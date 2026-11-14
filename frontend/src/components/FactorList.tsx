@@ -1,18 +1,21 @@
 import { ASSET_STYLES, FACTOR_CATEGORY_LABELS } from "../format";
-import type { AssetType, Factor, FactorCategory } from "../types";
+import type { AssetType, Factor, FactorCategory, Highlight } from "../types";
 
 interface Props {
   factors: Factor[];
+  /** What stands out for the better, best first. */
+  highlights: Highlight[];
   /** Asset types searched for and not found. */
   missingAssetTypes: AssetType[];
 }
 
 /** The assets and factors section: what the county has to work with. The
  * opportunities are built from these and from the mapped sites. */
-export function FactorList({ factors, missingAssetTypes }: Props) {
+export function FactorList({ factors, highlights, missingAssetTypes }: Props) {
   if (factors.length === 0) {
     return <p className="muted">No facts about this county could be loaded.</p>;
   }
+  const starred = new Set(highlights.map((h) => h.factor_id));
   // The backend sends factors grouped by category, in display order.
   const groups: [FactorCategory, Factor[]][] = [];
   for (const factor of factors) {
@@ -27,12 +30,38 @@ export function FactorList({ factors, missingAssetTypes }: Props) {
         What the county has to work with: its climate, land, buildings, workforce, community
         and more. The opportunities are built from these facts and from the sites on the map.
       </p>
+      {highlights.length > 0 && (
+        <section className="card highlights">
+          <h3>Where this county stands out</h3>
+          <ol className="highlight-list">
+            {highlights.map((h) => (
+              <li key={h.factor_id} className="highlight">
+                <div className="highlight-head">
+                  <span className="highlight-label">{h.label}</span>
+                  <span
+                    className="highlight-times"
+                    title="Computed from the data: the county's figure against the benchmark"
+                  >
+                    {h.times_better.toFixed(1)}× better
+                  </span>
+                </div>
+                <div className="factor-value">{h.value}</div>
+                <div className="factor-comparison">{h.benchmark}</div>
+                <p className="factor-detail">{h.why}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       {groups.map(([category, items]) => (
         <section key={category} className="card factor-group">
           <h3>{FACTOR_CATEGORY_LABELS[category]}</h3>
           <dl className="factor-list">
             {items.map((factor) => (
-              <div key={factor.id} className="factor">
+              <div
+                key={factor.id}
+                className={starred.has(factor.id) ? "factor factor-starred" : "factor"}
+              >
                 <dt>{factor.label}</dt>
                 <dd>
                   <span className="factor-value">{factor.value}</span>

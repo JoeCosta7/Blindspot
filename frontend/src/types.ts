@@ -125,6 +125,18 @@ export interface Factor {
   source: string;
 }
 
+/** A factor where the county stands out for the better. Chosen by code. */
+export interface Highlight {
+  factor_id: string;
+  label: string;
+  value: string;
+  /** e.g. "US: 8.5%" or "Average US county: 290 acres" */
+  benchmark: string;
+  /** How many times better than the benchmark, one decimal. */
+  times_better: number;
+  why: string;
+}
+
 export interface Resources {
   solar_kwh_per_kw_year: number | null;
   /** USDA Census of Agriculture 2022. Null where the census withholds it. */
@@ -245,6 +257,8 @@ export interface CountyReport {
   resources: Resources;
   /** Everything known about the county that a solution could draw on. */
   factors: Factor[];
+  /** The few factors that stand out most for the better, best first. */
+  highlights: Highlight[];
   /** Written by Gemini from the needs, factors and assets. The `gemini` entry
    * in `source_status` says why when they are rule matches instead. */
   opportunities: Opportunity[];

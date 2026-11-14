@@ -181,6 +181,20 @@ class Factor(BaseModel):
     source: str
 
 
+class Highlight(BaseModel):
+    """A factor where the county stands out for the better: it beats the US
+    figure, or has far more of some land than the average US county. Chosen
+    and worded by code (highlights.py), not by Gemini."""
+
+    factor_id: str
+    label: str
+    value: str  # the factor's own display text
+    benchmark: str  # e.g. "US: 8.5%" or "Average US county: 290 acres"
+    # How many times better than the benchmark, rounded to one decimal.
+    times_better: float
+    why: str
+
+
 class Resources(BaseModel):
     solar_kwh_per_kw_year: float | None = None
     # USDA Census of Agriculture 2022. Null where the census withholds it.
@@ -312,6 +326,8 @@ class CountyReport(BaseModel):
     resources: Resources
     # Everything known about the county that a solution could draw on.
     factors: list[Factor] = Field(default_factory=list)
+    # The few factors that stand out most for the better, best first.
+    highlights: list[Highlight] = Field(default_factory=list)
     # Written by Gemini from the needs, factors and assets above. The `gemini`
     # entry in `source_status` says why when they are rule matches instead.
     opportunities: list[Opportunity]
