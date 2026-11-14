@@ -365,6 +365,9 @@ export function MapView(props: Props) {
       }
     });
     mapRef.current = map;
+    // The box changes size when the workspace opens; keep the canvas in step.
+    const resize = new ResizeObserver(() => map.resize());
+    resize.observe(containerRef.current);
     return () => {
       if (stopped) return;
       stopped = true;

@@ -601,3 +601,64 @@ class ScoutEvent(BaseModel):
     step: ScoutStep | None = None
     candidate: SiteCandidate | None = None
     result: ScoutResult | None = None
+
+
+# --- Opportunity workspace: the government process (app/process.py) ------------------
+
+ProcessStepSource = Literal["template", "site_plan", "plan"]
+
+
+class ProcessStep(BaseModel):
+    """One thing the county does to move a project forward. From the curated
+    table (data/process_templates.json), the chosen site's plan, or the
+    opportunity's own plan. General practice, not legal advice."""
+
+    id: str
+    title: str
+    detail: str | None = None
+    # Who usually does it, e.g. "County board" or "Planning department".
+    who: str | None = None
+    # Ids of documents in ProcessPlan.documents this step uses.
+    document_ids: list[str] = Field(default_factory=list)
+    source: ProcessStepSource
+
+
+class ProcessPhase(BaseModel):
+    id: str
+    title: str
+    steps: list[ProcessStep]
+
+
+class PackSection(BaseModel):
+    """One part of the printable document pack. Code fills it from the
+    opportunity's own figures; Gemini may reword it (number-checked)."""
+
+    id: str
+    title: str
+    text: str
+    generated_by: Literal["gemini", "template"]
+
+
+class ProcessPlan(BaseModel):
+    opportunity_id: str
+    site_id: str | None
+    phases: list[ProcessPhase]
+    documents: list[ProjectDocument]
+    # Forms to gather locally that have no national URL.
+    documents_needed: list[str]
+    sections: list[PackSection]
+    caveats: list[str]
+
+
+class ProcessRequest(BaseModel):
+    """The client sends what it already has; nothing is re-analyzed."""
+
+    fips: str = Field(pattern=r"^\d{5}$")
+    county_name: str
+    state: str
+    opportunity: Opportunity
+    # The needs the opportunity addresses, for the pack's wording.
+    needs: list[Need] = Field(default_factory=list)
+    # The chosen site: a Site Scout candidate, or one of the report's own sites.
+    site: SiteCandidate | None = None
+    site_asset: Asset | None = None

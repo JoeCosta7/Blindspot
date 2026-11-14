@@ -47,6 +47,7 @@ from app.models import (
     CountyContext,
     CountyReport,
     Estimate,
+    FundingMatch,
     Need,
     NeedFit,
     Opportunity,
@@ -543,6 +544,22 @@ def proposals_from_matches(matches: list[matching.Match]) -> list[_Proposal]:
     return proposals
 
 
+def _borrowed_leads(
+    queries: tuple[grantsgov.GrantQuery, ...],
+    searches: dict[str, Any],
+    similar: matching.Solution | None,
+    limit: int,
+) -> list[FundingMatch]:
+    """Grants.gov leads for an idea of Gemini's own, from the catalogued type
+    nearest to it, each marked as found for that type."""
+    if similar is None:
+        return []
+    return [
+        lead.model_copy(update={"note": f"Found for a similar project type: {similar.name}."})
+        for lead in grantsgov.leads_for(queries, searches, similar.id, None, limit)
+    ]
+
+
 def can_scout(
     solution_id: str | None,
     need_ids: list[str],
@@ -903,9 +920,17 @@ async def analyze_county(
     # Grants.gov searches for the typed opportunities run alongside, so they add
     # no wait. Leads are found by hand-written queries, never by Gemini.
     grant_queries = grantsgov.load_queries(data_dir / "grants_queries.json")
+    # An idea of Gemini's own borrows the leads of the catalogued type that
+    # shares the most of its needs.
+    nearest = {
+        p.id: matching.nearest_solution(solutions, [n.id for n in p.needs])
+        for p in proposals
+        if p.solution is None
+    }
     keywords = grantsgov.keywords_for(
         grant_queries,
-        [(p.solution.id, p.host.type if p.host else None) for p in proposals if p.solution],
+        [(p.solution.id, p.host.type if p.host else None) for p in proposals if p.solution]
+        + [(s.id, None) for s in nearest.values() if s is not None],
     )
     gathered = await asyncio.gather(
         *(
@@ -976,7 +1001,9 @@ async def analyze_county(
                 settings.max_grant_leads,
             )
             if solution
-            else []
+            else _borrowed_leads(
+                grant_queries, grant_searches, nearest.get(proposal.id), settings.max_grant_leads
+            )
         )
         leads.sort(key=lambda f: (funding.STATUS_ORDER[f.status], f.deadline or "9999"))
         # Curated forms and packets only. Funding leads already carry their own

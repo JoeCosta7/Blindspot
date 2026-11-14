@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
-from app import matching
+from app import matching, process
 from app.config import Settings, get_settings
 from app.geo import County, CountyIndex
 from app.models import (
@@ -25,6 +25,8 @@ from app.models import (
     CountyReport,
     HealthResponse,
     NeedMapResponse,
+    ProcessPlan,
+    ProcessRequest,
     ScoutEvent,
     ScoutRequest,
     ScoutResult,
@@ -201,6 +203,13 @@ async def _replay_fixture(saved: ScoutResult, delay_s: float) -> AsyncIterator[s
         await asyncio.sleep(delay_s)
     replayed = saved.model_copy(update={"generated_by": "fixture"})
     yield _line(ScoutEvent(type="result", result=replayed))
+
+
+@app.post("/api/process")
+async def process_plan(body: ProcessRequest, request: Request) -> ProcessPlan:
+    """The checklist and document pack for one opportunity and its chosen site.
+    Built from what the client sends; nothing is re-analyzed."""
+    return await process.build_process(body, request.app.state.settings)
 
 
 @app.post("/api/scout")

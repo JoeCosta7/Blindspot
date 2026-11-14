@@ -36,9 +36,28 @@ NEW_SOURCE_SOLUTIONS = {
     "watershed_restoration",
 }
 
+# Added 2026-11-14 so every need has at least two answers.
+GAP_SOLUTIONS = {
+    "microtransit",
+    "mobility_hub",
+    "flood_buyout",
+    "wildfire_defensible_space",
+    "green_stormwater",
+    "mobile_home_repair",
+    "heat_pump_group_buy",
+    "utility_assistance_drive",
+    "water_system_consolidation",
+    "farm_conservation_buffers",
+}
+
+
+# The ranking tests were written for the catalogue before the gap-filling types;
+# they test the rules, so they keep running on that catalogue.
+ORIGINAL = tuple(s for s in SOLUTIONS if s.id not in GAP_SOLUTIONS)
+
 
 def run(needs, assets, **kwargs):
-    return matching.match_opportunities(needs, assets, SOLUTIONS, CENTRE, **kwargs)
+    return matching.match_opportunities(needs, assets, ORIGINAL, CENTRE, **kwargs)
 
 
 # --- the hand-written tables --------------------------------------------------
@@ -63,6 +82,7 @@ def test_solutions_table_is_consistent_with_the_contract():
         *STRETCH_SOLUTIONS,
         *EXISTING_SITE_SOLUTIONS,
         *NEW_SOURCE_SOLUTIONS,
+        *GAP_SOLUTIONS,
     }
     for solution in SOLUTIONS:
         assert set(solution.triggers) <= need_ids, solution.id
@@ -234,7 +254,7 @@ def test_second_sites_do_not_crowd_out_a_lower_scoring_solution():
     ]
     # Composting shares the landfill trigger; leave it out so the test keeps
     # checking how second sites compete for the last place.
-    without_compost = tuple(s for s in SOLUTIONS if s.id != "landfill_composting")
+    without_compost = tuple(s for s in ORIGINAL if s.id != "landfill_composting")
     matches = matching.match_opportunities(needs, assets, without_compost, CENTRE)
 
     # Nine candidates for six places: all five triggered solutions appear,
@@ -407,3 +427,24 @@ def test_new_solutions_use_existing_sites():
     # Composting needs no gas-project candidate; the largest landfill comes first.
     assert by_solution["landfill_composting"].asset.id == "big_lf"
     assert "landfill_gas_energy" not in by_solution  # neither landfill is a candidate
+
+
+def test_hazard_projects_answer_only_their_hazard():
+    by_id = {s.id: s for s in SOLUTIONS}
+    flood = make_need("hazard_risk", 100).model_copy(
+        update={"detail": "Inland flooding: Very High"}
+    )
+    heat = make_need("hazard_risk", 100).model_copy(update={"detail": "Heat wave: Very High"})
+    assert by_id["flood_buyout"].answers(flood) and not by_id["flood_buyout"].answers(heat)
+    assert by_id["resilience_hub"].answers(heat)  # no hazard list: any hazard counts
+
+
+def test_every_need_has_an_answer():
+    for need in NeedId.__args__:
+        assert any(need in s.triggers for s in SOLUTIONS), need
+
+
+def test_nearest_solution_shares_the_most_needs():
+    nearest = matching.nearest_solution(SOLUTIONS, ["no_vehicle", "long_commute"])
+    assert nearest is not None and nearest.id == "microtransit"
+    assert matching.nearest_solution(SOLUTIONS, []) is None

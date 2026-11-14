@@ -4,66 +4,127 @@
     "name": "Community solar on reclaimed land",
     "title_template": "Community solar on {asset}",
     "asset_kind": "land",
-    "hosts": ["brownfield", "landfill", "mine_land", "contaminated_site"],
-    "triggers": ["low_income", "renters", "mobile_homes", "high_electricity_cost", "carbon_intensive_grid", "high_energy_burden"]
+    "hosts": [
+      "brownfield",
+      "landfill",
+      "mine_land",
+      "contaminated_site"
+    ],
+    "triggers": [
+      "low_income",
+      "renters",
+      "mobile_homes",
+      "high_electricity_cost",
+      "carbon_intensive_grid",
+      "high_energy_burden"
+    ]
   },
   {
     "id": "resilience_hub",
     "name": "Solar-and-battery resilience hub",
     "title_template": "Solar-and-battery resilience hub at {asset}",
     "asset_kind": "building",
-    "hosts": ["school", "library", "college"],
-    "triggers": ["hazard_risk", "low_income"]
+    "hosts": [
+      "school",
+      "library",
+      "college"
+    ],
+    "triggers": [
+      "hazard_risk",
+      "low_income"
+    ]
   },
   {
     "id": "weatherization_clinic",
     "name": "Weatherization and heat-pump sign-up clinic",
     "title_template": "Weatherization and heat-pump sign-up clinic at {asset}",
     "asset_kind": "building",
-    "hosts": ["library", "school"],
-    "triggers": ["old_housing", "delivered_fuel_heat", "mobile_homes", "high_electricity_cost", "high_energy_burden", "utility_shutoff_risk"]
+    "hosts": [
+      "library",
+      "school"
+    ],
+    "triggers": [
+      "old_housing",
+      "delivered_fuel_heat",
+      "mobile_homes",
+      "high_electricity_cost",
+      "high_energy_burden",
+      "utility_shutoff_risk"
+    ]
   },
   {
     "id": "public_ev_charging",
     "name": "Public EV charging",
     "title_template": "Public EV charging at {asset}",
     "asset_kind": "building",
-    "hosts": ["college", "library", "school"],
-    "triggers": ["ev_charging_gap", "long_commute", "drive_alone"]
+    "hosts": [
+      "college",
+      "library",
+      "school"
+    ],
+    "triggers": [
+      "ev_charging_gap",
+      "long_commute",
+      "drive_alone"
+    ]
   },
   {
     "id": "landfill_gas_energy",
     "name": "Landfill gas-to-energy",
     "title_template": "Landfill gas-to-energy at {asset}",
     "asset_kind": "landfill",
-    "hosts": ["lmop_landfill"],
+    "hosts": [
+      "lmop_landfill"
+    ],
     "host_requires": "is_candidate",
-    "triggers": ["landfill_gas_uncaptured"]
+    "triggers": [
+      "landfill_gas_uncaptured"
+    ]
   },
   {
     "id": "small_hydro",
     "name": "Hydropower at an existing dam",
     "title_template": "Hydropower at {asset}",
     "asset_kind": "dam",
-    "hosts": ["non_powered_dam"],
-    "triggers": ["carbon_intensive_grid", "high_electricity_cost"]
+    "hosts": [
+      "non_powered_dam"
+    ],
+    "triggers": [
+      "carbon_intensive_grid",
+      "high_electricity_cost"
+    ]
   },
   {
     "id": "wind_on_reclaimed_land",
     "name": "Wind on reclaimed land",
     "title_template": "Wind energy on {asset}",
     "asset_kind": "wind_land",
-    "hosts": ["mine_land", "landfill", "brownfield", "contaminated_site"],
+    "hosts": [
+      "mine_land",
+      "landfill",
+      "brownfield",
+      "contaminated_site"
+    ],
     "host_requires": "epa_wind_mw",
-    "triggers": ["carbon_intensive_grid", "high_electricity_cost"]
+    "triggers": [
+      "carbon_intensive_grid",
+      "high_electricity_cost"
+    ]
   },
   {
     "id": "shade_trees_depaving",
     "name": "Shade trees and depaving at public buildings",
     "title_template": "Shade trees and depaving at {asset}",
     "asset_kind": "building",
-    "hosts": ["school", "library", "college"],
-    "triggers": ["urban_heat", "low_tree_canopy"]
+    "hosts": [
+      "school",
+      "library",
+      "college"
+    ],
+    "triggers": [
+      "urban_heat",
+      "low_tree_canopy"
+    ]
   },
   {
     "id": "farm_digester",
@@ -71,32 +132,51 @@
     "title_template": "Manure digesters at the county's large livestock farms",
     "asset_kind": "county",
     "hosts": [],
-    "triggers": ["unmanaged_farm_waste"]
+    "triggers": [
+      "unmanaged_farm_waste"
+    ]
   },
   {
     "id": "school_heat_pumps",
     "name": "Ground-source heat pumps for school heating",
     "title_template": "Ground-source heat pumps at {asset}",
     "asset_kind": "building",
-    "hosts": ["school", "college"],
-    "triggers": ["delivered_fuel_heat"]
+    "hosts": [
+      "school",
+      "college"
+    ],
+    "triggers": [
+      "delivered_fuel_heat"
+    ]
   },
   {
     "id": "landfill_composting",
     "name": "Food-scrap composting at a landfill",
     "title_template": "Food-scrap composting site at {asset}",
     "asset_kind": "landfill",
-    "hosts": ["lmop_landfill", "landfill"],
-    "triggers": ["landfill_gas_uncaptured"]
+    "hosts": [
+      "lmop_landfill",
+      "landfill"
+    ],
+    "triggers": [
+      "landfill_gas_uncaptured"
+    ]
   },
   {
     "id": "repower_fossil_plant",
     "name": "Solar and storage at a retiring or retired fossil plant",
     "title_template": "Solar and battery storage at {asset}",
     "asset_kind": "plant",
-    "hosts": ["power_plant"],
+    "hosts": [
+      "power_plant"
+    ],
     "host_requires": "reuse_candidate",
-    "triggers": ["carbon_intensive_grid", "high_electricity_cost", "high_energy_burden", "poor_air_quality"]
+    "triggers": [
+      "carbon_intensive_grid",
+      "high_electricity_cost",
+      "high_energy_burden",
+      "poor_air_quality"
+    ]
   },
   {
     "id": "drinking_water_compliance",
@@ -104,7 +184,9 @@
     "title_template": "Compliance and upgrade help for the county's small water systems",
     "asset_kind": "county",
     "hosts": [],
-    "triggers": ["unsafe_drinking_water"]
+    "triggers": [
+      "unsafe_drinking_water"
+    ]
   },
   {
     "id": "watershed_restoration",
@@ -112,6 +194,139 @@
     "title_template": "Restore the county's impaired streams and lakes",
     "asset_kind": "county",
     "hosts": [],
-    "triggers": ["impaired_waters"]
+    "triggers": [
+      "impaired_waters"
+    ]
+  },
+  {
+    "id": "microtransit",
+    "name": "On-demand microtransit for residents without a car",
+    "title_template": "On-demand microtransit for residents without a car",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "no_vehicle",
+      "long_commute"
+    ]
+  },
+  {
+    "id": "mobility_hub",
+    "name": "E-bike and car-share mobility hub",
+    "title_template": "E-bike and car-share mobility hub",
+    "asset_kind": "building",
+    "hosts": [
+      "library",
+      "college"
+    ],
+    "triggers": [
+      "no_vehicle",
+      "drive_alone",
+      "poor_air_quality"
+    ]
+  },
+  {
+    "id": "flood_buyout",
+    "name": "Voluntary buyout of flood-prone homes",
+    "title_template": "Voluntary buyout of flood-prone homes",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "hazard_risk"
+    ],
+    "hazards": [
+      "Inland flooding"
+    ]
+  },
+  {
+    "id": "wildfire_defensible_space",
+    "name": "Community wildfire defensible-space program",
+    "title_template": "Community wildfire defensible-space program",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "hazard_risk"
+    ],
+    "hazards": [
+      "Wildfire"
+    ]
+  },
+  {
+    "id": "green_stormwater",
+    "name": "Rain gardens and green stormwater infrastructure",
+    "title_template": "Rain gardens and green stormwater infrastructure",
+    "asset_kind": "building",
+    "hosts": [
+      "school",
+      "library",
+      "college"
+    ],
+    "triggers": [
+      "hazard_risk",
+      "impaired_waters",
+      "urban_heat"
+    ],
+    "hazards": [
+      "Inland flooding"
+    ]
+  },
+  {
+    "id": "mobile_home_repair",
+    "name": "Manufactured home repair and replacement program",
+    "title_template": "Manufactured home repair and replacement program",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "mobile_homes",
+      "delivered_fuel_heat",
+      "high_energy_burden"
+    ]
+  },
+  {
+    "id": "heat_pump_group_buy",
+    "name": "Heat-pump group-buy program",
+    "title_template": "Heat-pump group-buy program",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "delivered_fuel_heat",
+      "high_energy_burden",
+      "old_housing"
+    ]
+  },
+  {
+    "id": "utility_assistance_drive",
+    "name": "Energy-bill assistance sign-up drive",
+    "title_template": "Energy-bill assistance sign-up drive",
+    "asset_kind": "building",
+    "hosts": [
+      "library",
+      "school"
+    ],
+    "triggers": [
+      "utility_shutoff_risk",
+      "high_energy_burden",
+      "low_income"
+    ]
+  },
+  {
+    "id": "water_system_consolidation",
+    "name": "Consolidating small water systems with violations",
+    "title_template": "Consolidating small water systems with violations",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "unsafe_drinking_water"
+    ]
+  },
+  {
+    "id": "farm_conservation_buffers",
+    "name": "Farm stream buffers and cover crops",
+    "title_template": "Farm stream buffers and cover crops",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "impaired_waters",
+      "unmanaged_farm_waste"
+    ]
   }
 ]

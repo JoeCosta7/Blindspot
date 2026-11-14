@@ -31,6 +31,8 @@ export interface ScoutProps {
   scoutRuns: Record<string, ScoutRun>;
   onScout: (fips: string, opportunity: Opportunity) => void;
   onShowCandidate: (candidate: SiteCandidate) => void;
+  /** Open an opportunity in the workspace. */
+  onPursue: (fips: string, opportunity: Opportunity) => void;
 }
 
 const LOADING_SOURCES = [
@@ -208,6 +210,7 @@ function OpportunityList({
                 }
               : undefined
           }
+          onPursue={() => scout.onPursue(report.fips, opportunity)}
         />
       ))}
     </>

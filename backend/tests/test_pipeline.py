@@ -298,7 +298,10 @@ def test_full_report(sources, settings):
     charging = [o for o in report.opportunities if o.solution_id == "public_ev_charging"]
     assert charging and all(o.score == 50 for o in charging)
     assert report.opportunities[-1].solution_id == "public_ev_charging"
-    assert all(o.score > 50 for o in report.opportunities if o.solution_id != "public_ev_charging")
+    # Below 50 only: transport-only types, and the heat-pump group buy, which here
+    # answers only the low-priority old-housing need.
+    low = {"public_ev_charging", "microtransit", "mobility_hub", "heat_pump_group_buy"}
+    assert all(o.score > 50 for o in report.opportunities if o.solution_id not in low)
 
     # Points outside the county polygon are dropped.
     names = {a.name for a in report.assets}
@@ -403,9 +406,11 @@ def test_failed_sources_do_not_fail_the_request(sources, settings, monkeypatch):
     # A failed source is "unknown", not "not found".
     assert "school" not in report.missing_asset_types
     # Only the landfill solutions remain: every building and land source failed.
+    # (plus the county-wide wildfire program, which needs no site at all)
     assert {o.solution_id for o in report.opportunities} == {
         "landfill_gas_energy",
         "landfill_composting",
+        "wildfire_defensible_space",
     }
     assert any("could not be loaded" in c for c in report.narrative.caveats)
 
@@ -575,7 +580,9 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
     assert crews.estimates == [] and crews.funding == []
     # A project type claimed at a site that cannot host it is not trusted.
     assert gas.solution_id is None and gas.asset_ids == ["repowering:9"]
-    assert gas.estimates == [] and gas.funding == []
+    # No estimate; its Grants.gov leads are borrowed from the nearest type and say so.
+    assert gas.estimates == []
+    assert all(f.note and "similar project type" in f.note for f in gas.funding)
 
     shown = {a.id for a in report.assets}
     assert {"repowering:10", "repowering:9", "repowering:8"} <= shown

@@ -5,6 +5,8 @@ import type {
   NeedId,
   NeedMapResponse,
   ScoutEvent,
+  ProcessPlan,
+  ProcessRequest,
 } from "./types";
 
 /** `?fixture=1` in the page URL serves saved reports: the demo works offline. */
@@ -93,4 +95,15 @@ export async function scout(
     }
   }
   emit(buffer);
+}
+
+/** The checklist and document pack for one opportunity and its chosen site. */
+export async function fetchProcess(request: ProcessRequest): Promise<ProcessPlan> {
+  const resp = await fetch("/api/process", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!resp.ok) throw new Error(await readError(resp));
+  return (await resp.json()) as ProcessPlan;
 }

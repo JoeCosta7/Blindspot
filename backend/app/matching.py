@@ -51,6 +51,16 @@ class Solution(BaseModel):
     hosts: list[str]
     host_requires: str | None = None
     triggers: list[str]
+    # For hazard_risk: the NRI hazards (sources/nri.py HAZARDS names) the
+    # project answers. Empty means any flagged hazard counts.
+    hazards: list[str] = []
+
+    def answers(self, need: Need) -> bool:
+        if need.id not in self.triggers:
+            return False
+        if need.id == "hazard_risk" and self.hazards:
+            return any(h in (need.detail or "") for h in self.hazards)
+        return True
 
 
 @dataclass(frozen=True)
@@ -155,6 +165,19 @@ def top_need_rank(addressed: list[Need], flagged: list[Need]) -> int:
     return min((position[n.id] for n in addressed if n.id in position), default=len(ranked))
 
 
+def nearest_solution(
+    solutions: tuple[Solution, ...] | list[Solution], need_ids: list[str]
+) -> Solution | None:
+    """The catalogued project type sharing the most needs with an idea of
+    Gemini's own, for its funding leads. None when no type shares any."""
+    best: tuple[int, Solution] | None = None
+    for solution in solutions:
+        shared = len(set(need_ids) & set(solution.triggers))
+        if shared and (best is None or shared > best[0]):
+            best = (shared, solution)
+    return best[1] if best else None
+
+
 def match_opportunities(
     needs: list[Need],
     assets: list[Asset],
@@ -180,7 +203,7 @@ def match_opportunities(
     """
     matches: list[tuple[tuple, Match]] = []
     for order, solution in enumerate(solutions):
-        matched = [n for n in needs if n.id in solution.triggers]
+        matched = [n for n in needs if solution.answers(n)]
         if not matched:
             continue
         base = need_score(matched)

@@ -500,3 +500,47 @@ export interface ScoutRun {
   result: ScoutResult | null;
   error: string | null;
 }
+
+// --- Opportunity workspace: the government process ----------------------------
+
+export interface ProcessStep {
+  id: string;
+  title: string;
+  detail: string | null;
+  who: string | null;
+  document_ids: string[];
+  source: "template" | "site_plan" | "plan";
+}
+
+export interface ProcessPhase {
+  id: string;
+  title: string;
+  steps: ProcessStep[];
+}
+
+export interface PackSection {
+  id: string;
+  title: string;
+  text: string;
+  generated_by: "gemini" | "template";
+}
+
+export interface ProcessPlan {
+  opportunity_id: string;
+  site_id: string | null;
+  phases: ProcessPhase[];
+  documents: ProjectDocument[];
+  documents_needed: string[];
+  sections: PackSection[];
+  caveats: string[];
+}
+
+export interface ProcessRequest {
+  fips: string;
+  county_name: string;
+  state: string;
+  opportunity: Opportunity;
+  needs: Need[];
+  site: SiteCandidate | null;
+  site_asset: Asset | null;
+}

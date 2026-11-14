@@ -195,6 +195,8 @@ interface Props {
   note: string | undefined;
   onShowOnMap: (asset: Asset) => void;
   scout?: ScoutHooks;
+  /** Open this opportunity in the workspace. */
+  onPursue?: () => void;
 }
 
 /** One opportunity: collapsed by default; expand for plan, sites, funding and
@@ -208,6 +210,7 @@ export function OpportunityCard({
   note,
   onShowOnMap,
   scout,
+  onPursue,
 }: Props) {
   const addressed = needs.filter((need) => opportunity.need_ids.includes(need.id));
   // Absent in reports saved before the field existed.
@@ -275,6 +278,11 @@ export function OpportunityCard({
         >
           Score {opportunity.score}
         </span>
+        {onPursue && (
+          <button type="button" className="button pursue-button" onClick={onPursue}>
+            Pursue this
+          </button>
+        )}
       </header>
 
       {opportunity.summary && <p className="note">{opportunity.summary}</p>}

@@ -43,7 +43,7 @@ function Timeline({ steps, running }: { steps: ScoutStep[]; running: boolean }) 
   );
 }
 
-function SiteCard({
+export function SiteCard({
   rank,
   candidate,
   drafts,
