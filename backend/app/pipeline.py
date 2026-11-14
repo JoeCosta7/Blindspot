@@ -48,6 +48,7 @@ from app.models import (
     CountyReport,
     Estimate,
     Need,
+    NeedFit,
     Opportunity,
     PeerCounty,
     Resources,
@@ -387,6 +388,7 @@ class _Proposal:
     documents_needed: tuple[str, ...] = ()
     site_plans: tuple[SiteActionPlan, ...] = ()
     factor_ids: tuple[str, ...] = ()
+    need_fits: tuple[NeedFit, ...] = ()
 
     @property
     def first_steps(self) -> tuple[str, ...]:
@@ -499,6 +501,11 @@ def proposals_from_drafts(
                 documents_needed=tuple(draft.documents_needed),
                 site_plans=site_plans,
                 factor_ids=tuple(draft.factor_ids),
+                need_fits=tuple(
+                    NeedFit(need_id=n.id, text=draft.need_fits[n.id])
+                    for n in addressed
+                    if n.id in draft.need_fits
+                ),
             )
         )
     # Stable: Gemini's order breaks ties. Top need first, then score.
@@ -965,6 +972,7 @@ async def analyze_county(
                 first_steps=list(proposal.plan),
                 compliance=list(proposal.compliance),
                 need_ids=[n.id for n in proposal.needs],
+                need_fits=list(proposal.need_fits),
                 asset_ids=[a.id for a in proposal.assets],
                 site_plans=list(proposal.site_plans),
                 factor_ids=list(proposal.factor_ids),

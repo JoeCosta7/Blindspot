@@ -165,6 +165,7 @@ Frontend packages: `react react-dom mapbox-gl typescript vite`.
 | `NLR_API_KEY` | NLR developer network (PVWatts, stations) |
 | `GEMINI_API_KEY` | Gemini API |
 | `GEMINI_MODEL` | default `gemini-3.8-flash`; confirm on the Gemini models page |
+| `GEMINI_THINKING_LEVEL` | default `low` (about 30 s per county; the model's own default, `medium`, took about 80 s when measured 2026-11-14). Empty uses the model's default |
 | `ACS_YEAR` | default `2024` (the 2020–2024 5-year release) |
 | `MAX_COUNTIES` | default `4` |
 | `VITE_MAPBOX_TOKEN` | in `frontend/.env` |

@@ -9,10 +9,11 @@ Three steps:
 
 1. `build_digest` puts the needs, the factors and a few sites of each kind
    into one compact input. The model never sees the full asset list.
-2. `write_opportunities` sends the digest and checks every opportunity that
-   comes back against it. One is dropped if it names a need or site that is
-   not in the digest, draws on no factor or site, or contains a number that is
-   not in the digest. The same call returns the county summary.
+2. `write_opportunities` sends the digest, cut down by `shrink_digest` and
+   `shorten_site_ids` to what the model can use, and checks every opportunity
+   that comes back against the full one. One is dropped if it names a need or
+   site that is not in the digest, draws on no factor or site, or contains a
+   number that is not in the digest. The same call returns the county summary.
 3. The pipeline turns each surviving draft into an Opportunity and adds what
    only code may supply: the score, the estimates and the funding leads.
 
@@ -28,8 +29,9 @@ import hashlib
 import json
 import logging
 import math
+import re
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -75,13 +77,27 @@ ASSET_LABELS = {
 }
 # Counted but never listed: nobody builds a project at an existing charger.
 COUNT_ONLY_TYPES = {"ev_station"}
+# A site id longer than this is sent to the model under a short stand-in
+# (shorten_site_ids). Geoapify place ids run past 100 hex characters.
+MAX_SITE_ID_CHARS = 24
 # Keys whose values are identifiers, not prose: their digits are not figures.
-ID_KEYS = {"site_id", "factor_id", "need_id", "project_type"}
+ID_KEYS = {"site_id", "factor_id", "need_id", "project_type", "answers"}
 
 PROMPT_RULES = (
     "Write for a county official with no technical background.",
-    'Every opportunity must directly reduce at least one need listed under "needs". Put '
-    "only the need_id values it directly reduces in need_ids, exactly as given.",
+    'Every opportunity must directly reduce at least one need listed under "needs". A '
+    "project directly reduces a need only when carrying it out makes that problem itself "
+    "smaller: fewer people or homes exposed to the hazard, lower bills, cleaner water or "
+    "air, more of what is missing. Put only those need_id values in need_ids, exactly as "
+    "given. Generating clean power does not reduce a hazard, water, housing or "
+    "transportation need. Never list a need because it ranks high.",
+    "For every need_id in need_ids, add an entry in need_fits with that need_id and how: "
+    "one sentence on how this project makes that need smaller, naming the problem as the "
+    "need states it (for a hazard need, the hazards named in its detail). A need with no "
+    "entry does not count, and an opportunity left with no need is discarded.",
+    'A catalogued project_type may list only the need_ids under its "answers". Code '
+    "removes any other. To reduce a need no listed kind of project answers, write an "
+    f'opportunity of your own with project_type "{OTHER_PROJECT_TYPE}".',
     "Every opportunity must draw on what the county has: at least one factor or one site. "
     "Put the factor_id values it relies on in factor_ids and the site_id values of the "
     "places it would use in site_ids, exactly as given. Leave site_ids empty only for a "
@@ -95,8 +111,11 @@ PROMPT_RULES = (
     "standout factor or on a kind of site that is scarce in most counties (a dam, "
     "landfill gas candidate, power plant, large livestock farms, or a named school, "
     "library or college).",
-    "Cover different needs. An opportunity's top need is the highest-priority need_id it "
-    "lists. Do not give more than two opportunities the same top need. Secondary needs "
+    'Solve the biggest problems first. "needs" is ordered highest priority first. Each '
+    "of the first three needs must be directly reduced by at least one opportunity, "
+    "unless nothing the county has could reduce it. An opportunity's top need is the "
+    "highest-priority need_id it lists. Do not give more than two opportunities the "
+    "same top need. Secondary needs "
     "may repeat. Answer high-priority needs, but spread across the list rather than "
     "stacking every opportunity on the first need.",
     "Fit each opportunity to the county. Where its weather, terrain, land cover, "
@@ -138,25 +157,47 @@ class _ModelSitePlan(BaseModel):
     documents_needed: list[str] = []
 
 
-class _ModelOpportunity(BaseModel):
+class _ModelNeedFit(BaseModel):
+    need_id: str
+    how: str
+
+
+class _AskedOpportunity(BaseModel):
+    """One opportunity as Gemini is asked to write it. The order is the order
+    it writes in: the kind of project, then the needs that kind answers, then
+    how it reduces each one, before anything else is said about it."""
+
     title: str
+    project_type: str
     need_ids: list[str]
+    need_fits: list[_ModelNeedFit]
     factor_ids: list[str]
     site_ids: list[str]
-    project_type: str
     what: str
     why_here: str
-    # County-wide start-to-finish plan. Also accepted as first_steps from older
-    # cached Gemini responses.
+    # County-wide start-to-finish plan.
     plan: list[str] = []
-    first_steps: list[str] = []
     compliance: list[str] = []
     documents_needed: list[str] = []
     site_plans: list[_ModelSitePlan] = []
 
 
-class ModelPlan(BaseModel):
+class _ModelOpportunity(_AskedOpportunity):
+    # The plan's old name, still read from answers saved before `plan` existed.
+    # Not in the schema Gemini is given: it filled both, and every word it
+    # writes is time the user waits.
+    first_steps: list[str] = []
+
+
+class AskedPlan(BaseModel):
     """The response schema given to Gemini."""
+
+    summary: str
+    opportunities: list[_AskedOpportunity]
+
+
+class ModelPlan(BaseModel):
+    """An answer as it is checked and cached."""
 
     summary: str
     opportunities: list[_ModelOpportunity]
@@ -187,6 +228,8 @@ class Draft:
     asset_ids: list[str]
     # A project type from data/solutions.json, or None for an idea of its own.
     solution_id: str | None
+    # How it reduces each need in need_ids, by need id.
+    need_fits: dict[str, str] = field(default_factory=dict)
 
     @property
     def first_steps(self) -> list[str]:
@@ -308,6 +351,7 @@ def build_digest(
             )
         )
 
+    ranked = sorted(needs, key=lambda n: (-n.priority, -n.severity))
     return {
         "county": f"{county_name}, {state}",
         "needs": [
@@ -322,7 +366,7 @@ def build_digest(
                     "detail": n.detail,
                 }
             )
-            for n in sorted(needs, key=lambda n: (-n.priority, -n.severity))
+            for n in ranked
         ],
         "standouts": [
             _compact(
@@ -358,11 +402,113 @@ def build_digest(
                     "project_type": s.id,
                     "name": s.name,
                     "built_at": [ASSET_LABELS.get(host, host) for host in s.hosts],
+                    # The flagged needs this kind of project is catalogued to
+                    # reduce (its triggers in data/solutions.json).
+                    "answers": [n.id for n in ranked if n.id in s.triggers],
                 }
             )
             for s in solutions
         ],
     }
+
+
+# --- shrinking the digest for the prompt -------------------------------------------
+
+_FIRST_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+def _first_number(text: str | None) -> float | None:
+    """The leading figure of display text such as "$53,210" or "US: 8.8% for ..."."""
+    found = _FIRST_NUMBER.search(text or "")
+    return float(found.group().replace(",", "")) if found else None
+
+
+def _near_typical(factor: dict[str, Any], share: float) -> bool:
+    """True when the county's figure is within `share` of the US figure beside it."""
+    county = _first_number(factor.get("value"))
+    us = _first_number(factor.get("comparison"))
+    if county is None or not us:
+        return False
+    return abs(county - us) <= share * us
+
+
+def shrink_digest(digest: dict[str, Any], near_typical_share: float) -> dict[str, Any]:
+    """The digest as it is sent: the same facts with less to read. Nothing is
+    reworded and no number changes, so an answer written from the smaller
+    digest is still checked against the full one.
+
+    Four cuts, all by fixed rule:
+
+    1. A factor whose figure is within `near_typical_share` of the US figure
+       is left out. It says the county is typical, which is nothing to build
+       on. Standouts always stay.
+    2. A sentence of a factor's note that an earlier factor already carried is
+       left out. Method notes ("Share of the county's land and water area.")
+       repeat down a whole group of factors; the first one keeps it.
+    3. Factors are grouped under their kind, so the kind is written once.
+    4. A project type that can only be built at kinds of site the county does
+       not have, or that answers none of the county's needs, is left out: the
+       model could not use it.
+    """
+    standouts = {s["factor_id"] for s in digest["standouts"]}
+    seen: set[str] = set()
+    factors: dict[str, list[dict[str, Any]]] = {}
+    for factor in digest["factors"]:
+        if factor["factor_id"] not in standouts and _near_typical(factor, near_typical_share):
+            continue
+        sentences = _SENTENCE_BREAK.split(factor.get("note") or "")
+        note = " ".join(s for s in sentences if s not in seen)
+        seen.update(sentences)
+        entry = {key: value for key, value in factor.items() if key not in ("kind", "note")}
+        factors.setdefault(factor["kind"], []).append(_compact({**entry, "note": note}))
+
+    site_kinds = {group["kind"] for group in digest["sites"]}
+    project_types = [
+        p
+        for p in digest["project_types"]
+        if p.get("answers") and (not p.get("built_at") or site_kinds & set(p["built_at"]))
+    ]
+    return {**digest, "factors": factors, "project_types": project_types}
+
+
+def shorten_site_ids(digest: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """The digest with each long site id replaced by a short stand-in such as
+    "site:3", and the real id of every stand-in.
+
+    The model has to copy a site id back character for character, in site_ids
+    and again in site_plans. A long id costs tokens both ways, and one wrong
+    character loses the whole opportunity: seen 2026-11-14, one hex pair wrong
+    in a 125-character Geoapify id."""
+    taken = _site_ids(digest)
+    real: dict[str, str] = {}
+    sites = []
+    for group in digest["sites"]:
+        examples = []
+        for example in group.get("examples", []):
+            if len(example["site_id"]) > MAX_SITE_ID_CHARS:
+                number = len(real) + 1
+                while f"site:{number}" in taken:
+                    number += 1
+                short = f"site:{number}"
+                taken.add(short)
+                real[short] = example["site_id"]
+                example = {**example, "site_id": short}
+            examples.append(example)
+        sites.append({**group, "examples": examples} if examples else group)
+    return {**digest, "sites": sites}, real
+
+
+def _with_real_site_ids(model: ModelPlan, real: dict[str, str]) -> ModelPlan:
+    """The model's answer with the stand-ins from `shorten_site_ids` undone."""
+    if not real:
+        return model
+    data = model.model_dump()
+    for item in data["opportunities"]:
+        item["site_ids"] = [real.get(site_id, site_id) for site_id in item["site_ids"]]
+        for plan in item["site_plans"]:
+            plan["site_id"] = real.get(plan["site_id"].strip(), plan["site_id"])
+    return ModelPlan.model_validate(data)
 
 
 def _site_ids(digest: dict[str, Any]) -> set[str]:
@@ -445,6 +591,7 @@ def opportunity_problem(item: _ModelOpportunity, digest: dict[str, Any]) -> str 
     site_documents = [
         line for plan in item.site_plans for line in plan.documents_needed if line.strip()
     ]
+    fits = [fit.how for fit in item.need_fits if fit.how.strip()]
     if (
         _over(item.title, TITLE_MAX_WORDS)
         or _over(item.what, TEXT_MAX_WORDS)
@@ -453,6 +600,7 @@ def opportunity_problem(item: _ModelOpportunity, digest: dict[str, Any]) -> str 
         or any(_over(step, STEP_MAX_WORDS) for step in site_steps)
         or any(_over(line, STEP_MAX_WORDS) for line in compliance + site_compliance)
         or any(_over(line, STEP_MAX_WORDS) for line in documents + site_documents)
+        or any(_over(line, STEP_MAX_WORDS) for line in fits)
     ):
         return "it is too long"
     invented = _invented(
@@ -461,6 +609,7 @@ def opportunity_problem(item: _ModelOpportunity, digest: dict[str, Any]) -> str 
                 item.title,
                 item.what,
                 item.why_here,
+                *fits,
                 *steps,
                 *compliance,
                 *documents,
@@ -492,6 +641,32 @@ def _unique(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
+def answered_needs(
+    item: _ModelOpportunity, digest: dict[str, Any]
+) -> tuple[dict[str, str], str | None]:
+    """The needs the opportunity is credited with, each with the model's
+    sentence on how the project reduces it, in the order it listed them; or
+    why it is credited with none.
+
+    A need counts only if the model said how the project reduces it and, for
+    a catalogued project type, the catalogue agrees that kind of project
+    answers it. Opportunities are ordered by the needs they address, so a need
+    listed only because it ranks high puts the wrong project first: seen
+    2026-11-14, landfill solar listed under flood and heat risk led the list
+    for Queens County, NY."""
+    how = {fit.need_id.strip(): fit.how.strip() for fit in item.need_fits if fit.how.strip()}
+    needs = {need_id: how[need_id] for need_id in _unique(item.need_ids) if need_id in how}
+    if not needs:
+        return {}, "it does not say how it reduces any need it lists"
+    for project_type in digest["project_types"]:
+        if project_type["project_type"] == item.project_type.strip():
+            answers = project_type.get("answers", [])
+            needs = {need_id: text for need_id, text in needs.items() if need_id in answers}
+            if not needs:
+                return {}, "its kind of project answers none of the needs it lists"
+    return needs, None
+
+
 def _primary_need(need_ids: list[str], digest: dict[str, Any]) -> str | None:
     """The highest-priority need the opportunity answers. Digest needs are
     already ordered highest first."""
@@ -521,7 +696,9 @@ def keep_valid(
         problem = opportunity_problem(item, digest)
         project_type = item.project_type.strip()
         catalogued = project_type if project_type in project_types else None
-        primary = _primary_need(item.need_ids, digest)
+        needs, unanswered = answered_needs(item, digest)
+        problem = problem or unanswered
+        primary = _primary_need(list(needs), digest)
         if problem is None and title.lower() in titles:
             problem = "it repeats another opportunity"
         if problem is None and catalogued is not None and catalogued in used_types:
@@ -578,7 +755,8 @@ def keep_valid(
                 compliance=county_compliance,
                 documents_needed=county_documents,
                 site_plans=site_plans,
-                need_ids=_unique(item.need_ids),
+                need_ids=list(needs),
+                need_fits=needs,
                 # A factor id the input does not have is a slip, not a false claim.
                 factor_ids=[f for f in _unique(item.factor_ids) if f in known_factors],
                 asset_ids=_unique(item.site_ids),
@@ -602,8 +780,9 @@ def build_prompt(digest: dict[str, Any], limit: int) -> str:
         "with why each one matters for local projects. Start here.\n"
         "- factors: what the county has to work with: its climate and weather, energy "
         "system, land cover and terrain, buildings, workforce and industries, economy, "
-        "community, infrastructure and farms. A factor is not good or bad in itself. A "
-        "weakness in one place can be the raw material for a fix in another.\n"
+        "community, infrastructure and farms, grouped by kind. A factor is not good or "
+        "bad in itself. A weakness in one place can be the raw material for a fix in "
+        "another. A note that applies to several factors is given once, on the first.\n"
         "- sites: specific places in the county, with what is known about each.\n\n"
         f"Create up to {limit} opportunities. An opportunity is a concrete project or "
         "program that uses the county's factors and sites to meet its needs. The list "
@@ -628,6 +807,7 @@ def build_prompt(digest: dict[str, Any], limit: int) -> str:
         f"Rules:\n{rules}\n\n"
         "Format of each opportunity:\n"
         f"- title: at most {TITLE_MAX_WORDS} words.\n"
+        f"- need_fits: one entry per need_id, with how in at most {STEP_MAX_WORDS} words.\n"
         f"- what: at most {TEXT_MAX_WORDS} words on what would be done.\n"
         f"- why_here: at most {TEXT_MAX_WORDS} words on which factors and sites make it fit "
         "this county, pointing to its data.\n"
@@ -643,12 +823,14 @@ def build_prompt(digest: dict[str, Any], limit: int) -> str:
         f"Also write summary: at most {SUMMARY_MAX_WORDS} words on the county's main needs "
         "and how your opportunities use what it has to meet them. The same rules apply.\n\n"
         "Plain sentences only: no headings, bullet characters or markdown.\n\n"
-        f"County data:\n{json.dumps(digest, ensure_ascii=False, indent=1)}"
+        # No indentation: the model reads compact JSON as well, in fewer tokens.
+        f"County data:\n{json.dumps(digest, ensure_ascii=False, separators=(',', ':'))}"
     )
 
 
 async def _call_gemini(prompt: str, settings: Settings) -> ModelPlan:
-    return await gemini.generate(prompt, ModelPlan, settings)
+    asked = await gemini.generate(prompt, AskedPlan, settings)
+    return ModelPlan.model_validate(asked.model_dump())
 
 
 async def write_opportunities(
@@ -666,9 +848,14 @@ async def write_opportunities(
     if not settings.gemini_api_key:
         return none("GEMINI_API_KEY is not set")
 
-    prompt = build_prompt(digest, limit)
+    # The model reads the shrunk digest; its answer is checked against the full one.
+    sent, real_site_ids = shorten_site_ids(
+        shrink_digest(digest, settings.digest_near_typical_share)
+    )
+    prompt = build_prompt(sent, limit)
     key = {
         "model": settings.gemini_model,
+        "thinking": settings.gemini_thinking_level,
         "prompt": hashlib.sha256(prompt.encode()).hexdigest(),
     }
     model: ModelPlan | None = None
@@ -690,6 +877,7 @@ async def write_opportunities(
         except Exception as exc:  # any SDK, network or parsing failure
             log.warning("Gemini opportunities call failed: %r", exc)
             return none(f"Gemini call failed ({gemini.describe_error(exc)})")
+        model = _with_real_site_ids(model, real_site_ids)
 
     kept, dropped = keep_valid(model, digest, limit)
     if dropped:
