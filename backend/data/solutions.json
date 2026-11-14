@@ -1,0 +1,43 @@
+[
+  {
+    "id": "community_solar",
+    "name": "Community solar on reclaimed land",
+    "title_template": "Community solar on {asset}",
+    "asset_kind": "land",
+    "hosts": ["brownfield", "landfill", "mine_land", "contaminated_site"],
+    "triggers": ["low_income", "renters", "mobile_homes"]
+  },
+  {
+    "id": "resilience_hub",
+    "name": "Solar-and-battery resilience hub",
+    "title_template": "Solar-and-battery resilience hub at {asset}",
+    "asset_kind": "building",
+    "hosts": ["school", "library", "college"],
+    "triggers": ["hazard_risk", "low_income"]
+  },
+  {
+    "id": "weatherization_clinic",
+    "name": "Weatherization and heat-pump sign-up clinic",
+    "title_template": "Weatherization and heat-pump sign-up clinic at {asset}",
+    "asset_kind": "building",
+    "hosts": ["library", "school"],
+    "triggers": ["old_housing", "delivered_fuel_heat", "mobile_homes"]
+  },
+  {
+    "id": "public_ev_charging",
+    "name": "Public EV charging",
+    "title_template": "Public EV charging at {asset}",
+    "asset_kind": "building",
+    "hosts": ["college", "library", "school"],
+    "triggers": ["ev_charging_gap", "long_commute", "drive_alone"]
+  },
+  {
+    "id": "landfill_gas_energy",
+    "name": "Landfill gas-to-energy",
+    "title_template": "Landfill gas-to-energy at {asset}",
+    "asset_kind": "landfill",
+    "hosts": ["lmop_landfill"],
+    "host_requires": "is_candidate",
+    "triggers": ["landfill_gas_uncaptured"]
+  }
+]

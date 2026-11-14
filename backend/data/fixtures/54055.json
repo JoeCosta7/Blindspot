@@ -1,0 +1,1629 @@
+{
+ "fips": "54055",
+ "name": "Mercer County",
+ "state": "WV",
+ "population": null,
+ "context": {
+  "median_household_income": null,
+  "poverty_rate": null,
+  "unemployment_rate": null,
+  "electric_heat_share": null
+ },
+ "needs": [
+  {
+   "id": "landfill_gas_uncaptured",
+   "label": "Landfill with no gas energy project",
+   "theme": "waste",
+   "value": 1.0,
+   "national_value": null,
+   "unit": "count",
+   "severity": 75,
+   "level": "high",
+   "source": "EPA LMOP (September 2024)",
+   "detail": "EPA candidate landfill: Mercer County Landfill."
+  },
+  {
+   "id": "hazard_risk",
+   "label": "High natural hazard risk",
+   "theme": "resilience",
+   "value": null,
+   "national_value": null,
+   "unit": "rating",
+   "severity": 40,
+   "level": "elevated",
+   "source": "FEMA National Risk Index (December 2025)",
+   "detail": "Inland flooding: Relatively Moderate"
+  }
+ ],
+ "assets": [
+  {
+   "id": "repowering:170062",
+   "type": "mine_land",
+   "name": "Beeson Highwall",
+   "lat": 37.491999195,
+   "lon": -81.2024291758,
+   "attributes": {
+    "acres": 422.51,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 61.23,
+    "transmission_miles": 2.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170062"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170203",
+   "type": "mine_land",
+   "name": "Widemouth Creek High",
+   "lat": 37.4026499282,
+   "lon": -81.243576962,
+   "attributes": {
+    "acres": 397.27,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 57.58,
+    "transmission_miles": 1.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170203"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170063",
+   "type": "mine_land",
+   "name": "Rich Creek East Highwall",
+   "lat": 37.488766118,
+   "lon": -81.2156767925,
+   "attributes": {
+    "acres": 384.37,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 55.71,
+    "transmission_miles": 2.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170063"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170003",
+   "type": "mine_land",
+   "name": "Church Hollow High",
+   "lat": 37.4273593657,
+   "lon": -81.2375407448,
+   "attributes": {
+    "acres": 373.7,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 54.16,
+    "transmission_miles": 0.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170003"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170625",
+   "type": "mine_land",
+   "name": "Marsh Fork Highwall",
+   "lat": 37.4918616713,
+   "lon": -81.1842463664,
+   "attributes": {
+    "acres": 322.71,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 46.77,
+    "transmission_miles": 4.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170625"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170243",
+   "type": "mine_land",
+   "name": "Mccomas Highwall",
+   "lat": 37.4064208967,
+   "lon": -81.2891031253,
+   "attributes": {
+    "acres": 302.81,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 43.89,
+    "transmission_miles": 0.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170243"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170007",
+   "type": "mine_land",
+   "name": "Springton (mckinney) Highwall",
+   "lat": 37.4590228395,
+   "lon": -81.2379652824,
+   "attributes": {
+    "acres": 272.91,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 39.55,
+    "transmission_miles": 1.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170007"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170010",
+   "type": "mine_land",
+   "name": "Lower Rich Creek",
+   "lat": 37.4717161489,
+   "lon": -81.2131098721,
+   "attributes": {
+    "acres": 237.59,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 34.43,
+    "transmission_miles": 2.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170010"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170000",
+   "type": "mine_land",
+   "name": "Pocosin Bottom Highwall",
+   "lat": 37.434273092,
+   "lon": -81.2222419479,
+   "attributes": {
+    "acres": 229.48,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 33.26,
+    "transmission_miles": 1.7,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170000"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170002",
+   "type": "mine_land",
+   "name": "Matoaka Highwall",
+   "lat": 37.4214319579,
+   "lon": -81.2265523198,
+   "attributes": {
+    "acres": 216.36,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 31.36,
+    "transmission_miles": 1.8,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170002"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170214",
+   "type": "mine_land",
+   "name": "Tolliver Branch Highwall",
+   "lat": 37.3839434686,
+   "lon": -81.318239764,
+   "attributes": {
+    "acres": 214.53,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 31.09,
+    "transmission_miles": 0.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170214"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170073",
+   "type": "mine_land",
+   "name": "Hiawatha Highwall",
+   "lat": 37.4360204676,
+   "lon": -81.2420847719,
+   "attributes": {
+    "acres": 208.98,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 30.29,
+    "transmission_miles": 0.7,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170073"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169997",
+   "type": "mine_land",
+   "name": "Giatto/weyanoke Waterline",
+   "lat": 37.420472912,
+   "lon": -81.2425931382,
+   "attributes": {
+    "acres": 178.78,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 25.91,
+    "transmission_miles": 0.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169997"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170015",
+   "type": "mine_land",
+   "name": "Meadow Fork Highwall",
+   "lat": 37.4592113708,
+   "lon": -81.2108452309,
+   "attributes": {
+    "acres": 167.14,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 24.22,
+    "transmission_miles": 2.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170015"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169885",
+   "type": "mine_land",
+   "name": "Coaldale/bramwell Hill Waterline Extension",
+   "lat": 37.3471610079,
+   "lon": -81.3344008982,
+   "attributes": {
+    "acres": 161.94,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 23.47,
+    "transmission_miles": 0.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169885"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169884",
+   "type": "mine_land",
+   "name": "Bluewell Psd (windmill Gap) Waterli",
+   "lat": 37.3956157492,
+   "lon": -81.3205219057,
+   "attributes": {
+    "acres": 148.57,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 21.53,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169884"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170014",
+   "type": "mine_land",
+   "name": "Pinoak \"b\" Highwall",
+   "lat": 37.4535921146,
+   "lon": -81.2167653518,
+   "attributes": {
+    "acres": 135.04,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 19.57,
+    "transmission_miles": 2.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170014"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170247",
+   "type": "mine_land",
+   "name": "Mc Comas #1 Refuse Pile",
+   "lat": 37.3879995162,
+   "lon": -81.2940202305,
+   "attributes": {
+    "acres": 128.97,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 18.69,
+    "transmission_miles": 0.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170247"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170008",
+   "type": "mine_land",
+   "name": "Pinoak \"a\" Highwall",
+   "lat": 37.4475218299,
+   "lon": -81.2265640964,
+   "attributes": {
+    "acres": 128.7,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 18.65,
+    "transmission_miles": 1.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170008"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170071",
+   "type": "mine_land",
+   "name": "Fork Ridge Refuse Pile",
+   "lat": 37.4513816967,
+   "lon": -81.2810583987,
+   "attributes": {
+    "acres": 123.83,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 17.95,
+    "transmission_miles": 0.6,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170071"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170060",
+   "type": "mine_land",
+   "name": "Sand Gap \"a\" Highwall",
+   "lat": 37.4807658373,
+   "lon": -81.2381335851,
+   "attributes": {
+    "acres": 116.15,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 16.83,
+    "transmission_miles": 1.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170060"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170075",
+   "type": "mine_land",
+   "name": "Wenonah Highwalls",
+   "lat": 37.467012667,
+   "lon": -81.2339649477,
+   "attributes": {
+    "acres": 116.15,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 16.83,
+    "transmission_miles": 1.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170075"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170067",
+   "type": "mine_land",
+   "name": "Sand Gap \"b\" Highwal",
+   "lat": 37.4767658648,
+   "lon": -81.2391507331,
+   "attributes": {
+    "acres": 110.72,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 16.05,
+    "transmission_miles": 1.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170067"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170068",
+   "type": "mine_land",
+   "name": "Route 11 #2 Refuse Pile",
+   "lat": 37.4013808045,
+   "lon": -81.2789362726,
+   "attributes": {
+    "acres": 105.67,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 15.31,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170068"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169996",
+   "type": "mine_land",
+   "name": "Coaldale Coke Ovens And Drainage",
+   "lat": 37.3483040793,
+   "lon": -81.314617271,
+   "attributes": {
+    "acres": 103.25,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 14.96,
+    "transmission_miles": 1.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169996"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:29835",
+   "type": "brownfield",
+   "name": "Bluefield Area Transit Properties",
+   "lat": 37.2846033035,
+   "lon": -81.1197432928,
+   "attributes": {
+    "acres": 83.4,
+    "program": "Brownfields",
+    "city": "Bluefield",
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 12.09,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:29835"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170245",
+   "type": "mine_land",
+   "name": "Red Hollow Burning Refuse",
+   "lat": 37.3973553421,
+   "lon": -81.3006145113,
+   "attributes": {
+    "acres": 82.3,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 11.93,
+    "transmission_miles": 0.6,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170245"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170011",
+   "type": "mine_land",
+   "name": "Righthand Fork \"a\" Highwall",
+   "lat": 37.4574090661,
+   "lon": -81.2304984864,
+   "attributes": {
+    "acres": 79.33,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 11.5,
+    "transmission_miles": 1.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170011"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170212",
+   "type": "mine_land",
+   "name": "Mccomas Highwall",
+   "lat": 37.3923988129,
+   "lon": -81.3252182053,
+   "attributes": {
+    "acres": 73.6,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 10.67,
+    "transmission_miles": 1.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170212"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170064",
+   "type": "mine_land",
+   "name": "Rich Creek West Highwall",
+   "lat": 37.4864147115,
+   "lon": -81.228298693,
+   "attributes": {
+    "acres": 72.61,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 10.52,
+    "transmission_miles": 1.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170064"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170202",
+   "type": "mine_land",
+   "name": "Crane Creek Refuse Piles",
+   "lat": 37.3782244357,
+   "lon": -81.2768374367,
+   "attributes": {
+    "acres": 65.31,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 9.47,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170202"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:168018",
+   "type": "mine_land",
+   "name": "Piedmont Complex",
+   "lat": 37.4569767261,
+   "lon": -81.2630403952,
+   "attributes": {
+    "acres": 64.6,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 9.36,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168018"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170074",
+   "type": "mine_land",
+   "name": "Lamar Complex",
+   "lat": 37.4505603885,
+   "lon": -81.2973678111,
+   "attributes": {
+    "acres": 62.95,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 9.12,
+    "transmission_miles": 1.6,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170074"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170248",
+   "type": "mine_land",
+   "name": "Crane Creek #6 Highwall",
+   "lat": 37.3941658222,
+   "lon": -81.282195562,
+   "attributes": {
+    "acres": 54.33,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 7.87,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170248"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170069",
+   "type": "mine_land",
+   "name": "Left Hand Fork Rfs Pile",
+   "lat": 37.4261077381,
+   "lon": -81.2791786712,
+   "attributes": {
+    "acres": 49.45,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 7.17,
+    "transmission_miles": 0.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170069"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170242",
+   "type": "mine_land",
+   "name": "Mccomas Highwall",
+   "lat": 37.3981964337,
+   "lon": -81.3060346723,
+   "attributes": {
+    "acres": 40.89,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "community",
+    "epa_pv_mw": 5.93,
+    "transmission_miles": 0.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170242"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170004",
+   "type": "mine_land",
+   "name": "Bluff Mountain A",
+   "lat": 37.4981585385,
+   "lon": -81.1976020386,
+   "attributes": {
+    "acres": 40.08,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": null,
+    "epa_pv_mw": 5.81,
+    "transmission_miles": 3.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170004"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:44335",
+   "type": "landfill",
+   "name": "Mercer County Landfill",
+   "lat": 37.33199,
+   "lon": -81.12497,
+   "attributes": {
+    "acres": 38.2,
+    "program": "Landfill Methane Outreach Program",
+    "city": "Princeton",
+    "pv_scale": "utility",
+    "wind_scale": "facility",
+    "epa_pv_mw": 5.54,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:44335"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170012",
+   "type": "mine_land",
+   "name": "Righthand Fork \"b\" Highwall",
+   "lat": 37.4557482619,
+   "lon": -81.2311059869,
+   "attributes": {
+    "acres": 37.62,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "facility",
+    "epa_pv_mw": 5.45,
+    "transmission_miles": 1.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170012"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170210",
+   "type": "mine_land",
+   "name": "Booths Hollow Highwall",
+   "lat": 37.3650116646,
+   "lon": -81.3227913603,
+   "attributes": {
+    "acres": 35.11,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "utility",
+    "wind_scale": "facility",
+    "epa_pv_mw": 5.09,
+    "transmission_miles": 0.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170210"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169994",
+   "type": "mine_land",
+   "name": "Flipping Hollow Complex",
+   "lat": 37.3574034069,
+   "lon": -81.2959210557,
+   "attributes": {
+    "acres": 33.77,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 4.89,
+    "transmission_miles": 0.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169994"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170016",
+   "type": "mine_land",
+   "name": "Pocosin Highwall",
+   "lat": 37.4533272276,
+   "lon": -81.2286154778,
+   "attributes": {
+    "acres": 29.22,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 4.24,
+    "transmission_miles": 1.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170016"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170013",
+   "type": "mine_land",
+   "name": "Pinoak Highwall",
+   "lat": 37.4549303166,
+   "lon": -81.2286239632,
+   "attributes": {
+    "acres": 28.82,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 4.18,
+    "transmission_miles": 1.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170013"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169995",
+   "type": "mine_land",
+   "name": "Goodwill Hollow Refuse Pile",
+   "lat": 37.3616916274,
+   "lon": -81.2934660307,
+   "attributes": {
+    "acres": 27.65,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 4.01,
+    "transmission_miles": 0.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169995"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170204",
+   "type": "mine_land",
+   "name": "Browning-lambert Mt Hicks Hw",
+   "lat": 37.3866803757,
+   "lon": -81.2522213186,
+   "attributes": {
+    "acres": 23.13,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 3.35,
+    "transmission_miles": 1.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170204"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170006",
+   "type": "mine_land",
+   "name": "Matoaka",
+   "lat": 37.4425081091,
+   "lon": -81.2388128804,
+   "attributes": {
+    "acres": 22.44,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 3.25,
+    "transmission_miles": 1.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170006"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:168028",
+   "type": "mine_land",
+   "name": "Nemours Refuse Pile",
+   "lat": 37.3023632943,
+   "lon": -81.309829126,
+   "attributes": {
+    "acres": 18.28,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 2.65,
+    "transmission_miles": 4.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168028"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169928",
+   "type": "mine_land",
+   "name": "Barlow Hollow Refuse Pile",
+   "lat": 37.3504203885,
+   "lon": -81.3473579014,
+   "attributes": {
+    "acres": 17.66,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 2.56,
+    "transmission_miles": 1.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169928"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170066",
+   "type": "mine_land",
+   "name": "Sand Gap Complex/fork Ridge Portals",
+   "lat": 37.4901449469,
+   "lon": -81.2277218796,
+   "attributes": {
+    "acres": 17.48,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 2.53,
+    "transmission_miles": 2.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170066"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170213",
+   "type": "mine_land",
+   "name": "Windmill Gap Highwall",
+   "lat": 37.3844111487,
+   "lon": -81.3256616171,
+   "attributes": {
+    "acres": 17.18,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 2.49,
+    "transmission_miles": 0.8,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170213"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170009",
+   "type": "mine_land",
+   "name": "Springton Refuse Pile",
+   "lat": 37.4545724741,
+   "lon": -81.2389559054,
+   "attributes": {
+    "acres": 14.61,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 2.12,
+    "transmission_miles": 1.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170009"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170249",
+   "type": "mine_land",
+   "name": "Mc Comas #2 Refuse Pile",
+   "lat": 37.3939592496,
+   "lon": -81.2874922122,
+   "attributes": {
+    "acres": 13.94,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 2.02,
+    "transmission_miles": 0.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170249"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170076",
+   "type": "mine_land",
+   "name": "Springton Refuse Pile",
+   "lat": 37.4581245987,
+   "lon": -81.2393227501,
+   "attributes": {
+    "acres": 13.87,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 2.01,
+    "transmission_miles": 1.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170076"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:172879",
+   "type": "mine_land",
+   "name": "Wolfe Rock",
+   "lat": 37.3125813121,
+   "lon": -81.3323325173,
+   "attributes": {
+    "acres": 13.32,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 1.93,
+    "transmission_miles": 3.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:172879"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170005",
+   "type": "mine_land",
+   "name": "Hiawatha Mine Dump",
+   "lat": 37.4392175906,
+   "lon": -81.2423802618,
+   "attributes": {
+    "acres": 12.94,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.88,
+    "transmission_miles": 0.8,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170005"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170244",
+   "type": "mine_land",
+   "name": "Mccomas (poco Land) Refuse Pile",
+   "lat": 37.3984544311,
+   "lon": -81.2853823176,
+   "attributes": {
+    "acres": 12.7,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.84,
+    "transmission_miles": 0.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170244"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170072",
+   "type": "mine_land",
+   "name": "Weyanoke (parks) Por",
+   "lat": 37.413104132,
+   "lon": -81.2619162847,
+   "attributes": {
+    "acres": 11.53,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.67,
+    "transmission_miles": 0.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170072"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170017",
+   "type": "mine_land",
+   "name": "Pinoak Complex",
+   "lat": 37.4581585191,
+   "lon": -81.2015033549,
+   "attributes": {
+    "acres": 9.61,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 1.39,
+    "transmission_miles": 3.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170017"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170252",
+   "type": "mine_land",
+   "name": "Benefuels, Inc.",
+   "lat": 37.4087023778,
+   "lon": -81.2886707874,
+   "attributes": {
+    "acres": 9.42,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.36,
+    "transmission_miles": 0.6,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170252"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169999",
+   "type": "mine_land",
+   "name": "Matoaka (crespo) Drainage",
+   "lat": 37.4229206539,
+   "lon": -81.2397758294,
+   "attributes": {
+    "acres": 9.11,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.32,
+    "transmission_miles": 1.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169999"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:168027",
+   "type": "mine_land",
+   "name": "Bluefield \"bowman\" Burning Refuse",
+   "lat": 37.2930465057,
+   "lon": -81.3076331748,
+   "attributes": {
+    "acres": 7.95,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 1.15,
+    "transmission_miles": 3.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168027"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170246",
+   "type": "mine_land",
+   "name": "Crane Creek Drainage",
+   "lat": 37.388835015,
+   "lon": -81.2812676343,
+   "attributes": {
+    "acres": 7.95,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.15,
+    "transmission_miles": 0.1,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170246"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170626",
+   "type": "mine_land",
+   "name": "Beeson Structure",
+   "lat": 37.4813333631,
+   "lon": -81.1767232193,
+   "attributes": {
+    "acres": 7.95,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.15,
+    "transmission_miles": 4.7,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170626"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170001",
+   "type": "mine_land",
+   "name": "Matoaka (wv Rt. 10) Subsidence Ii",
+   "lat": 37.4277118768,
+   "lon": -81.2239794141,
+   "attributes": {
+    "acres": 7.31,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 1.06,
+    "transmission_miles": 2.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170001"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:5218",
+   "type": "brownfield",
+   "name": "Hatfield Mccoy Welcome Center",
+   "lat": 37.363911,
+   "lon": -81.335318,
+   "attributes": {
+    "acres": 4.4,
+    "program": "Brownfields",
+    "city": "Bramwell",
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.64,
+    "transmission_miles": 0.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:5218"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170241",
+   "type": "mine_land",
+   "name": "Mccomas (thomas) Drainage",
+   "lat": 37.3995752055,
+   "lon": -81.2871244931,
+   "attributes": {
+    "acres": 3.29,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.48,
+    "transmission_miles": 0.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170241"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:12087",
+   "type": "brownfield",
+   "name": "Former Freeman School",
+   "lat": 37.323025,
+   "lon": -81.307884,
+   "attributes": {
+    "acres": 3.0,
+    "program": "Brownfields",
+    "city": "Bramwell",
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 0.43,
+    "transmission_miles": 3.0,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:12087"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:13292",
+   "type": "brownfield",
+   "name": "Former Freeman School",
+   "lat": 37.330108,
+   "lon": -81.306758,
+   "attributes": {
+    "acres": 3.0,
+    "program": "Brownfields",
+    "city": "Bramwell",
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 0.43,
+    "transmission_miles": 2.5,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:13292"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:168031",
+   "type": "mine_land",
+   "name": "Mccomas (rose) Slide",
+   "lat": 37.3904068647,
+   "lon": -81.2956367161,
+   "attributes": {
+    "acres": 2.94,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.43,
+    "transmission_miles": 0.4,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168031"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170065",
+   "type": "mine_land",
+   "name": "Fork Ridge Portals",
+   "lat": 37.4868452009,
+   "lon": -81.2132797918,
+   "attributes": {
+    "acres": 1.84,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.27,
+    "transmission_miles": 2.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170065"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:169998",
+   "type": "mine_land",
+   "name": "Matoaka (young) Drainage",
+   "lat": 37.4263246184,
+   "lon": -81.2432583284,
+   "attributes": {
+    "acres": 1.65,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.24,
+    "transmission_miles": 1.2,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169998"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:170251",
+   "type": "mine_land",
+   "name": "Mccomas (gilliand) Burning Refuse",
+   "lat": 37.39996359,
+   "lon": -81.2858361221,
+   "attributes": {
+    "acres": 1.55,
+    "program": "West Virginia Abandoned Coal Mine Areas",
+    "city": null,
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.22,
+    "transmission_miles": 0.3,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170251"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:29771",
+   "type": "brownfield",
+   "name": "Hawley Building",
+   "lat": 37.2667271796,
+   "lon": -81.2216710497,
+   "attributes": {
+    "acres": 0.53,
+    "program": "Brownfields",
+    "city": "Bluefield",
+    "pv_scale": "distributed",
+    "wind_scale": "facility",
+    "epa_pv_mw": 0.08,
+    "transmission_miles": 0.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:29771"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:6398",
+   "type": "brownfield",
+   "name": "Summit Bank Building",
+   "lat": 37.2680569387,
+   "lon": -81.2220553009,
+   "attributes": {
+    "acres": 0.44,
+    "program": "Brownfields",
+    "city": "Bluefield",
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 0.06,
+    "transmission_miles": 0.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:6398"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:26525",
+   "type": "brownfield",
+   "name": "Law And Commerce Building",
+   "lat": 37.26876,
+   "lon": -81.22205,
+   "attributes": {
+    "acres": 0.25,
+    "program": "Brownfields",
+    "city": "Bluefield",
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 0.04,
+    "transmission_miles": 0.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:26525"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "repowering:9567",
+   "type": "brownfield",
+   "name": "Elks Building",
+   "lat": 37.2689778188,
+   "lon": -81.2225365038,
+   "attributes": {
+    "acres": 0.1,
+    "program": "Brownfields",
+    "city": "Bluefield",
+    "pv_scale": "distributed",
+    "wind_scale": null,
+    "epa_pv_mw": 0.01,
+    "transmission_miles": 0.9,
+    "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:9567"
+   },
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "lmop:2215",
+   "type": "lmop_landfill",
+   "name": "Mercer County Landfill",
+   "lat": 37.33199,
+   "lon": -81.12497,
+   "attributes": {
+    "landfill_status": "Open",
+    "project_status": "Candidate",
+    "is_candidate": true,
+    "has_operational_project": false,
+    "operational_mw": null,
+    "waste_in_place_tons": 2134206.0,
+    "lfg_collected_mmscfd": null,
+    "lfg_collected_year": null,
+    "lfg_generated_mmscfd": 0.724,
+    "ownership_type": "Public"
+   },
+   "source": "EPA LMOP (September 2024)"
+  },
+  {
+   "id": "afdc:49777",
+   "type": "ev_station",
+   "name": "Cole Nissan",
+   "lat": 37.322633,
+   "lon": -81.135206,
+   "attributes": {
+    "city": "Bluefield",
+    "level2_ports": 1,
+    "dc_fast_ports": null
+   },
+   "source": "NLR Alternative Fuel Stations"
+  },
+  {
+   "id": "afdc:116218",
+   "type": "ev_station",
+   "name": "Bluefield Inn, a Select Registry Property - Tesla Destination",
+   "lat": 37.254924,
+   "lon": -81.217121,
+   "attributes": {
+    "city": "Bluefield",
+    "level2_ports": 2,
+    "dc_fast_ports": null
+   },
+   "source": "NLR Alternative Fuel Stations"
+  },
+  {
+   "id": "afdc:236873",
+   "type": "ev_station",
+   "name": "Princeton, WV - Tesla Supercharger",
+   "lat": 37.364054,
+   "lon": -81.052396,
+   "attributes": {
+    "city": "Princeton",
+    "level2_ports": null,
+    "dc_fast_ports": 8
+   },
+   "source": "NLR Alternative Fuel Stations"
+  },
+  {
+   "id": "afdc:376462",
+   "type": "ev_station",
+   "name": "Bluefield WV - Tail Yard Parking Lot",
+   "lat": 37.2695819,
+   "lon": -81.22019829999999,
+   "attributes": {
+    "city": "Bluefield",
+    "level2_ports": 4,
+    "dc_fast_ports": null
+   },
+   "source": "NLR Alternative Fuel Stations"
+  },
+  {
+   "id": "afdc:404778",
+   "type": "ev_station",
+   "name": "Bluestone Travel Plaza - DC America",
+   "lat": 37.47444037,
+   "lon": -81.06737624,
+   "attributes": {
+    "city": "Princeton",
+    "level2_ports": null,
+    "dc_fast_ports": 4
+   },
+   "source": "NLR Alternative Fuel Stations"
+  },
+  {
+   "id": "afdc:448376",
+   "type": "ev_station",
+   "name": "LOT1ATTOWNHALL LOTATTOWNHALL",
+   "lat": 37.325653,
+   "lon": -81.313297,
+   "attributes": {
+    "city": "Bramwell",
+    "level2_ports": 2,
+    "dc_fast_ports": null
+   },
+   "source": "NLR Alternative Fuel Stations"
+  }
+ ],
+ "asset_counts": {
+  "mine_land": 67,
+  "brownfield": 8,
+  "landfill": 1,
+  "lmop_landfill": 1,
+  "ev_station": 6
+ },
+ "missing_asset_types": [
+  "contaminated_site"
+ ],
+ "resources": {
+  "solar_kwh_per_kw_year": 1306.0
+ },
+ "opportunities": [
+  {
+   "id": "landfill_gas_energy:lmop:2215",
+   "solution_id": "landfill_gas_energy",
+   "title": "Landfill gas-to-energy at Mercer County Landfill",
+   "asset_id": "lmop:2215",
+   "need_ids": [
+    "landfill_gas_uncaptured"
+   ],
+   "score": 75,
+   "estimates": [
+    {
+     "label": "Landfill gas generated",
+     "value": 0.724,
+     "unit": "million cubic feet per day",
+     "is_estimate": true,
+     "assumptions": [
+      "EPA LMOP database estimate of gas generated by the landfill"
+     ]
+    },
+    {
+     "label": "Waste in place",
+     "value": 2130000.0,
+     "unit": "tons",
+     "is_estimate": true,
+     "assumptions": [
+      "Reported in the EPA LMOP database; not checked by this tool"
+     ]
+    }
+   ],
+   "funding": []
+  }
+ ],
+ "narrative": {
+  "summary": "Mercer County, WV has 2 flagged needs. The most severe are landfill with no gas energy project and high natural hazard risk. 1 opportunity was matched to a local site: \"Landfill gas-to-energy at Mercer County Landfill\".",
+  "opportunity_notes": [
+   {
+    "opportunity_id": "landfill_gas_energy:lmop:2215",
+    "text": "Addresses landfill with no gas energy project. Rough estimates: landfill gas generated 0.724 million cubic feet per day; waste in place 2,130,000 tons. No program in the funding table matched."
+   }
+  ],
+  "caveats": [
+   "Figures marked as estimates are rough. The assumptions behind each one are listed with it.",
+   "EPA's landfill database does not include every landfill.",
+   "Some data could not be loaded (Census ACS (county), Census ACS (national baseline) and OpenStreetMap public buildings), so needs or sites may be missing from this report."
+  ],
+  "generated_by": "template"
+ },
+ "source_status": [
+  {
+   "source": "census",
+   "ok": false,
+   "cached": false,
+   "message": "CENSUS_API_KEY is not set (the Census API rejects keyless calls)"
+  },
+  {
+   "source": "census_national",
+   "ok": false,
+   "cached": false,
+   "message": "CENSUS_API_KEY is not set (the Census API rejects keyless calls)"
+  },
+  {
+   "source": "nri",
+   "ok": true,
+   "cached": false,
+   "message": null
+  },
+  {
+   "source": "repowering",
+   "ok": true,
+   "cached": false,
+   "message": null
+  },
+  {
+   "source": "lmop",
+   "ok": true,
+   "cached": false,
+   "message": "1 landfill(s) in the EPA file have no coordinates and are not mapped"
+  },
+  {
+   "source": "overpass",
+   "ok": false,
+   "cached": false,
+   "message": "Timed out after 15 s"
+  },
+  {
+   "source": "ev_stations",
+   "ok": true,
+   "cached": true,
+   "message": null
+  },
+  {
+   "source": "ev_national_count",
+   "ok": true,
+   "cached": true,
+   "message": null
+  },
+  {
+   "source": "pvwatts",
+   "ok": true,
+   "cached": true,
+   "message": null
+  },
+  {
+   "source": "gemini",
+   "ok": false,
+   "cached": false,
+   "message": "GEMINI_API_KEY is not set; template narrative used"
+  }
+ ]
+}
