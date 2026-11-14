@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+httpx
+pydantic
+pydantic-settings
+pandas
+pyarrow
+openpyxl
+shapely
+geopandas
+google-genai
+pytest
+ruff
