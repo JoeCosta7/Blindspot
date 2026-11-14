@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from starlette.types import Receive, Scope, Send
 
 from app import matching
 from app.config import Settings, get_settings
@@ -52,6 +53,22 @@ DATA_FILES = (
 )
 
 
+class GZipSkipStreams(GZipMiddleware):
+    """GZip buffers NDJSON progress streams until the request finishes, so the
+    loading checklist never turns green/red live. Skip compression for those."""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            query = (scope.get("query_string") or b"").decode()
+            if path.endswith("/api/scout") or (
+                path.endswith("/api/analyze") and "progress=" in query
+            ):
+                await self.app(scope, receive, send)
+                return
+        await super().__call__(scope, receive, send)
+
+
 def load_county_index(settings: Settings) -> CountyIndex:
     path = settings.data_dir / "counties.geojson"
     if not path.exists():
@@ -71,7 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="County Sustainability Planner", lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(GZipSkipStreams, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
@@ -283,7 +300,14 @@ async def analyze(
             + "\n"
         )
 
-    return StreamingResponse(events(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        events(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # --- Site Scout -----------------------------------------------------------------------

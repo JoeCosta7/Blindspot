@@ -794,34 +794,47 @@ body.panel-resizing .map {
   gap: 8px;
 }
 
+.loading-source {
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
 .loading-mark {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
   display: grid;
   place-items: center;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1;
+  border-radius: 50%;
+}
+
+.loading-source-ok {
+  background: rgb(22 163 74 / 12%);
 }
 
 .loading-source-ok .loading-mark {
-  color: #15803d;
+  color: #fff;
+  background: #16a34a;
+}
+
+.loading-source-fail {
+  background: rgb(185 28 28 / 12%);
 }
 
 .loading-source-fail .loading-mark {
-  color: #b91c1c;
+  color: #fff;
+  background: #b91c1c;
 }
 
 .loading-source-pending {
   color: var(--muted);
 }
 
-.loading-source-ok .loading-source-label {
-  color: var(--text);
-}
-
+.loading-source-ok .loading-source-label,
 .loading-source-fail .loading-source-label {
   color: var(--text);
 }
