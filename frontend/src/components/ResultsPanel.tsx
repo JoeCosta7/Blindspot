@@ -12,8 +12,9 @@ import {
 import type { AnalyzeResponse, Asset, CountyReport } from "../types";
 import { NeedList } from "./NeedList";
 import { OpportunityCard } from "./OpportunityCard";
+import { SuggestionCard } from "./SuggestionCard";
 
-type Tab = "opportunities" | "needs" | "assets";
+type Tab = "opportunities" | "suggestions" | "needs" | "assets";
 
 const LOADING_SOURCES = [
   "Census ACS: county and national figures",
@@ -26,7 +27,7 @@ const LOADING_SOURCES = [
   "OpenStreetMap: schools, libraries, colleges",
   "NLR: EV charging stations",
   "NLR PVWatts: solar yield",
-  "Gemini: written brief",
+  "Gemini: written brief and suggested solutions",
 ];
 
 export function LoadingPanel({ label }: { label: string }) {
@@ -102,8 +103,9 @@ function ContextStats({ report }: { report: CountyReport }) {
 }
 
 function SourceNotice({ report }: { report: CountyReport }) {
-  // The Gemini entry is about how the brief was written, not missing data.
-  const failed = report.source_status.filter((s) => !s.ok && s.source !== "gemini");
+  // The Gemini entries are about how the brief and the suggestions were written,
+  // not missing data. The Suggestions tab reports its own failure.
+  const failed = report.source_status.filter((s) => !s.ok && !s.source.startsWith("gemini"));
   if (failed.length === 0) return null;
   return (
     <div className="notice notice-warning" role="status">
@@ -192,6 +194,46 @@ function AssetList({
   );
 }
 
+function SuggestionList({
+  report,
+  assetsById,
+  onShowOnMap,
+}: {
+  report: CountyReport;
+  assetsById: Map<string, Asset>;
+  onShowOnMap: (asset: Asset) => void;
+}) {
+  if (report.suggested_solutions.length === 0) {
+    const status = report.source_status.find((s) => s.source === "gemini_solutions");
+    return (
+      <p className="muted">
+        No suggestions for this report.
+        {status?.message && ` ${status.message}.`}
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="muted">
+        Proposed by Gemini from a summary of this report, in addition to the rule-based
+        opportunities. Each one was checked to use only needs, sites and numbers from this report.
+        Feasibility, cost and funding were not checked.
+      </p>
+      {report.suggested_solutions.map((suggestion) => (
+        <SuggestionCard
+          key={suggestion.id}
+          suggestion={suggestion}
+          assets={suggestion.asset_ids
+            .map((id) => assetsById.get(id))
+            .filter((asset): asset is Asset => asset !== undefined)}
+          needs={report.needs}
+          onShowOnMap={onShowOnMap}
+        />
+      ))}
+    </>
+  );
+}
+
 function CountyView({
   report,
   onShowOnMap,
@@ -211,6 +253,7 @@ function CountyView({
   const totalAssets = Object.values(report.asset_counts).reduce((sum, n) => sum + n, 0);
   const tabs: [Tab, string][] = [
     ["opportunities", `Opportunities (${report.opportunities.length})`],
+    ["suggestions", `Suggestions (${report.suggested_solutions.length})`],
     ["needs", `Needs (${report.needs.length})`],
     ["assets", `Sites (${formatWhole(totalAssets)})`],
   ];
@@ -272,6 +315,9 @@ function CountyView({
               />
             ))
           ))}
+        {tab === "suggestions" && (
+          <SuggestionList report={report} assetsById={assetsById} onShowOnMap={onShowOnMap} />
+        )}
         {tab === "needs" && <NeedList needs={report.needs} />}
         {tab === "assets" && <AssetList report={report} onShowOnMap={onShowOnMap} />}
       </div>

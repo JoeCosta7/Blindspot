@@ -9,5 +9,6 @@ openpyxl
 shapely
 geopandas
 google-genai
+earthengine-api
 pytest
 ruff

@@ -189,3 +189,39 @@ def test_farm_waste_need_levels(settings):
     some = needs.farm_waste_need(farm(dairies=5, digesters=2, building=1), settings)
     assert some.level == "elevated"
     assert "2 operating digesters" in some.detail and "1 under construction" in some.detail
+
+
+def ee_metrics(heat=9.0, canopy=0.05, built_up=0.02):
+    return {
+        "heat_island_c": heat,
+        "lst_built_up_c": 38.0,
+        "lst_natural_c": 29.0,
+        "built_up_share": built_up,
+        "canopy_built_up": canopy,
+    }
+
+
+def test_urban_heat_need_levels(settings):
+    assert needs.urban_heat_need(None, settings) is None
+    assert needs.urban_heat_need(ee_metrics(heat=6.4), settings) is None  # below elevated
+    assert needs.urban_heat_need(ee_metrics(heat=None), settings) is None
+    elevated = needs.urban_heat_need(ee_metrics(heat=6.5), settings)
+    assert (elevated.level, elevated.severity) == ("elevated", 48)  # (6.5-5.1)/(8.0-5.1)
+    high = needs.urban_heat_need(ee_metrics(heat=9.0), settings)
+    assert (high.id, high.level, high.severity, high.unit) == ("urban_heat", "high", 100, "celsius")
+    assert (high.value, high.national_value) == (9.0, 5.1)
+
+
+def test_low_tree_canopy_need_is_scored_like_an_acs_need(settings):
+    assert needs.low_tree_canopy_need(ee_metrics(canopy=0.14), settings) is None
+    assert needs.low_tree_canopy_need(ee_metrics(canopy=None), settings) is None
+    elevated = needs.low_tree_canopy_need(ee_metrics(canopy=0.12), settings)  # 0.133/0.12 = 1.11
+    assert (elevated.id, elevated.level) == ("low_tree_canopy", "elevated")
+    assert needs.low_tree_canopy_need(ee_metrics(canopy=0.0), settings).severity == 100
+    assert needs.low_tree_canopy_need(ee_metrics(canopy=0.05), settings).level == "high"
+
+
+def test_earth_engine_needs_skip_counties_with_almost_no_built_up_land(settings):
+    sparse = ee_metrics(heat=9.0, canopy=0.0, built_up=0.0002)
+    assert needs.urban_heat_need(sparse, settings) is None
+    assert needs.low_tree_canopy_need(sparse, settings) is None

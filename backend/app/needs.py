@@ -8,7 +8,7 @@ from typing import Any
 
 from app.config import Settings
 from app.models import Need, NeedLevel
-from app.sources import afdc, farms, lmop, nri, state_energy
+from app.sources import afdc, earthengine, farms, lmop, nri, state_energy
 from app.sources.census import AcsMetrics
 
 
@@ -268,6 +268,72 @@ def grid_carbon_need(energy: dict[str, Any] | None, settings: Settings) -> Need 
             f"State average for {energy['state_abbr']}: carbon dioxide per megawatt-hour "
             "generated in the state. Power crosses state lines, so this is not exactly what "
             "the county's homes use."
+        ),
+    )
+
+
+def _enough_built_up(metrics: dict[str, Any] | None, settings: Settings) -> bool:
+    share = (metrics or {}).get("built_up_share")
+    return share is not None and share >= settings.ee_min_built_up_share
+
+
+def urban_heat_need(metrics: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Summer surface temperature of built-up land minus natural land in the
+    county. Raw temperature would only measure climate; the difference measures
+    what buildings and pavement add. Thresholds are in config.py."""
+    if not metrics or not _enough_built_up(metrics, settings):
+        return None
+    gap = metrics.get("heat_island_c")
+    if gap is None or gap < settings.heat_island_elevated_c:
+        return None
+    span = settings.heat_island_high_c - settings.heat_island_reference_c
+    severity = round(100 * min(max((gap - settings.heat_island_reference_c) / span, 0.0), 1.0))
+    return Need(
+        id="urban_heat",
+        label="Built-up land much hotter than its surroundings",
+        theme="resilience",
+        value=float(gap),
+        national_value=settings.heat_island_reference_c,
+        unit="celsius",
+        severity=severity,
+        level="high" if gap >= settings.heat_island_high_c else "elevated",
+        source=earthengine.SOURCE_LABEL,
+        detail=(
+            f"On summer days (2021-2025) buildings and pavement averaged "
+            f"{metrics['lst_built_up_c']} C against {metrics['lst_natural_c']} C for natural "
+            "land in the county. The US figure is the median of 120 sampled counties, not a "
+            "published standard."
+        ),
+    )
+
+
+def low_tree_canopy_need(metrics: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Tree canopy over the county's built-up land against the lower-48 average,
+    scored like an ACS need with lower canopy as the worse side. Counted on
+    built-up land only: a desert or a farm county has little canopy and needs
+    none."""
+    if not metrics or not _enough_built_up(metrics, settings):
+        return None
+    canopy = metrics.get("canopy_built_up")
+    baseline = settings.tree_canopy_built_up_national
+    if canopy is None:
+        return None
+    severity, level = (100, "high") if canopy <= 0 else score_ratio(baseline / canopy, settings)
+    if level is None:
+        return None
+    return Need(
+        id="low_tree_canopy",
+        label="Little tree canopy over built-up land",
+        theme="resilience",
+        value=float(canopy),
+        national_value=baseline,
+        unit="share",
+        severity=severity,
+        level=level,
+        source=earthengine.SOURCE_LABEL,
+        detail=(
+            "Share of the county's built-up land (buildings and pavement) covered by tree "
+            "canopy. The US figure is the lower-48 average."
         ),
     )
 

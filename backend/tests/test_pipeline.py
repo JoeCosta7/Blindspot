@@ -4,12 +4,13 @@ import asyncio
 
 import pytest
 
-from app import pipeline
+from app import narrative, pipeline, suggestions
 from app.sources import (
     SourceError,
     afdc,
     census,
     dams,
+    earthengine,
     farms,
     geoapify,
     lmop,
@@ -187,6 +188,7 @@ def sources(monkeypatch):
     monkeypatch.setattr(state_energy, "for_state", lambda data_dir, state: None)
     monkeypatch.setattr(dams, "dams_for_county", lambda data_dir, fips: [])
     monkeypatch.setattr(farms, "farms_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(earthengine, "fetch_county_metrics", returning(None))
 
 
 def analyze(settings):
@@ -249,9 +251,12 @@ def test_full_report(sources, settings):
     asset_ids = {a.id for a in report.assets}
     assert all(o.asset_id in asset_ids for o in report.opportunities)
 
+    # With no Gemini key: the template brief, and no suggested solutions.
     assert report.narrative.generated_by == "template"
+    assert report.suggested_solutions == []
     status = {s.source: s for s in report.source_status}
-    assert all(s.ok for name, s in status.items() if name != "gemini")
+    assert all(s.ok for name, s in status.items() if not name.startswith("gemini"))
+    assert "GEMINI_API_KEY" in status["gemini_solutions"].message
     assert "no coordinates" in status["lmop"].message
 
 
@@ -327,6 +332,66 @@ def test_map_caps_keep_opportunity_assets(sources, settings, monkeypatch):
     assert report.asset_counts["brownfield"] == 10
     assert shown[:3] == ["repowering:10", "repowering:9", "repowering:8"]  # largest first
     assert "repowering:1" in shown and len(shown) == 4
+
+
+def test_gemini_suggestions_reach_the_report_and_the_map(sources, settings, monkeypatch):
+    rows = [
+        {
+            "site_id": i,
+            "name": f"Site {i}",
+            "site_type": "mine_land",
+            "program": "AML",
+            "lat": 0.5,
+            "lon": 0.5,
+            "acres": float(i),
+            "pv_scale": None,
+        }
+        for i in range(1, 11)
+    ]
+    monkeypatch.setattr(repowering, "sites_for_county", lambda data_dir, fips: rows)
+    prompts = []
+
+    async def fake_gemini(prompt, s):
+        prompts.append(prompt)
+        return suggestions.ModelSuggestions(
+            solutions=[
+                {
+                    "title": "Mine land solar",
+                    "need_ids": ["low_income"],
+                    "site_ids": ["repowering:8"],
+                    "what": "Offer Site 8 to a solar developer.",
+                    "why_here": "The county has 10 abandoned mine lands.",
+                    "first_steps": ["Check who owns the land."],
+                },
+                {
+                    "title": "Invented",
+                    "need_ids": ["low_income"],
+                    "site_ids": ["repowering:1"],  # in the county, not in the digest
+                    "what": "x",
+                    "why_here": "y",
+                    "first_steps": ["z"],
+                },
+            ]
+        )
+
+    monkeypatch.setattr(suggestions, "_call_gemini", fake_gemini)
+    monkeypatch.setattr(narrative, "_call_gemini", raising(RuntimeError("not under test")))
+    # The map shows only the largest mine land, so the suggested one must be kept.
+    keyed = settings.model_copy(update={"gemini_api_key": "k", "max_sites_per_county": 1})
+
+    report = analyze(keyed)
+
+    assert [s.title for s in report.suggested_solutions] == ["Mine land solar"]
+    assert report.suggested_solutions[0].asset_ids == ["repowering:8"]
+    shown = {a.id for a in report.assets}
+    assert {"repowering:10", "repowering:8"} <= shown and "repowering:7" not in shown
+    status = {s.source: s for s in report.source_status}
+    assert status["gemini_solutions"].ok and "1 of 2" in status["gemini_solutions"].message
+
+    # The model was sent the digest: three mine lands and a count, not all ten.
+    assert len(prompts) == 1
+    assert '"count": 10' in prompts[0]
+    assert "repowering:8" in prompts[0] and "repowering:7" not in prompts[0]
 
 
 def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, monkeypatch):
@@ -419,3 +484,29 @@ def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, m
     shown = {a.id for a in report.assets}
     assert all(o.asset_id in shown for o in report.opportunities if o.asset_id)
     assert any("state averages" in c for c in report.narrative.caveats)
+
+
+def test_earth_engine_needs_flow_into_the_report(sources, settings, monkeypatch):
+    metrics = {
+        "heat_island_c": 9.0,
+        "lst_built_up_c": 38.0,
+        "lst_natural_c": 29.0,
+        "built_up_share": 0.02,
+        "canopy_built_up": 0.05,
+    }
+    monkeypatch.setattr(earthengine, "fetch_county_metrics", returning(metrics))
+    report = analyze(settings)
+    ids = {n.id for n in report.needs}
+    assert {"urban_heat", "low_tree_canopy"} <= ids
+    assert any(o.solution_id == "shade_trees_depaving" for o in report.opportunities)
+    assert next(s for s in report.source_status if s.source == "earthengine").ok
+
+
+def test_earth_engine_failure_keeps_the_rest_of_the_report(sources, settings, monkeypatch):
+    monkeypatch.setattr(
+        earthengine, "fetch_county_metrics", raising(SourceError("Earth Engine sign-in failed"))
+    )
+    report = analyze(settings)
+    status = next(s for s in report.source_status if s.source == "earthengine")
+    assert not status.ok and "sign-in" in status.message
+    assert report.needs and not {"urban_heat", "low_tree_canopy"} & {n.id for n in report.needs}

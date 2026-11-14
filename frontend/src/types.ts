@@ -21,7 +21,9 @@ export type NeedId =
   | "hazard_risk"
   | "high_electricity_cost"
   | "carbon_intensive_grid"
-  | "unmanaged_farm_waste";
+  | "unmanaged_farm_waste"
+  | "urban_heat"
+  | "low_tree_canopy";
 
 export type NeedTheme = "equity" | "energy" | "transportation" | "waste" | "resilience";
 export type NeedLevel = "elevated" | "high";
@@ -32,7 +34,8 @@ export type NeedUnit =
   | "count"
   | "rating"
   | "usd_per_month"
-  | "lb_co2_per_mwh";
+  | "lb_co2_per_mwh"
+  | "celsius";
 
 export type AssetType =
   | "brownfield"
@@ -130,6 +133,19 @@ export interface Narrative {
   generated_by: "gemini" | "template";
 }
 
+/** Proposed by Gemini from a digest of the report. Not rule-matched: no score,
+ * estimate or funding, and not checked for feasibility. */
+export interface SuggestedSolution {
+  id: string;
+  title: string;
+  summary: string;
+  rationale: string;
+  need_ids: NeedId[];
+  /** Sites the suggestion names. Empty for a county-wide suggestion. */
+  asset_ids: string[];
+  first_steps: string[];
+}
+
 export interface SourceStatus {
   source: string;
   ok: boolean;
@@ -162,6 +178,9 @@ export interface CountyReport {
   missing_asset_types: AssetType[];
   resources: Resources;
   opportunities: Opportunity[];
+  /** Empty when Gemini was not used or every suggestion was rejected; the
+   * `gemini_solutions` entry in `source_status` says which. */
+  suggested_solutions: SuggestedSolution[];
   narrative: Narrative;
   source_status: SourceStatus[];
 }

@@ -142,6 +142,13 @@ programs. EIA's Table 5A gives 863 kWh a month for 2024 (10,359 a year);
 - **EV benchmark.** Computed per request from two cached calls (national
   station count and ACS national population) instead of a hard-coded constant.
   Set `EV_BENCHMARK_PER_10K` to pin it.
+- **AI-suggested solutions.** `suggestions.py` has Gemini propose up to four
+  further solutions per county, shown in their own "Suggestions" tab. This departs
+  from rule 2 of the plan: Gemini chooses these solutions. It is sent a digest,
+  not the report (flagged needs, headline figures, and the best three sites of
+  each type with exact counts), and still supplies no numbers or funding
+  programs: a suggestion that names a need, site or number missing from the
+  digest is dropped. Set `MAX_AI_SOLUTIONS=0` to turn it off.
 - **Contract additions** in `models.py`: `Need.detail`, `asset_counts`,
   `missing_asset_types`, extra `context` and `resources` fields, and `agency`
   and `key_terms` on funding matches. `Opportunity.asset_id` can be null.

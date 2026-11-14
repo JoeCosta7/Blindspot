@@ -6,7 +6,8 @@ import httpx
 import pytest
 
 from app import cache
-from app.sources import SourceError, afdc, census, geoapify, pvwatts
+from app.sources import SourceError, afdc, census, earthengine, geoapify, pvwatts
+from tests.conftest import make_county
 
 
 def client_returning(handler) -> httpx.AsyncClient:
@@ -282,15 +283,25 @@ def test_geoapify_splits_full_boxes_and_dedupes(settings, monkeypatch):
         boxes.append(box)
         if box == "rect:-76.0,42.0,-75.0,43.0":
             names = ["A", "B", "C"]  # full: triggers the split
-            return httpx.Response(200, json={"features": [
-                feature(n, ["education.school"], osm=("w", i)) for i, n in enumerate(names)
-            ]})
+            return httpx.Response(
+                200,
+                json={
+                    "features": [
+                        feature(n, ["education.school"], osm=("w", i)) for i, n in enumerate(names)
+                    ]
+                },
+            )
         # Every quarter returns place w/1 (an edge duplicate) plus one of its own.
         own = len(boxes)
-        return httpx.Response(200, json={"features": [
-            feature("B", ["education.school"], osm=("w", 1)),
-            feature(f"Q{own}", ["education.school"], osm=("w", 100 + own)),
-        ]})
+        return httpx.Response(
+            200,
+            json={
+                "features": [
+                    feature("B", ["education.school"], osm=("w", 1)),
+                    feature(f"Q{own}", ["education.school"], osm=("w", 100 + own)),
+                ]
+            },
+        )
 
     rows, _ = fetch_buildings(keyed, handler)
     assert len(boxes) == 5  # the county box, then its four quarters
@@ -328,3 +339,31 @@ def test_state_energy_lookup(tmp_path):
     assert found["national"]["residential_monthly_bill_usd"] == 142.26
     assert (found["electricity_year"], found["grid_year"]) == (2024, 2023)
     assert state_energy.for_state(data_dir, "ZZ") is None
+
+
+# --- earth engine -------------------------------------------------------------
+
+
+def test_earth_engine_needs_a_project(settings):
+    county = make_county("99001", 0, 0, 1, 1)
+    with pytest.raises(SourceError, match="EE_PROJECT"):
+        asyncio.run(earthengine.fetch_county_metrics(settings, county))
+
+
+def test_earth_engine_result_is_cached_by_county(settings, monkeypatch):
+    calls = []
+
+    def fake_compute(project, county):
+        calls.append(county.fips)
+        return {"heat_island_c": 7.0, "canopy_built_up": 0.1}
+
+    monkeypatch.setattr(earthengine, "_compute", fake_compute)
+    keyed = settings.model_copy(update={"ee_project": "demo-project"})
+    county = make_county("99001", 0, 0, 1, 1)
+
+    async def run():
+        return [await earthengine.fetch_county_metrics(keyed, county) for _ in range(2)]
+
+    (first, first_cached), (second, second_cached) = asyncio.run(run())
+    assert first == second and (first_cached, second_cached) == (False, True)
+    assert calls == ["99001"]

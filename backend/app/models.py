@@ -40,11 +40,20 @@ NeedId = Literal[
     "high_electricity_cost",  # state average, EIA
     "carbon_intensive_grid",  # state average, EPA eGRID
     "unmanaged_farm_waste",  # large livestock farms without digesters
+    "urban_heat",  # built-up land much hotter than the county's natural land (Landsat)
+    "low_tree_canopy",  # little tree canopy on the county's built-up land (USFS TCC)
 ]
 NeedTheme = Literal["equity", "energy", "transportation", "waste", "resilience"]
 NeedLevel = Literal["elevated", "high"]
 NeedUnit = Literal[
-    "share", "usd", "per_10k_residents", "count", "rating", "usd_per_month", "lb_co2_per_mwh"
+    "share",
+    "usd",
+    "per_10k_residents",
+    "count",
+    "rating",
+    "usd_per_month",
+    "lb_co2_per_mwh",
+    "celsius",  # a temperature difference in degrees Celsius
 ]
 
 AssetType = Literal[
@@ -143,6 +152,22 @@ class Narrative(BaseModel):
     generated_by: Literal["gemini", "template"]
 
 
+class SuggestedSolution(BaseModel):
+    """A solution proposed by Gemini from a digest of this report. Unlike an
+    Opportunity it is not rule-matched: it has no score, estimate or funding,
+    and nothing in it has been checked for feasibility. Code only confirms that
+    its needs and sites exist and that it contains no number the digest lacks."""
+
+    id: str
+    title: str
+    summary: str
+    rationale: str
+    need_ids: list[NeedId]
+    # Sites the suggestion names. Empty for a county-wide suggestion.
+    asset_ids: list[str]
+    first_steps: list[str]
+
+
 class SourceStatus(BaseModel):
     source: str
     ok: bool
@@ -176,6 +201,9 @@ class CountyReport(BaseModel):
     missing_asset_types: list[AssetType] = Field(default_factory=list)
     resources: Resources
     opportunities: list[Opportunity]
+    # Written by Gemini; empty when it was not used or every suggestion was
+    # rejected. The `gemini_solutions` entry in `source_status` says which.
+    suggested_solutions: list[SuggestedSolution] = Field(default_factory=list)
     narrative: Narrative
     source_status: list[SourceStatus]
 

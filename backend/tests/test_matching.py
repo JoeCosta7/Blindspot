@@ -18,7 +18,12 @@ MVP_SOLUTIONS = {
     "public_ev_charging",
     "landfill_gas_energy",
 }
-STRETCH_SOLUTIONS = {"small_hydro", "wind_on_reclaimed_land", "farm_digester"}
+STRETCH_SOLUTIONS = {
+    "small_hydro",
+    "wind_on_reclaimed_land",
+    "farm_digester",
+    "shade_trees_depaving",
+}
 
 
 def run(needs, assets, **kwargs):
