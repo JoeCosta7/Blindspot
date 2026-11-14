@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { analyze, fetchCounties, FIXTURE_MODE } from "./api";
 import { CountySearch } from "./components/CountySearch";
-import { MapView, type SelectMode } from "./components/MapView";
+import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
 import { LoadingPanel, ResultsPanel } from "./components/ResultsPanel";
 import { featureBounds, unionBounds } from "./format";
 import type {
@@ -13,6 +13,53 @@ import type {
   CountyFeature,
   LonLat,
 } from "./types";
+
+// View preferences are remembered per browser. Storage can be unavailable
+// (private windows, blocked site data), so every access is guarded.
+function readPref<T extends string>(key: string, allowed: readonly T[]): T | null {
+  try {
+    const value = localStorage.getItem(key);
+    return allowed.includes(value as T) ? (value as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // not remembered; the toggle still works for this visit
+  }
+}
+
+function initialTheme(): Theme {
+  const saved = readPref<Theme>("theme", ["light", "dark"]);
+  if (saved) return saved;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function ThemeIcon({ theme }: { theme: Theme }) {
+  // Shows what the button switches to: a moon in light mode, a sun in dark mode.
+  return theme === "light" ? (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </g>
+    </svg>
+  );
+}
 
 interface PendingRequest {
   body: AnalyzeRequest;
@@ -58,6 +105,26 @@ export function App() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [focusAsset, setFocusAsset] = useState<Asset | null>(null);
   const inFlight = useRef<AbortController | null>(null);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [basemap, setBasemap] = useState<Basemap>(
+    () => readPref<Basemap>("basemap", ["streets", "satellite"]) ?? "streets",
+  );
+
+  // Before paint, so the page never flashes the other theme.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    writePref("theme", next);
+  };
+
+  const changeBasemap = (next: Basemap) => {
+    setBasemap(next);
+    writePref("basemap", next);
+  };
 
   useEffect(() => {
     fetchCounties()
@@ -175,12 +242,25 @@ export function App() {
             Saved demo data
           </span>
         )}
+        <button
+          type="button"
+          className="theme-toggle"
+          aria-pressed={theme === "dark"}
+          onClick={toggleTheme}
+          title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+        >
+          <ThemeIcon theme={theme} />
+          {theme === "light" ? "Dark mode" : "Light mode"}
+        </button>
       </header>
 
       <main className="layout">
         <MapView
           counties={counties}
           mode={mode}
+          basemap={basemap}
+          theme={theme}
+          onBasemapChange={changeBasemap}
           selectedFips={selectedFips}
           fitTo={fitTo}
           assets={assets}

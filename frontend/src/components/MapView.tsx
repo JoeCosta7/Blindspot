@@ -13,10 +13,34 @@ const COUNTY_FILL = "counties-fill";
 const assetLayer = (type: AssetType) => `assets-${type}`;
 
 export type SelectMode = "county" | "box";
+export type Basemap = "streets" | "satellite";
+export type Theme = "light" | "dark";
+
+function styleUrl(basemap: Basemap, theme: Theme): string {
+  if (basemap === "satellite") return "mapbox://styles/mapbox/satellite-streets-v12";
+  return theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11";
+}
+
+// Satellite photos in dark mode: brightest pixel capped at 55% and colors
+// slightly muted, so the photos sit back behind labels and markers.
+const SATELLITE_DARK_BRIGHTNESS = 0.55;
+const SATELLITE_DARK_SATURATION = -0.2;
+
+/** County outline and highlight colors that read on each basemap. */
+function countyColors(basemap: Basemap, theme: Theme) {
+  if (basemap === "satellite") {
+    return { accent: "#4ade80", line: "rgba(255, 255, 255, 0.55)", lineWidth: 0.6 };
+  }
+  if (theme === "dark") return { accent: "#4ade80", line: "#8b98a3", lineWidth: 0.6 };
+  return { accent: "#15803d", line: "#94a3b8", lineWidth: 0.4 };
+}
 
 interface Props {
   counties: CountyCollection | null;
   mode: SelectMode;
+  basemap: Basemap;
+  theme: Theme;
+  onBasemapChange: (basemap: Basemap) => void;
   selectedFips: string[];
   /** Fit the map to this box when it changes. */
   fitTo: Bounds | null;
@@ -86,53 +110,134 @@ function toFeatureCollection(assets: Asset[]): GeoJSON.FeatureCollection<GeoJSON
 }
 
 export function MapView(props: Props) {
-  const { counties, mode, selectedFips, fitTo, assets, focusAsset, onCountyClick, onBoxSelect } =
-    props;
+  const {
+    counties,
+    mode,
+    basemap,
+    theme,
+    onBasemapChange,
+    selectedFips,
+    fitTo,
+    assets,
+    focusAsset,
+    onCountyClick,
+    onBoxSelect,
+  } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
-  const [ready, setReady] = useState(false);
-  const [layersReady, setLayersReady] = useState(false);
+  const styleRef = useRef<string | null>(null);
+  const handlersBound = useRef(false);
+  // Bumped each time a style finishes loading. Changing the style wipes our
+  // sources and layers, so they are added again on every bump.
+  const [styleVersion, setStyleVersion] = useState(0);
+  // Bumped each time our layers are (re)added.
+  const [layersVersion, setLayersVersion] = useState(0);
+  const layersReady = layersVersion > 0;
   const [mapError, setMapError] = useState<string | null>(null);
+  // Set once Mapbox refuses satellite imagery (usage limit or no access).
+  // Satellite then stays off for this page visit so no more photo tiles are
+  // requested; reloading the page tries again.
+  const [satelliteBlocked, setSatelliteBlocked] = useState(false);
 
   // Event handlers registered once read the latest props through refs.
-  const latest = useRef({ mode, assets, onCountyClick, onBoxSelect });
-  latest.current = { mode, assets, onCountyClick, onBoxSelect };
+  const latest = useRef({ mode, assets, basemap, theme, onCountyClick, onBoxSelect, onBasemapChange });
+  latest.current = { mode, assets, basemap, theme, onCountyClick, onBoxSelect, onBasemapChange };
   const highlighted = useRef<string[]>([]);
 
   // --- create the map -------------------------------------------------------
   useEffect(() => {
     if (!TOKEN || !containerRef.current) return;
+    const style = styleUrl(latest.current.basemap, latest.current.theme);
+    styleRef.current = style;
     const map = new mapboxgl.Map({
       accessToken: TOKEN,
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/light-v11",
+      style,
       center: [-96.5, 38.5],
       zoom: 3.6,
       minZoom: 2.5,
     });
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-    map.on("load", () => setReady(true));
+    map.on("style.load", () => setStyleVersion((v) => v + 1));
+
+    let stopped = false;
+    // Removing the map cancels its pending requests and makes no new ones.
+    const stopMap = (message: string) => {
+      if (stopped) return;
+      stopped = true;
+      popupRef.current?.remove();
+      map.remove();
+      mapRef.current = null;
+      setMapError(message);
+    };
+
     map.on("error", (event) => {
-      const status = (event.error as { status?: number } | undefined)?.status;
+      const error = event.error as { status?: number; url?: string } | undefined;
+      const status = error?.status;
+      const isSatellite = (error?.url ?? "").includes("mapbox.satellite");
+
+      if (status === 429 && isSatellite) {
+        // Only the photos are refused: go back to the plain map, which uses a
+        // separate allowance, and stop asking for photos.
+        setSatelliteBlocked(true);
+        if (latest.current.basemap === "satellite") latest.current.onBasemapChange("streets");
+        return;
+      }
+      if (status === 429) {
+        stopMap(
+          "Mapbox usage limit reached, so the map was stopped to avoid more requests. " +
+            "Check your usage at account.mapbox.com, then reload the page.",
+        );
+        return;
+      }
       if (status === 401 || status === 403) {
-        setMapError("Mapbox rejected the token. Check VITE_MAPBOX_TOKEN in frontend/.env.");
+        stopMap("Mapbox rejected the token. Check VITE_MAPBOX_TOKEN in frontend/.env.");
       }
     });
     mapRef.current = map;
     return () => {
+      if (stopped) return;
+      stopped = true;
       popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
-      setReady(false);
-      setLayersReady(false);
+      handlersBound.current = false;
+      setStyleVersion(0);
+      setLayersVersion(0);
     };
   }, []);
+
+  // --- basemap and theme ----------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    const style = styleUrl(basemap, theme);
+    if (!map || styleRef.current === style) return;
+    styleRef.current = style;
+    // A clean swap: "style.load" then fires and the layers below are re-added.
+    // The cast: Mapbox's types mark its font options required, but the map
+    // fills them in itself, and passing undefined would override its defaults.
+    map.setStyle(style, { diff: false } as Parameters<typeof map.setStyle>[1]);
+  }, [basemap, theme]);
+
+  // --- dim satellite photos in dark mode ----------------------------------------
+  // Only the photo (raster) layers: labels, roads and our layers stay bright.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || styleVersion === 0 || basemap !== "satellite") return;
+    const dark = theme === "dark";
+    for (const layer of map.getStyle()?.layers ?? []) {
+      if (layer.type !== "raster") continue;
+      map.setPaintProperty(layer.id, "raster-brightness-max", dark ? SATELLITE_DARK_BRIGHTNESS : 1);
+      map.setPaintProperty(layer.id, "raster-saturation", dark ? SATELLITE_DARK_SATURATION : 0);
+    }
+  }, [styleVersion, basemap, theme]);
 
   // --- county and asset layers ------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !counties || map.getSource(COUNTY_SOURCE)) return;
+    if (!map || styleVersion === 0 || !counties || map.getSource(COUNTY_SOURCE)) return;
+    const colors = countyColors(latest.current.basemap, latest.current.theme);
 
     map.addSource(COUNTY_SOURCE, { type: "geojson", data: counties, promoteId: "GEOID" });
     map.addLayer({
@@ -140,7 +245,7 @@ export function MapView(props: Props) {
       type: "fill",
       source: COUNTY_SOURCE,
       paint: {
-        "fill-color": "#15803d",
+        "fill-color": colors.accent,
         "fill-opacity": [
           "case",
           ["boolean", ["feature-state", "selected"], false],
@@ -159,10 +264,15 @@ export function MapView(props: Props) {
         "line-color": [
           "case",
           ["boolean", ["feature-state", "selected"], false],
-          "#15803d",
-          "#94a3b8",
+          colors.accent,
+          colors.line,
         ],
-        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2, 0.4],
+        "line-width": [
+          "case",
+          ["boolean", ["feature-state", "selected"], false],
+          2,
+          colors.lineWidth,
+        ],
       },
     });
 
@@ -181,6 +291,15 @@ export function MapView(props: Props) {
         },
       });
     }
+    // Feature state and data did not survive the style swap; the effects
+    // keyed on layersVersion restore them.
+    highlighted.current = [];
+    setLayersVersion((v) => v + 1);
+
+    // Layer-bound handlers are kept by the map across style swaps, so they are
+    // registered once.
+    if (handlersBound.current) return;
+    handlersBound.current = true;
     const assetLayers = ASSET_TYPE_ORDER.map(assetLayer);
 
     let hovered: string | null = null;
@@ -217,14 +336,12 @@ export function MapView(props: Props) {
       const [county] = map.queryRenderedFeatures(event.point, { layers: [COUNTY_FILL] });
       if (typeof county?.id === "string") latest.current.onCountyClick(county.id);
     });
-
-    setLayersReady(true);
-  }, [ready, counties]);
+  }, [styleVersion, counties]);
 
   // --- selection highlight ----------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !layersReady) return;
+    if (!map || layersVersion === 0) return;
     for (const id of highlighted.current) {
       map.setFeatureState({ source: COUNTY_SOURCE, id }, { selected: false });
     }
@@ -232,7 +349,7 @@ export function MapView(props: Props) {
       map.setFeatureState({ source: COUNTY_SOURCE, id }, { selected: true });
     }
     highlighted.current = selectedFips;
-  }, [layersReady, selectedFips]);
+  }, [layersVersion, selectedFips]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -248,12 +365,16 @@ export function MapView(props: Props) {
   }, [layersReady, fitTo]);
 
   // --- markers ------------------------------------------------------------------
+  // New results close an open popup; a basemap swap does not.
+  useEffect(() => {
+    popupRef.current?.remove();
+  }, [assets]);
+
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !layersReady) return;
-    popupRef.current?.remove();
+    if (!map || layersVersion === 0) return;
     (map.getSource(ASSET_SOURCE) as mapboxgl.GeoJSONSource).setData(toFeatureCollection(assets));
-  }, [layersReady, assets]);
+  }, [layersVersion, assets]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -297,6 +418,32 @@ export function MapView(props: Props) {
   return (
     <div className="map">
       <div ref={containerRef} className="map-canvas" />
+      <div className="basemap-toggle" role="group" aria-label="Map view">
+        <button
+          type="button"
+          className={basemap === "streets" ? "active" : undefined}
+          aria-pressed={basemap === "streets"}
+          onClick={() => onBasemapChange("streets")}
+        >
+          Map
+        </button>
+        <button
+          type="button"
+          className={basemap === "satellite" ? "active" : undefined}
+          aria-pressed={basemap === "satellite"}
+          disabled={satelliteBlocked}
+          title={satelliteBlocked ? "Mapbox refused satellite imagery for this token" : undefined}
+          onClick={() => onBasemapChange("satellite")}
+        >
+          Satellite
+        </button>
+      </div>
+      {satelliteBlocked && (
+        <div className="map-notice" role="status">
+          Satellite view is off: Mapbox refused the imagery (usage limit or no access). Check
+          account.mapbox.com, then reload.
+        </div>
+      )}
       {mode === "box" && (
         <div className="map-hint">Drag a box over the counties to analyze. Esc cancels.</div>
       )}
