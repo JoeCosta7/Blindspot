@@ -215,6 +215,14 @@ class Settings(BaseSettings):
     # A privately owned site, against one the county owns (schools, libraries).
     scout_factor_private_site: float = 0.9
 
+    # --- saved reports ----------------------------------------------------
+    # When on, a county with a report in data/fixtures/<fips>.json is served
+    # from that file, and every other county is analyzed live. For demos: a
+    # saved report loads at once and does not wait on Gemini. It is frozen at
+    # the time scripts/warm_cache.py wrote it, so leave this off while changing
+    # the pipeline.
+    serve_saved_reports: bool = False
+
     # --- paths ------------------------------------------------------------
     data_dir: Path = BACKEND_DIR / "data"
     cache_dir: Path = BACKEND_DIR / ".cache"

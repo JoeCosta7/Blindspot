@@ -103,6 +103,47 @@ def test_fixture_mode_serves_saved_reports_without_analysis(client, grid_index, 
     assert client.analyzed == []
 
 
+def test_saved_reports_are_served_and_other_counties_run_live(client, grid_index, tmp_path):
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    saved = minimal_report(grid_index.get("99001"))
+    saved.narrative.summary = "saved earlier"
+    (fixtures / "99001.json").write_text(saved.model_dump_json())
+    (fixtures / "99003.json").write_text('{"fips": "99003"}')  # no longer fits the contract
+
+    def summary_for(fips: str) -> str:
+        resp = client.post("/api/analyze", json={"mode": "county", "fips": fips})
+        assert resp.status_code == 200
+        return resp.json()["counties"][0]["narrative"]["summary"]
+
+    # Off by default: a saved file changes nothing.
+    assert summary_for("99001") == "s"
+    assert client.analyzed == ["99001"]
+
+    client.analyzed.clear()
+    main.app.state.settings = main.app.state.settings.model_copy(
+        update={"serve_saved_reports": True}
+    )
+    assert summary_for("99001") == "saved earlier"
+    assert summary_for("99002") == "s"  # no file
+    assert summary_for("99003") == "s"  # unusable file
+    assert client.analyzed == ["99002", "99003"]
+
+
+def test_a_box_mixes_saved_and_live_counties(client, grid_index, tmp_path):
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "99001.json").write_text(minimal_report(grid_index.get("99001")).model_dump_json())
+    main.app.state.settings = main.app.state.settings.model_copy(
+        update={"serve_saved_reports": True}
+    )
+
+    body = client.post("/api/analyze", json={"mode": "bbox", "sw": [0, 0], "ne": [2, 1]}).json()
+
+    assert sorted(c["fips"] for c in body["counties"]) == ["99001", "99002"]
+    assert client.analyzed == ["99002"]
+
+
 def test_counties_geojson_missing_is_503(client):
     assert client.get("/api/counties.geojson").status_code == 503
 

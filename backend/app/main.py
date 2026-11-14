@@ -89,6 +89,23 @@ def _load_fixture(settings: Settings, county: County) -> CountyReport | None:
     return CountyReport.model_validate_json(path.read_text())
 
 
+async def _report_for(
+    county: County, client: httpx.AsyncClient, settings: Settings
+) -> CountyReport:
+    """The county's report: the saved one when `serve_saved_reports` is on and
+    a usable file exists, otherwise a live analysis. A saved file that cannot
+    be read, or no longer fits the contract, is skipped rather than served."""
+    if settings.serve_saved_reports:
+        try:
+            saved = _load_fixture(settings, county)
+        except (OSError, ValueError) as exc:  # ValidationError is a ValueError
+            log.warning("saved report for %s is unusable, analyzing live: %s", county.fips, exc)
+            saved = None
+        if saved is not None:
+            return saved
+    return await analyze_county(county, client, settings)
+
+
 @app.get("/api/health")
 async def health(request: Request) -> HealthResponse:
     settings: Settings = request.app.state.settings
@@ -160,7 +177,7 @@ async def analyze(
     else:
         reports = list(
             await asyncio.gather(
-                *(analyze_county(c, request.app.state.client, settings) for c in counties)
+                *(_report_for(c, request.app.state.client, settings) for c in counties)
             )
         )
         message = None
@@ -238,7 +255,8 @@ async def scout(
                 step=ScoutStep(index=0, kind="plan", text="Loading the county report."),
             )
         )
-        report = await analyze_county(county, client, settings)
+        # The same report the panel showed, so the site ids the request names match.
+        report = await _report_for(county, client, settings)
         try:
             energy_community = energy_communities.status_for_county(settings.data_dir, county.fips)
             checked = True

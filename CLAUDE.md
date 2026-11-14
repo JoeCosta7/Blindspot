@@ -168,6 +168,7 @@ Frontend packages: `react react-dom mapbox-gl typescript vite`.
 | `GEMINI_THINKING_LEVEL` | default `low` (about 30 s per county; the model's own default, `medium`, took about 80 s when measured 2026-11-14). Empty uses the model's default |
 | `ACS_YEAR` | default `2024` (the 2020–2024 5-year release) |
 | `MAX_COUNTIES` | default `4` |
+| `SERVE_SAVED_REPORTS` | default `false`. When `true`, a county with a report in `data/fixtures/<fips>.json` is served from that file and every other county is analyzed live |
 | `VITE_MAPBOX_TOKEN` | in `frontend/.env` |
 
 Get all four keys before the clock starts.

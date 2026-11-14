@@ -334,12 +334,8 @@ def test_failed_layer_does_not_fail_the_run(settings):
 # --- the endpoint ----------------------------------------------------------------------
 
 
-def test_scout_endpoint_streams_ndjson(grid_index, settings, monkeypatch, tmp_path):
-    async def fake_analyze(county, client, s):
-        report = minimal_report(county)
-        return report.model_copy(update={"needs": NEEDS})
-
-    monkeypatch.setattr(main, "analyze_county", fake_analyze)
+def _fake_scout_run(monkeypatch) -> None:
+    """A provider and a decider that find and evaluate one building, mp:A."""
     monkeypatch.setattr(main.scout_provider, "get_provider", lambda client, s: FakeProvider())
     monkeypatch.setattr(
         agent,
@@ -354,6 +350,15 @@ def test_scout_endpoint_streams_ndjson(grid_index, settings, monkeypatch, tmp_pa
             )
         ),
     )
+
+
+def test_scout_endpoint_streams_ndjson(grid_index, settings, monkeypatch, tmp_path):
+    async def fake_analyze(county, client, s):
+        report = minimal_report(county)
+        return report.model_copy(update={"needs": NEEDS})
+
+    monkeypatch.setattr(main, "analyze_county", fake_analyze)
+    _fake_scout_run(monkeypatch)
     with TestClient(main.app) as client:
         main.app.state.counties = grid_index
         main.app.state.settings = settings.model_copy(update={"scout_counties": ["99001"]})
@@ -366,6 +371,26 @@ def test_scout_endpoint_streams_ndjson(grid_index, settings, monkeypatch, tmp_pa
     result = ScoutResult.model_validate(lines[-1]["result"])
     assert result.fips == "99001" and result.candidates[0].building_id == "mp:A"
     assert [s.index for s in result.steps] == list(range(len(result.steps)))
+
+
+def test_scout_endpoint_uses_the_saved_report(grid_index, settings, monkeypatch, tmp_path):
+    async def no_analysis(county, client, s):
+        raise AssertionError("the saved report should have been used")
+
+    saved = minimal_report(grid_index.get("99001")).model_copy(update={"needs": NEEDS})
+    (tmp_path / "99001.json").write_text(saved.model_dump_json())
+    monkeypatch.setattr(main, "_fixture_path", lambda s, fips: tmp_path / f"{fips}.json")
+    monkeypatch.setattr(main, "analyze_county", no_analysis)
+    _fake_scout_run(monkeypatch)
+    with TestClient(main.app) as client:
+        main.app.state.counties = grid_index
+        main.app.state.settings = settings.model_copy(
+            update={"scout_counties": ["99001"], "serve_saved_reports": True}
+        )
+        resp = client.post("/api/scout", json={"fips": "99001"})
+    lines = [json.loads(line) for line in resp.text.strip().splitlines()]
+    assert lines[-1]["type"] == "result"
+    assert lines[-1]["result"]["candidates"][0]["building_id"] == "mp:A"
 
 
 async def _ready(decider):
