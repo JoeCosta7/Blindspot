@@ -23,7 +23,19 @@ from app.sources import costar, matterport, vexcel
 
 log = logging.getLogger(__name__)
 
-FoundBy = Literal["costar", "matterport", "vexcel"]
+FoundBy = Literal["costar", "matterport", "vexcel", "geoapify"]
+
+
+@dataclass(frozen=True)
+class SitePicture:
+    """The photo saved for a site: `name` is what the image endpoint serves
+    now; `base` and `directions` let the other oblique views be fetched
+    on demand."""
+
+    name: str
+    view: Literal["oblique", "ortho"]
+    base: str
+    directions: list[str]
 
 
 @dataclass(frozen=True)
@@ -151,9 +163,7 @@ class BuildingData(Protocol):
         """The scan's floors, rooms and summary, or None without a scan."""
         ...
 
-    async def image(
-        self, building: Building, roof: RoofRecord
-    ) -> tuple[str, Literal["oblique", "ortho"]] | None:
+    async def image(self, building: Building, roof: RoofRecord) -> SitePicture | None:
         """Save a photo of the building with the outlines drawn: a side-angle
         view where one exists, else top-down. Returns (name the image endpoint
         serves, view), or None."""
@@ -323,9 +333,7 @@ class RealBuildingData:
             image_url=d["image_url"],
         )
 
-    async def image(
-        self, building: Building, roof: RoofRecord
-    ) -> tuple[str, Literal["oblique", "ortho"]] | None:
+    async def image(self, building: Building, roof: RoofRecord) -> SitePicture | None:
         area = roof.parcel_wkt or roof.footprint_wkt
         if not area:
             return None
@@ -344,17 +352,24 @@ class RealBuildingData:
             drawings.append({"wkt": d.wkt, "outline-width": 2, "outline-color": color})
         name = building.id.replace(":", "_").replace(",", "_")
         # A side-angle photo shows the building itself; fall back to top-down.
+        # The first direction is fetched now, the others on demand (main.py).
+        directions: list[str] = []
         try:
             directions = await vexcel.oblique_directions(self.client, self.settings, area)
-            if directions:
+        except Exception as exc:
+            log.warning("oblique directions for %s failed: %r", building.id, exc)
+        vexcel.save_image_job(self.settings, name, area, drawings, directions)
+        if directions:
+            first = f"{name}_{directions[0]}"
+            try:
                 await vexcel.oblique_jpg(
-                    self.client, self.settings, area, directions[0], drawings, name
+                    self.client, self.settings, area, directions[0], drawings, first
                 )
-                return name, "oblique"
-        except Exception as exc:  # the oblique is a nicety; the ortho still works
-            log.warning("oblique image for %s failed: %r", building.id, exc)
+                return SitePicture(first, "oblique", name, directions)
+            except Exception as exc:  # the oblique is a nicety; the ortho still works
+                log.warning("oblique image for %s failed: %r", building.id, exc)
         await vexcel.ortho_png(self.client, self.settings, area, drawings, name)
-        return name, "ortho"
+        return SitePicture(name, "ortho", name, directions)
 
 
 def get_provider(client: httpx.AsyncClient, settings: Settings) -> BuildingData:

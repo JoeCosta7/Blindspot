@@ -878,3 +878,15 @@ def test_grants_failure_keeps_the_report(sources, settings, monkeypatch):
     assert report.opportunities and not any(live(o) for o in report.opportunities)
     status = next(s for s in report.source_status if s.source == "grants_gov")
     assert not status.ok and "HTTP 503" in (status.message or "")
+
+
+def test_can_scout_needs_a_site_and_a_building_project():
+    from app import matching
+    from app.config import BACKEND_DIR
+    from app.pipeline import can_scout
+
+    scout = matching.load_solutions(BACKEND_DIR / "data" / "scout_solutions.json")
+    assert can_scout(["hazard_risk"], ["school:1"], scout) is True
+    assert can_scout(["impaired_waters"], ["school:1"], scout) is False  # no roof answers it
+    assert can_scout(["hazard_risk"], [], scout) is False  # county-wide
+    assert can_scout(["hazard_risk"], ["school:1"], ()) is False  # no building data here

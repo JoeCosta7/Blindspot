@@ -20,9 +20,11 @@ from app.config import Settings
 from app.estimates import format_number
 from app.geo import County
 from app.models import (
+    Asset,
     Estimate,
     FundingMatch,
     GeoOverlay,
+    ImageOption,
     LayerCheck,
     Need,
     Observation,
@@ -34,13 +36,21 @@ from app.models import (
     SourceStatus,
 )
 from app.scout import measure
-from app.scout.provider import Building, BuildingData, InteriorRecord, RoofRecord
+from app.scout.provider import (
+    Building,
+    BuildingData,
+    InteriorRecord,
+    RoofRecord,
+    ScanIndex,
+    SitePicture,
+)
 from app.sources import SourceError, pvwatts
 
 log = logging.getLogger(__name__)
 
 TOOLS = (
     "search_properties",
+    "search_public_buildings",
     "search_scans",
     "search_imagery",
     "inspect_roof",
@@ -78,8 +88,7 @@ class Inspection:
     interior: InteriorRecord | None = None
     interior_checked: bool = False
     interior_error: str | None = None
-    image_name: str | None = None
-    image_view: str | None = None
+    picture: SitePicture | None = None
     candidate: SiteCandidate | None = None
     # Everything the tools told the model about this building, for number checks.
     texts: list[str] = field(default_factory=list)
@@ -97,6 +106,8 @@ class ScoutState:
     client: httpx.AsyncClient
     energy_community: dict[str, Any] | None = None
     energy_community_checked: bool = False
+    # The county report's schools, libraries and colleges (Geoapify).
+    public_buildings: list[Asset] = field(default_factory=list)
     seen: dict[str, Inspection] = field(default_factory=dict)
     steps: list[ScoutStep] = field(default_factory=list)
     pending: list[ScoutEvent] = field(default_factory=list)
@@ -179,7 +190,89 @@ def _building_line(b: Building) -> str:
     return " | ".join(parts)
 
 
+DIRECTION_LABELS = {
+    "oblique-south": "From the south",
+    "oblique-north": "From the north",
+    "oblique-east": "From the east",
+    "oblique-west": "From the west",
+}
+PUBLIC_KINDS = ("school", "library", "college")
+
+
+def _image_options(picture: SitePicture | None) -> list[ImageOption]:
+    if picture is None:
+        return []
+    return [
+        ImageOption(label=DIRECTION_LABELS.get(d, d), url=f"/api/scout/oblique/{picture.base}/{d}")
+        for d in picture.directions
+    ]
+
+
 # --- searches ---------------------------------------------------------------------
+
+
+async def search_public_buildings(state: ScoutState, kinds: list[str], limit: int) -> str:
+    """Schools, libraries and colleges from the county report, as candidates.
+    A nearby 3D scan is linked when the scan index is available."""
+    wanted = [k.strip().lower() for k in kinds if k.strip().lower() in PUBLIC_KINDS] or list(
+        PUBLIC_KINDS
+    )
+    pool = [a for a in state.public_buildings if a.type in wanted]
+    if not pool:
+        add_step(
+            state,
+            "observation",
+            "The county report lists no public buildings of that kind.",
+            "search_public_buildings",
+        )
+        state.empty_searches += 1
+        state.last_result = "No public buildings of that kind are in the county report."
+        return state.last_result
+    scans = ScanIndex()
+    try:
+        scans = ScanIndex(await state.provider.scanned_buildings(state.county))
+    except Exception:  # linking a scan is a bonus
+        pass
+    picked: list[Building] = []
+    for a in pool:
+        bid = f"pb:{a.id}"
+        if bid in state.seen:
+            continue
+        scan = scans.near(None, a.lat, a.lon)
+        picked.append(
+            Building(
+                id=bid,
+                name=a.name,
+                lat=a.lat,
+                lon=a.lon,
+                found_by="geoapify",
+                address=str(a.attributes.get("city")) if a.attributes.get("city") else None,
+                scan_id=scan.scan_id if scan else None,
+                floors=scan.floors if scan else None,
+                rooms=scan.rooms if scan else None,
+                room_labels=scan.room_labels if scan else (),
+                building_type=a.type,
+            )
+        )
+        if len(picked) >= limit:
+            break
+    for b in picked:
+        state.seen[b.id] = Inspection(building=b)
+        state.seen[b.id].texts.append(_building_line(b))
+    add_step(
+        state,
+        "observation",
+        f"Searched the county's {len(pool)} public buildings ({', '.join(wanted)}): "
+        f"{len(picked)} new candidate(s).",
+        "search_public_buildings",
+    )
+    if not picked:
+        state.empty_searches += 1
+        state.last_result = "No new public buildings of that kind."
+        return state.last_result
+    state.empty_searches = 0
+    state.last_result = "Public buildings found:\n" + "\n".join(_building_line(b) for b in picked)
+    return state.last_result
 
 
 async def search_properties(
@@ -223,7 +316,8 @@ async def search_properties(
         return not (max_stories and (b.stories or 1) > max_stories)
 
     fresh = [b for b in buildings if b.id not in state.seen and matches(b)]
-    fresh.sort(key=lambda b: (-(b.gross_sqft or 0), b.name))
+    # Buildings with a 3D scan first: a third layer, and the only way to judge an interior.
+    fresh.sort(key=lambda b: (b.scan_id is None, -(b.gross_sqft or 0), b.name))
     picked = fresh[:limit]
     for b in picked:
         state.seen[b.id] = Inspection(building=b)
@@ -401,9 +495,7 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
         )
         return _record(state, insp, f"{b.id}: no parcel or building footprint at this point")
     try:
-        picture = await state.provider.image(b, insp.roof)
-        if picture:
-            insp.image_name, insp.image_view = picture
+        insp.picture = await state.provider.image(b, insp.roof)
     except Exception as exc:  # the image is for the card; the inspection stands
         log.warning("scout image for %s failed: %r", b.id, exc)
     text = _roof_text(insp.roof)
@@ -735,8 +827,9 @@ async def evaluate_site(
         status_reason=reason,
         agent_note=agent_note,
         score=max(0, min(100, score)),
-        image_url=f"/api/scout/image/{insp.image_name}" if insp.image_name else None,
-        image_view=insp.image_view,  # type: ignore[arg-type]
+        image_url=f"/api/scout/image/{insp.picture.name}" if insp.picture else None,
+        image_view=insp.picture.view if insp.picture else None,
+        image_options=_image_options(insp.picture),
         overlays=_overlays(roof),
         interior_summary=interior.summary if interior else None,
         tour_url=interior.tour_url if interior else None,

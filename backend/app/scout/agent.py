@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from app import funding, gemini, matching
 from app.config import Settings
 from app.geo import County
-from app.models import Need, ScoutEvent, ScoutResult, ScoutStop, SourceStatus
+from app.models import Asset, Need, ScoutEvent, ScoutResult, ScoutStop, SourceStatus
 from app.narrative import extract_numbers, format_need_value
 from app.scout import drafts, tools
 from app.scout.provider import BuildingData
@@ -43,6 +43,7 @@ class AgentAction(BaseModel):
     thought: str
     tool: Literal[
         "search_properties",
+        "search_public_buildings",
         "search_scans",
         "search_imagery",
         "inspect_roof",
@@ -55,6 +56,8 @@ class AgentAction(BaseModel):
     property_types: list[str] = []
     min_sqft: int | None = None
     max_stories: int | None = None
+    # search_public_buildings: school, library, college.
+    kinds: list[str] = []
     # search_scans: words to look for in building names and room labels.
     keywords: list[str] = []
     # search_imagery: what to look for from above, in plain words.
@@ -77,6 +80,8 @@ RULES = (
     "and parking. Prefer buildings that are not homes or apartments: warehouses, stores, "
     "offices, flex and community buildings. Fall back to search_scans, where names and room "
     "labels are the only description.",
+    "For a resilience hub, cooling centre, clinic or EV charging, the county's own public "
+    "buildings (search_public_buildings: schools, libraries, colleges) are natural hosts.",
     "Widen or change a search rather than evaluate a weak candidate. Use search_imagery to find "
     "buildings that have no scan, searching around a promising building.",
     "Write thought in one plain sentence for a county official, at most 40 words, using only "
@@ -126,6 +131,7 @@ def build_prompt(state: ScoutState) -> str:
         "Tools:\n"
         "- search_properties(property_types, min_sqft?, max_stories?): property records by type "
         "word (Industrial, Warehouse, Retail, Office, Flex, Multifamily), size and storeys.\n"
+        "- search_public_buildings(kinds): the county's schools, libraries and colleges.\n"
         "- search_scans(keywords): scanned buildings whose name or room labels contain a keyword.\n"
         "- search_imagery(text, near_building_id?): buildings found by describing them, e.g. "
         '"large flat-roofed warehouse with a big parking lot".\n'
@@ -192,6 +198,8 @@ def _code_text(action: AgentAction, state: ScoutState) -> str:
     return {
         "search_properties": "Searching the property records for "
         + (", ".join(action.property_types[:5]) or "commercial buildings"),
+        "search_public_buildings": "Searching the county's public buildings for "
+        + (", ".join(action.kinds[:3]) or "schools, libraries and colleges"),
         "search_scans": "Searching the 3D scan library for "
         + (", ".join(action.keywords[:5]) or "likely buildings"),
         "search_imagery": f'Searching the aerial imagery for "{action.text}"',
@@ -208,6 +216,8 @@ async def run_tool(action: AgentAction, state: ScoutState) -> str:
         return await tools.search_properties(
             state, action.property_types, action.min_sqft, action.max_stories, limit
         )
+    if action.tool == "search_public_buildings":
+        return await tools.search_public_buildings(state, action.kinds, limit)
     if action.tool == "search_scans":
         return await tools.search_scans(state, action.keywords, limit)
     if action.tool == "search_imagery":
@@ -238,6 +248,8 @@ def rule_actions(state: ScoutState) -> AgentAction:
             property_types=["Industrial", "Retail", "Office", "Flex"],
             max_stories=2,
         )
+    if "search_public_buildings" not in searched and state.public_buildings:
+        return AgentAction(thought="", tool="search_public_buildings")
     if "search_scans" not in searched:
         return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
     if not state.seen:
@@ -270,6 +282,7 @@ async def run_scout(
     energy_community: dict[str, Any] | None = None,
     energy_community_checked: bool = False,
     focus: str | None = None,
+    public_buildings: list[Asset] | None = None,
 ) -> AsyncIterator[ScoutEvent]:
     """Run the agent for one county, yielding steps, candidates and finally
     the result. Never raises past the result event."""
@@ -284,6 +297,7 @@ async def run_scout(
         client=client,
         energy_community=energy_community,
         energy_community_checked=energy_community_checked,
+        public_buildings=public_buildings or [],
     )
     decide = decider or await gemini_decider(settings)
     generated_by: Literal["gemini", "rules"] = "gemini"

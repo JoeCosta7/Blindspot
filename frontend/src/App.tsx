@@ -3,7 +3,9 @@ import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE, scout } from "./api
 import { CountySearch } from "./components/CountySearch";
 import type { LoadingArea } from "./components/loadingSweep";
 import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
+import { PhotoViewer } from "./components/PhotoViewer";
 import { LoadingPanel, ResultsPanel, scoutKey } from "./components/ResultsPanel";
+import { bestSites } from "./components/ScoutPanel";
 import { featureBounds, unionBounds } from "./format";
 import type {
   AnalyzeRequest,
@@ -134,6 +136,8 @@ export function App() {
   // One Site Scout run per opportunity, keyed by county and opportunity id.
   const [scoutRuns, setScoutRuns] = useState<Record<string, ScoutRun>>({});
   const scoutInFlight = useRef<Map<string, AbortController>>(new Map());
+  // The scouted site whose aerial photo is open over the map.
+  const [viewed, setViewed] = useState<SiteCandidate | null>(null);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [basemap, setBasemap] = useState<Basemap>(
     () => readPref<Basemap>("basemap", ["streets", "satellite"]) ?? "streets",
@@ -211,6 +215,7 @@ export function App() {
       for (const controller of scoutInFlight.current.values()) controller.abort();
       scoutInFlight.current.clear();
       setScoutRuns({});
+      setViewed(null);
       try {
         const result = await analyze(request.body, controller.signal);
         if (controller.signal.aborted) return;
@@ -334,23 +339,23 @@ export function App() {
   };
 
   const activeReport = response?.counties[activeIndex];
-  // Only the sites an opportunity is built on are drawn on the map.
-  const assets = useMemo(() => {
-    if (!activeReport) return [];
-    const used = new Set(activeReport.opportunities.flatMap((o) => o.asset_ids));
-    const fromReport = activeReport.assets.filter((asset) => used.has(asset.id));
-    const seen = new Set<string>();
-    const scouted: Asset[] = [];
+  // Only the best scouted sites get markers; the report's own opportunities
+  // are county-wide initiatives and draw nothing. Clicking a marker opens the
+  // site's photo, so each marker remembers its candidate.
+  const scouted = useMemo(() => {
+    const byId = new Map<string, SiteCandidate>();
     for (const run of Object.values(scoutRuns)) {
-      if (run.fips !== activeReport.fips) continue;
-      for (const c of run.candidates) {
-        if (c.status === "rejected" || seen.has(c.building_id)) continue;
-        seen.add(c.building_id);
-        scouted.push(candidateAsset(c));
-      }
+      if (!activeReport || run.fips !== activeReport.fips) continue;
+      for (const c of bestSites(run)) byId.set(c.building_id, c);
     }
-    return [...fromReport, ...scouted];
+    return byId;
   }, [activeReport, scoutRuns]);
+  const assets = useMemo(() => [...scouted.values()].map(candidateAsset), [scouted]);
+
+  const showCandidate = useCallback((candidate: SiteCandidate) => {
+    setFocusAsset(candidateAsset(candidate));
+    setViewed(candidate);
+  }, []);
 
   return (
     <div className="app">
@@ -414,6 +419,19 @@ export function App() {
           onNeedChange={setNeedId}
           onCountyClick={selectCounty}
           onBoxSelect={selectBox}
+          onAssetClick={(asset) => {
+            const candidate = scouted.get(asset.id);
+            if (candidate) showCandidate(candidate);
+          }}
+          overlay={
+            viewed ? (
+              <PhotoViewer
+                key={viewed.building_id}
+                candidate={viewed}
+                onClose={() => setViewed(null)}
+              />
+            ) : null
+          }
         />
 
         <aside className="panel" aria-label="Results">
@@ -434,12 +452,15 @@ export function App() {
               activeIndex={activeIndex}
               onSelectCounty={switchCounty}
               // A new object each time, so clicking the same site twice flies again.
-              onShowOnMap={(asset) => setFocusAsset({ ...asset })}
+              onShowOnMap={(asset) => {
+                setViewed(null);
+                setFocusAsset({ ...asset });
+              }}
               onAnalyzeCounty={selectCounty}
               scout={{
                 scoutRuns,
                 onScout: startScout,
-                onShowCandidate: (candidate) => setFocusAsset(candidateAsset(candidate)),
+                onShowCandidate: showCandidate,
               }}
             />
           )}

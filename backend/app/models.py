@@ -256,6 +256,10 @@ class Opportunity(BaseModel):
     # "grantsgov:<id>", found by the searches in data/grants_queries.json).
     funding: list[FundingMatch]
     generated_by: Literal["gemini", "rules"]
+    # Site Scout can look for a building to host this: the county has building
+    # data, the opportunity names a site (it is not county-wide), and a
+    # building-hosted project type answers one of its needs.
+    scoutable: bool = False
 
 
 class OpportunityNote(BaseModel):
@@ -434,6 +438,11 @@ class GeoOverlay(BaseModel):
     coordinates: list[LonLat]
 
 
+class ImageOption(BaseModel):
+    label: str  # "From the south"
+    url: str
+
+
 class SiteCandidate(BaseModel):
     building_id: str
     name: str
@@ -463,6 +472,8 @@ class SiteCandidate(BaseModel):
     image_url: str | None
     # A side-angle photo where the urban layer has one, else the top-down view.
     image_view: Literal["oblique", "ortho"] | None = None
+    # Every available side-angle view, fetched on first request (main.py).
+    image_options: list[ImageOption] = Field(default_factory=list)
     overlays: list[GeoOverlay]
     # The scan's own AI-written summary of the interior, quoted as is.
     interior_summary: str | None

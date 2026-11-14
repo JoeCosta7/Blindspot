@@ -273,6 +273,7 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
     );
   }
   const result = run.result;
+  const best = bestSites(run);
   const failed = (result?.source_status ?? []).filter((s) => !s.ok);
   const drafts = new Map((result?.drafts ?? []).map((d) => [d.building_id, d]));
   return (
@@ -314,13 +315,20 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
       <Timeline steps={run.steps} running={run.running} />
       {result && <p className="muted">{STOP_TEXT[result.stopped_because]}</p>}
 
-      {run.candidates.length > 0 && (
+      {best.length > 0 && (
         <p className="muted">
-          Each site below was measured from vendor geometry and scored by code. Capacity, energy
-          and household figures are estimates; detections are what a model saw in one image.
+          The {best.length === 1 ? "best site" : `${best.length} best sites`}, measured from vendor
+          geometry and scored by code. Capacity, energy and household figures are estimates;
+          detections are what a model saw in one image. Click a name to see its photo.
         </p>
       )}
-      {(result?.candidates ?? run.candidates).map((candidate, i) => (
+      {result && best.length === 0 && (
+        <p className="muted">
+          No building could host this. {run.candidates.length} were inspected; the timeline says
+          why each was set aside.
+        </p>
+      )}
+      {best.map((candidate, i) => (
         <SiteCard
           key={candidate.building_id}
           rank={i + 1}
@@ -332,4 +340,15 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
       ))}
     </div>
   );
+}
+
+/** The three best sites: anything not rejected, shortlisted before low
+ * confidence, then by score. Each card carries its status, so a low-confidence
+ * site is shown as such rather than hidden. */
+export function bestSites(run: ScoutRun): SiteCandidate[] {
+  const order = { shortlisted: 0, low_confidence: 1, rejected: 2 };
+  return (run.result?.candidates ?? run.candidates)
+    .filter((c) => c.status !== "rejected")
+    .sort((a, b) => order[a.status] - order[b.status] || b.score - a.score)
+    .slice(0, 3);
 }

@@ -312,6 +312,28 @@ async def oblique_directions(
     return value
 
 
+def save_image_job(
+    settings: Settings,
+    name: str,
+    area_wkt: str,
+    drawings: list[dict[str, Any]],
+    directions: list[str],
+) -> None:
+    """Remember what a site's photos are made from, so the other oblique
+    directions can be fetched on demand."""
+    path = image_path(settings, name, "json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"area": area_wkt, "drawings": drawings, "directions": directions}))
+
+
+def load_image_job(settings: Settings, name: str) -> dict[str, Any] | None:
+    path = image_path(settings, name, "json")
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
 def _bare(color: str) -> str:
     """oriented/extract wants "r,g,b" rather than "rgb(r,g,b)"."""
     return color.replace("rgb(", "").replace(")", "")

@@ -457,6 +457,18 @@ def proposals_from_matches(matches: list[matching.Match]) -> list[_Proposal]:
     ]
 
 
+def can_scout(
+    need_ids: list[str], asset_ids: list[str], scout_solutions: tuple[matching.Solution, ...]
+) -> bool:
+    """Whether Site Scout could find a building for this opportunity: it is
+    not county-wide, and one of the building-hosted project types answers at
+    least one of its needs. Empty `scout_solutions` means no building data."""
+    if not asset_ids or not scout_solutions:
+        return False
+    needs = set(need_ids)
+    return any(needs & set(s.triggers) for s in scout_solutions)
+
+
 def size_estimates(
     solution_id: str, asset: Asset, solar_yield: float | None, site_specific: bool
 ) -> list[Estimate]:
@@ -822,6 +834,11 @@ async def analyze_county(
     # Only a typed opportunity gets these: an idea of Gemini's own has no
     # project type to size or to look up in the funding table.
     programs = funding.load_programs(data_dir / "funding_programs.json")
+    scout_solutions = (
+        matching.load_solutions(data_dir / "scout_solutions.json")
+        if county.fips in settings.scout_counties
+        else ()
+    )
     built: list[Opportunity] = []
     for proposal in proposals:
         solution, host = proposal.solution, proposal.host
@@ -870,6 +887,9 @@ async def analyze_county(
                 estimates=figures,
                 funding=leads,
                 generated_by=proposal.generated_by,
+                scoutable=can_scout(
+                    [n.id for n in proposal.needs], [a.id for a in proposal.assets], scout_solutions
+                ),
             )
         )
 

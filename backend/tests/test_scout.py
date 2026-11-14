@@ -12,7 +12,7 @@ from app.geo import County
 from app.models import ScoutResult
 from app.scout import agent, measure
 from app.scout.agent import AgentAction
-from app.scout.provider import Building, Detection, InteriorRecord, RoofRecord
+from app.scout.provider import Building, Detection, InteriorRecord, RoofRecord, SitePicture
 from app.sources import SourceError
 from tests.conftest import make_county, make_need
 from tests.test_api import minimal_report
@@ -171,7 +171,8 @@ class FakeProvider:
         return INTERIORS.get(building.scan_id or "")
 
     async def image(self, building: Building, roof: RoofRecord):
-        return f"img_{building.id[-1]}", "oblique"
+        name = f"img_{building.id[-1]}"
+        return SitePicture(name, "oblique", name, ["oblique-south", "oblique-north"])
 
 
 def scripted(actions: list[AgentAction]):
@@ -282,6 +283,10 @@ def test_scripted_run_shortlists_rejects_and_flags_invalid_actions(settings):
     )  # 8,000 appears in the scan text
     assert any("flooding" in f for f in a.flags)
     assert a.image_url == "/api/scout/image/img_A" and a.tour_url is not None
+    assert [o.url for o in a.image_options] == [
+        "/api/scout/oblique/img_A/oblique-south",
+        "/api/scout/oblique/img_A/oblique-north",
+    ]
     assert any(ch.label.startswith("Scan floor area") and ch.ok for ch in a.checks)
 
     assert b.status == "rejected" and "already has solar" in b.status_reason

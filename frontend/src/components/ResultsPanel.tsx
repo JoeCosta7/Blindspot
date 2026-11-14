@@ -200,7 +200,7 @@ function OpportunityList({
           note={undefined}
           onShowOnMap={onShowOnMap}
           scout={
-            report.scout_available
+            report.scout_available && opportunity.scoutable
               ? {
                   run: scout.scoutRuns[scoutKey(report.fips, opportunity.id)] ?? null,
                   onStart: () => scout.onScout(report.fips, opportunity),

@@ -257,6 +257,9 @@ async def scout(
             energy_community=energy_community,
             energy_community_checked=checked,
             focus=body.focus,
+            public_buildings=[
+                a for a in report.assets if a.type in ("school", "library", "college")
+            ],
         ):
             if event.step is not None:
                 event = event.model_copy(
@@ -278,3 +281,27 @@ async def scout_image(name: str, request: Request) -> FileResponse:
         raise HTTPException(404, "No such image")
     media = "image/jpeg" if path.suffix == ".jpg" else "image/png"
     return FileResponse(path, media_type=media, headers={"Cache-Control": "max-age=86400"})
+
+
+@app.get("/api/scout/oblique/{name}/{direction}")
+async def scout_oblique(name: str, direction: str, request: Request) -> FileResponse:
+    """A side-angle photo of a scouted site from one direction, fetched from
+    Vexcel on first request and cached after."""
+    settings: Settings = request.app.state.settings
+    if not _IMAGE_NAME.match(name) or direction not in vexcel.OBLIQUE_DIRECTIONS:
+        raise HTTPException(404, "No such image")
+    job = vexcel.load_image_job(settings, name)
+    if job is None or direction not in job.get("directions", []):
+        raise HTTPException(404, "No such image")
+    try:
+        path = await vexcel.oblique_jpg(
+            request.app.state.client,
+            settings,
+            job["area"],
+            direction,
+            job["drawings"],
+            f"{name}_{direction}",
+        )
+    except SourceError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})

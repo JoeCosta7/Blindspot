@@ -179,7 +179,8 @@ class Settings(BaseSettings):
     scout_max_actions: int = 25
     # Roofs inspected (each is a parcel record plus a live detection call).
     scout_max_roofs: int = 8
-    scout_target_sites: int = 5
+    # The run stops once this many sites are shortlisted; the UI shows only these.
+    scout_target_sites: int = 3
     scout_draft_sites: int = 3
     scout_search_limit: int = 10
     # Half the side of the square the imagery search covers, in metres.

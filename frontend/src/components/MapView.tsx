@@ -1,6 +1,6 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ASSET_STYLES, formatAcres, formatNeedValue, formatNumber } from "../format";
 import type {
   Asset,
@@ -94,6 +94,10 @@ interface Props {
   onNeedChange: (id: NeedId | null) => void;
   onCountyClick: (fips: string) => void;
   onBoxSelect: (sw: LonLat, ne: LonLat) => void;
+  /** A marker was clicked. When set, no popup opens; the app shows the site instead. */
+  onAssetClick?: (asset: Asset) => void;
+  /** Rendered over the map, e.g. a site's photo. */
+  overlay?: ReactNode;
 }
 
 /** The class a county falls in for a need, as a fill color. Counties with no
@@ -252,6 +256,8 @@ export function MapView(props: Props) {
     onNeedChange,
     onCountyClick,
     onBoxSelect,
+    onAssetClick,
+    overlay,
   } = props;
   const needLayer = needMap?.layers.find((layer) => layer.id === needId) ?? null;
   const ramp = needRamp(basemap, theme);
@@ -286,8 +292,26 @@ export function MapView(props: Props) {
   const [satelliteBlocked, setSatelliteBlocked] = useState(false);
 
   // Event handlers registered once read the latest props through refs.
-  const latest = useRef({ mode, assets, basemap, theme, onCountyClick, onBoxSelect, onBasemapChange });
-  latest.current = { mode, assets, basemap, theme, onCountyClick, onBoxSelect, onBasemapChange };
+  const latest = useRef({
+    mode,
+    assets,
+    basemap,
+    theme,
+    onCountyClick,
+    onBoxSelect,
+    onBasemapChange,
+    onAssetClick,
+  });
+  latest.current = {
+    mode,
+    assets,
+    basemap,
+    theme,
+    onCountyClick,
+    onBoxSelect,
+    onBasemapChange,
+    onAssetClick,
+  };
   const highlighted = useRef<string[]>([]);
 
   // --- create the map -------------------------------------------------------
@@ -494,7 +518,10 @@ export function MapView(props: Props) {
       const [marker] = map.queryRenderedFeatures(event.point, { layers: [OPPORTUNITY_DOT, OPPORTUNITY_HALO] });
       if (marker) {
         const asset = latest.current.assets.find((a) => a.id === marker.properties?.id);
-        if (asset) {
+        if (asset && latest.current.onAssetClick) {
+          popupRef.current?.remove();
+          latest.current.onAssetClick(asset);
+        } else if (asset) {
           popupRef.current?.remove();
           popupRef.current = new mapboxgl.Popup({ offset: 10, maxWidth: "280px" })
             .setLngLat([asset.lon, asset.lat])
@@ -701,11 +728,12 @@ export function MapView(props: Props) {
           {assets.length > 0 && (
             <div className="legend-row">
               <span className="legend-dot legend-dot-opportunity" />
-              Opportunity sites
+              Scouted sites (click for the photo)
             </div>
           )}
         </div>
       )}
+      {overlay}
     </div>
   );
 }

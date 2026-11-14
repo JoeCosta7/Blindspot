@@ -192,6 +192,9 @@ export interface Opportunity {
    * (program_id "grantsgov:<id>"). */
   funding: FundingMatch[];
   generated_by: "gemini" | "rules";
+  /** Site Scout can look for a building to host this: it names a site and a
+   * building-hosted project type answers one of its needs. */
+  scoutable: boolean;
 }
 
 export interface OpportunityNote {
@@ -305,6 +308,11 @@ export interface GeoOverlay {
   coordinates: LonLat[];
 }
 
+export interface ImageOption {
+  label: string;
+  url: string;
+}
+
 export interface SiteCandidate {
   building_id: string;
   name: string;
@@ -327,6 +335,8 @@ export interface SiteCandidate {
   image_url: string | null;
   /** A side-angle photo where the urban layer has one, else top-down. */
   image_view: "oblique" | "ortho" | null;
+  /** Every available side-angle view, fetched on first request. */
+  image_options: ImageOption[];
   overlays: GeoOverlay[];
   interior_summary: string | null;
   tour_url: string | null;
