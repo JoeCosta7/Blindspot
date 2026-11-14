@@ -291,6 +291,7 @@ export function App() {
       opportunity.need_ids,
       opportunity.title,
       opportunity.solution_id,
+      opportunity.asset_ids,
       (event) => {
         if (controller.signal.aborted) return;
         update((run) => {

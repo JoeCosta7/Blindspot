@@ -189,10 +189,19 @@ def confidence_factor(
     interior: InteriorRecord | None,
     checks: list[LayerCheck],
     settings: Settings,
+    land: bool = False,
 ) -> tuple[float, list[str]]:
     """How much to trust the site, and why. Our own factors (config)."""
     factor = 1.0
     reasons: list[str] = []
+    if land:
+        # A site is judged by its parcel; there is no roof or interior to read.
+        if roof is None:
+            factor *= settings.scout_factor_low_confidence
+            reasons.append("no aerial record could be read here")
+        elif roof.inside_parcel is None:
+            reasons.append("no parcel record (usual for landfill cells and open land)")
+        return factor, reasons
     if roof is None or roof.footprint_m2 is None:
         factor *= settings.scout_factor_low_confidence
         reasons.append("no building footprint in the aerial record")

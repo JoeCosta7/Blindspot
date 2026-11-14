@@ -113,6 +113,12 @@ class ScoutState:
     source_order: tuple[str, ...] = ("search_properties", "search_scans")
     property_types: list[str] = field(default_factory=list)
     prefer_public: bool = False
+    # Site projects (profiles.Profile.land): candidates are land, judged for the
+    # opportunity's own project type, starting from the report's own sites.
+    land_mode: bool = False
+    imagery_text: str | None = None
+    report_sites: list[Asset] = field(default_factory=list)
+    site_solution: matching.Solution | None = None
     focus_hosts: str = ""
     seen: dict[str, Inspection] = field(default_factory=dict)
     steps: list[ScoutStep] = field(default_factory=list)
@@ -215,6 +221,49 @@ def _image_options(picture: SitePicture | None) -> list[ImageOption]:
 
 
 # --- searches ---------------------------------------------------------------------
+
+
+async def search_report_sites(state: ScoutState, limit: int) -> str:
+    """The sites the county report found for this project (its landfills,
+    brownfields, plants or dams), the opportunity's own sites first."""
+    picked: list[Building] = []
+    for a in state.report_sites:
+        bid = f"rs:{a.id}"
+        if bid in state.seen:
+            continue
+        picked.append(
+            Building(
+                id=bid,
+                name=a.name,
+                lat=a.lat,
+                lon=a.lon,
+                found_by="report",
+                address=str(a.attributes.get("city")) if a.attributes.get("city") else None,
+                building_type=a.type,
+                report_asset=a,
+            )
+        )
+        if len(picked) >= limit:
+            break
+    for b in picked:
+        state.seen[b.id] = Inspection(building=b)
+        state.seen[b.id].texts.append(_building_line(b))
+    add_step(
+        state,
+        "observation",
+        f"The county report lists {len(state.report_sites)} {state.focus_hosts}: "
+        f"{len(picked)} new candidate(s).",
+        "search_report_sites",
+    )
+    if not picked:
+        state.empty_searches += 1
+        state.last_result = "No new report sites. Use search_imagery to find more."
+        return state.last_result
+    state.empty_searches = 0
+    state.last_result = "Sites from the county report:\n" + "\n".join(
+        _building_line(b) for b in picked
+    )
+    return state.last_result
 
 
 async def search_public_buildings(state: ScoutState, kinds: list[str], limit: int) -> str:
@@ -402,7 +451,13 @@ async def search_imagery(state: ScoutState, text: str, near_id: str | None, limi
     where = f"around {anchor.building.name}" if anchor else "around the county centre"
     try:
         found = await state.provider.buildings_from_above(
-            state.county, lat, lon, state.settings.scout_search_half_m, text, limit
+            state.county,
+            lat,
+            lon,
+            state.settings.scout_search_half_m,
+            text,
+            limit,
+            need_structure=not state.land_mode,
         )
         _status(state, "vexcel", True)
     except SourceError as exc:
@@ -432,6 +487,27 @@ async def search_imagery(state: ScoutState, text: str, near_id: str | None, limi
 
 
 # --- inspections ------------------------------------------------------------------------
+
+
+def _site_text(roof: RoofRecord) -> str:
+    """What the aerial record says about a piece of land."""
+    parts: list[str] = []
+    if roof.parcel_wkt and roof.inside_parcel is not None:
+        parts.append(f"parcel of {_m2(measure.wkt_area_m2(roof.parcel_wkt))}")
+    else:
+        parts.append("no parcel record here; the area around the point was used")
+    if roof.structure_count:
+        parts.append(f"{roof.structure_count} structure(s) on record")
+    if roof.hardscape_m2 is not None:
+        parts.append(f"paved area {_m2(roof.hardscape_m2)}")
+    if roof.parcel_tree_cover_pct is not None:
+        parts.append(f"tree cover {roof.parcel_tree_cover_pct:.0f}%")
+    if not roof.detection_failed:
+        cars = sum(1 for d in roof.detections if d.label == "car")
+        parts.append(f"{cars} vehicle(s) detected")
+    if roof.captured:
+        parts.append(f"imagery {roof.captured}")
+    return "; ".join(parts)
 
 
 def _roof_text(roof: RoofRecord) -> str:
@@ -483,12 +559,14 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
     add_step(
         state,
         "action",
-        f"Inspecting the roof and parcel of {b.name} from the air",
+        f"Inspecting {b.name} from the air"
+        if state.land_mode
+        else f"Inspecting the roof and parcel of {b.name} from the air",
         "inspect_roof",
         b,
     )
     try:
-        insp.roof = await state.provider.roof(b)
+        insp.roof = await state.provider.roof(b, allow_no_parcel=state.land_mode)
         _status(state, "vexcel", True)
     except SourceError as exc:
         insp.roof_error = str(exc)
@@ -504,7 +582,7 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
         insp.picture = await state.provider.image(b, insp.roof)
     except Exception as exc:  # the image is for the card; the inspection stands
         log.warning("scout image for %s failed: %r", b.id, exc)
-    text = _roof_text(insp.roof)
+    text = _site_text(insp.roof) if state.land_mode else _roof_text(insp.roof)
     add_step(state, "observation", f"{b.name}: {text}", "inspect_roof", b)
     return _record(state, insp, f"{b.id}: {text}")
 
@@ -708,6 +786,8 @@ async def evaluate_site(
     roof, interior = insp.roof, insp.interior
     known = {s.id: s for s in state.solutions}
     wanted = [known[s] for s in dict.fromkeys(solution_ids) if s in known] or list(state.solutions)
+    if state.land_mode and state.site_solution is not None:
+        wanted = [state.site_solution]
 
     kept: list[matching.Solution] = []
     need_ids: list[str] = []
@@ -716,6 +796,8 @@ async def evaluate_site(
         matched = [
             n for n in state.needs if n.id in solution.triggers and need_applies(solution.id, n)
         ]
+        if not matched and state.land_mode:
+            matched = list(state.needs)  # the opportunity's own needs, already scoped
         if not matched:
             dropped.append(f"{solution.id}: answers no flagged need")
             continue
@@ -753,7 +835,9 @@ async def evaluate_site(
             )
             if c
         ]
-    factor, reasons = measure.confidence_factor(roof, interior, checks, state.settings)
+    factor, reasons = measure.confidence_factor(
+        roof, interior, checks, state.settings, land=state.land_mode
+    )
     # The county can act on its own buildings directly; a private site needs the
     # owner as a partner, so it ranks a little lower (our own choice, config).
     if state.prefer_public and b.found_by != "geoapify":
@@ -770,6 +854,11 @@ async def evaluate_site(
         )
 
     figures: list[Estimate] = []
+    if state.land_mode and kept and b.report_asset is not None:
+        from app.pipeline import size_estimates
+
+        site_yield, specific = await _site_yield(state, b)
+        figures = size_estimates(kept[0].id, b.report_asset, site_yield, specific)
     if any(s.id in ROOF_SOLUTIONS for s in kept) and roof is not None and roof.footprint_m2:
         hvac = measure.detections_on_roof(roof.detections, roof.footprint_wkt, "rooftop hvac unit")
         site_yield, specific = await _site_yield(state, b)
@@ -785,7 +874,9 @@ async def evaluate_site(
         for lead in funding.match_funding(
             state.programs,
             solution.id,
-            "commercial_building",
+            (b.report_asset.type if b.report_asset else None)
+            if state.land_mode
+            else "commercial_building",
             energy_community=state.energy_community,
             energy_community_checked=state.energy_community_checked,
         ):

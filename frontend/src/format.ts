@@ -118,7 +118,7 @@ export const ASSET_STYLES: Record<AssetType, AssetStyle> = {
     color: "#ea580c",
   },
   commercial_building: {
-    label: "Scouted building",
+    label: "Scouted site",
     plural: "Buildings found by Site Scout",
     color: "#c026d3",
   },

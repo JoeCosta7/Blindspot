@@ -52,6 +52,7 @@ from app.models import (
     Resources,
     SourceStatus,
 )
+from app.scout import profiles
 from app.sources import (
     SourceError,
     afdc,
@@ -458,13 +459,19 @@ def proposals_from_matches(matches: list[matching.Match]) -> list[_Proposal]:
 
 
 def can_scout(
-    need_ids: list[str], asset_ids: list[str], scout_solutions: tuple[matching.Solution, ...]
+    solution_id: str | None,
+    need_ids: list[str],
+    asset_ids: list[str],
+    scout_solutions: tuple[matching.Solution, ...],
 ) -> bool:
-    """Whether Site Scout could find a building for this opportunity: it is
-    not county-wide, and one of the building-hosted project types answers at
-    least one of its needs. Empty `scout_solutions` means no building data."""
+    """Whether Site Scout could find a place for this opportunity: it is not
+    county-wide, and either it is a site project (landfill, reclaimed land,
+    plant, dam: scout/profiles.py) or a building-hosted project type answers
+    one of its needs. Empty `scout_solutions` means no data for this county."""
     if not asset_ids or not scout_solutions:
         return False
+    if profiles.is_site_project(solution_id):
+        return True
     needs = set(need_ids)
     return any(needs & set(s.triggers) for s in scout_solutions)
 
@@ -888,7 +895,10 @@ async def analyze_county(
                 funding=leads,
                 generated_by=proposal.generated_by,
                 scoutable=can_scout(
-                    [n.id for n in proposal.needs], [a.id for a in proposal.assets], scout_solutions
+                    solution.id if solution else None,
+                    [n.id for n in proposal.needs],
+                    [a.id for a in proposal.assets],
+                    scout_solutions,
                 ),
             )
         )

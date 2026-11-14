@@ -156,16 +156,18 @@ class FakeProvider:
     async def scanned_buildings(self, county: County) -> list[Building]:
         return BUILDINGS
 
-    async def buildings_from_above(self, county, lat, lon, half_m, text, limit):
+    async def buildings_from_above(
+        self, county, lat, lon, half_m, text, limit, need_structure=True
+    ):
         return []
 
     async def properties(self, county: County) -> list[Building]:
         return [COSTAR_D]
 
-    async def roof(self, building: Building) -> RoofRecord | None:
+    async def roof(self, building: Building, allow_no_parcel: bool = False) -> RoofRecord | None:
         if self.fail_roof:
             raise SourceError("Vexcel is down")
-        return ROOFS[building.id]
+        return ROOFS.get(building.id, roof())
 
     async def interior(self, building: Building) -> InteriorRecord | None:
         return INTERIORS.get(building.scan_id or "")
@@ -403,3 +405,53 @@ def test_costar_kit_loads_when_present(settings):
     assert r["lat"] and r["lon"] and r["gross_sqft"] and r["name"]
     harris = make_county("48201", -95.9, 29.5, -94.9, 30.2)
     assert len(costar.properties_in_county(settings.costar_kit_dir, harris)) > 1000
+
+
+def test_site_project_starts_from_report_sites(settings):
+    from app import matching
+    from app.config import BACKEND_DIR
+    from app.models import Asset
+    from app.scout import profiles
+
+    landfill = Asset(
+        id="lmop:7",
+        type="lmop_landfill",
+        name="McCarty Road LF",
+        lat=29.80,
+        lon=-95.30,
+        attributes={"waste_in_place_tons": 1_000_000},
+        source="test",
+    )
+    solution = next(
+        s
+        for s in matching.load_solutions(BACKEND_DIR / "data" / "solutions.json")
+        if s.id == "landfill_composting"
+    )
+    need = make_need("landfill_gas_uncaptured", 75)
+
+    async def run():
+        county = make_county("48201", -96, 29, -95, 30)
+        out = []
+        async for event in agent.run_scout(
+            county,
+            [need],
+            1437.0,
+            FakeProvider(),
+            settings,
+            None,
+            broken,
+            profile=profiles.LANDFILL,
+            report_sites=[landfill],
+            site_solution=solution,
+        ):
+            out.append(event)
+        return out
+
+    async def broken(prompt):
+        raise RuntimeError("503")
+
+    events = asyncio.run(run())
+    result = events[-1].result
+    site = next(c for c in result.candidates if c.building_id == "rs:lmop:7")
+    assert site.name == "McCarty Road LF" and site.solution_ids == ["landfill_composting"]
+    assert site.status != "rejected" and site.need_ids == ["landfill_gas_uncaptured"]

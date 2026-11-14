@@ -886,7 +886,8 @@ def test_can_scout_needs_a_site_and_a_building_project():
     from app.pipeline import can_scout
 
     scout = matching.load_solutions(BACKEND_DIR / "data" / "scout_solutions.json")
-    assert can_scout(["hazard_risk"], ["school:1"], scout) is True
-    assert can_scout(["impaired_waters"], ["school:1"], scout) is False  # no roof answers it
-    assert can_scout(["hazard_risk"], [], scout) is False  # county-wide
-    assert can_scout(["hazard_risk"], ["school:1"], ()) is False  # no building data here
+    assert can_scout(None, ["hazard_risk"], ["school:1"], scout) is True
+    assert can_scout(None, ["impaired_waters"], ["school:1"], scout) is False  # no roof answers it
+    assert can_scout("landfill_composting", ["landfill_gas_uncaptured"], ["lmop:1"], scout)
+    assert can_scout(None, ["hazard_risk"], [], scout) is False  # county-wide
+    assert can_scout(None, ["hazard_risk"], ["school:1"], ()) is False  # no data here

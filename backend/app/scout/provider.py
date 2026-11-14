@@ -15,16 +15,29 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 import httpx
+from pyproj import Geod
 from shapely import wkt as shapely_wkt
 from shapely.geometry import Point
 
 from app.config import Settings
 from app.geo import County
+from app.models import Asset
 from app.sources import costar, matterport, vexcel
 
 log = logging.getLogger(__name__)
 
-FoundBy = Literal["costar", "matterport", "vexcel", "geoapify"]
+# Half the side of the square read around a site with no parcel record, and
+# the largest area photographed whole (a landfill parcel can be several km²).
+SITE_HALF_M = 200.0
+MAX_IMAGE_AREA_M2 = 600_000.0
+_GEOD = Geod(ellps="WGS84")
+
+
+def _area_m2(text: str) -> float:
+    return abs(_GEOD.geometry_area_perimeter(shapely_wkt.loads(text))[0])
+
+
+FoundBy = Literal["costar", "matterport", "vexcel", "geoapify", "report"]
 
 
 @dataclass(frozen=True)
@@ -67,6 +80,8 @@ class Building:
     year_built: int | None = None
     parking_spaces: int | None = None
     photo_url: str | None = None
+    # A site the county report found (landfill, brownfield, plant, dam).
+    report_asset: Asset | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -97,6 +112,7 @@ class RoofRecord:
     captured: str | None
     collection: str | None
     inside_parcel: bool | None
+    structure_count: int | None = None
     detections: tuple[Detection, ...] = ()
     detection_failed: str | None = None
 
@@ -146,7 +162,14 @@ class BuildingData(Protocol):
         ...
 
     async def buildings_from_above(
-        self, county: County, lat: float, lon: float, half_m: float, text: str, limit: int
+        self,
+        county: County,
+        lat: float,
+        lon: float,
+        half_m: float,
+        text: str,
+        limit: int,
+        need_structure: bool = True,
     ) -> list[Building]:
         """Buildings found by searching the imagery around a point for `text`."""
         ...
@@ -156,7 +179,7 @@ class BuildingData(Protocol):
         layer). Empty when the kit is not installed."""
         ...
 
-    async def roof(self, building: Building) -> RoofRecord | None:
+    async def roof(self, building: Building, allow_no_parcel: bool = False) -> RoofRecord | None:
         """Parcel, structure and detected objects, or None with no parcel."""
         ...
 
@@ -232,7 +255,14 @@ class RealBuildingData:
         return buildings
 
     async def buildings_from_above(
-        self, county: County, lat: float, lon: float, half_m: float, text: str, limit: int
+        self,
+        county: County,
+        lat: float,
+        lon: float,
+        half_m: float,
+        text: str,
+        limit: int,
+        need_structure: bool = True,
     ) -> list[Building]:
         tiles = await vexcel.embedding_search(
             self.client, self.settings, vexcel.square_wkt(lat, lon, half_m), text, limit
@@ -244,6 +274,23 @@ class RealBuildingData:
                 continue
             centre = shapely_wkt.loads(tile["wkt"]).centroid
             feature = await vexcel.property_at(self.client, self.settings, centre.y, centre.x)
+            if not need_structure:
+                # A site, not a building: the tile itself is the candidate.
+                if any(
+                    abs(b.lat - centre.y) < 0.002 and abs(b.lon - centre.x) < 0.002 for b in found
+                ):
+                    continue
+                found.append(
+                    Building(
+                        id=f"vx:{centre.y:.5f},{centre.x:.5f}",
+                        name=f"Site seen from the air ({text[:40]})",
+                        lat=centre.y,
+                        lon=centre.x,
+                        found_by="vexcel",
+                        building_type="site",
+                    )
+                )
+                continue
             if feature is None:
                 continue
             facts = vexcel.parcel_facts(feature)
@@ -269,11 +316,37 @@ class RealBuildingData:
             )
         return found
 
-    async def roof(self, building: Building) -> RoofRecord | None:
+    async def roof(self, building: Building, allow_no_parcel: bool = False) -> RoofRecord | None:
         feature = await vexcel.property_at(self.client, self.settings, building.lat, building.lon)
-        if feature is None:
+        if feature is None and not allow_no_parcel:
             return None
-        f = vexcel.parcel_facts(feature)
+        if feature is None:
+            # No parcel at the point (open land, a landfill cell): read the area
+            # around it instead. Imagery and detection take any polygon.
+            f = dict.fromkeys(
+                (
+                    "footprint_wkt",
+                    "footprint_m2",
+                    "building_type",
+                    "roof_shape",
+                    "roof_material",
+                    "roof_condition",
+                    "roof_tree_cover_pct",
+                    "solar_present",
+                    "ac_units",
+                    "parcel_tree_cover_pct",
+                    "hardscape_m2",
+                    "vehicles_count",
+                    "gsd_m",
+                    "captured",
+                    "collection",
+                    "inside_parcel",
+                    "structure_count",
+                )
+            )
+            f["parcel_wkt"] = vexcel.square_wkt(building.lat, building.lon, SITE_HALF_M)
+        else:
+            f = vexcel.parcel_facts(feature)
         detections: tuple[Detection, ...] = ()
         failed: str | None = None
         # Rooftop equipment is small, and the detector downsamples large areas,
@@ -312,6 +385,7 @@ class RealBuildingData:
             captured=f["captured"],
             collection=f["collection"],
             inside_parcel=f["inside_parcel"],
+            structure_count=f["structure_count"],
             detections=detections,
             detection_failed=failed,
         )
@@ -338,6 +412,8 @@ class RealBuildingData:
         area = roof.parcel_wkt or roof.footprint_wkt
         if not area:
             return None
+        if _area_m2(area) > MAX_IMAGE_AREA_M2:
+            area = vexcel.square_wkt(building.lat, building.lon, SITE_HALF_M)
         drawings: list[dict[str, Any]] = []
         if roof.parcel_wkt:
             drawings.append(

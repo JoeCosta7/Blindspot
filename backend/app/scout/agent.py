@@ -17,7 +17,6 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any, Literal
 
 import httpx
@@ -28,7 +27,7 @@ from app.config import Settings
 from app.geo import County
 from app.models import Asset, Need, ScoutEvent, ScoutResult, ScoutStop, SourceStatus
 from app.narrative import extract_numbers, format_need_value
-from app.scout import drafts, tools
+from app.scout import drafts, profiles, tools
 from app.scout.provider import BuildingData
 from app.scout.tools import ScoutState, add_step
 
@@ -45,6 +44,7 @@ class AgentAction(BaseModel):
     tool: Literal[
         "search_properties",
         "search_public_buildings",
+        "search_report_sites",
         "search_scans",
         "search_imagery",
         "inspect_roof",
@@ -73,78 +73,8 @@ class AgentAction(BaseModel):
 
 Decider = Callable[[str], Awaitable[AgentAction]]
 
-PUBLIC_FIRST = ("search_public_buildings", "search_properties", "search_scans")
-PRIVATE_FIRST = ("search_properties", "search_scans", "search_public_buildings")
-
-
-@dataclass(frozen=True)
-class Profile:
-    """What kind of host fits an opportunity: which source to search first,
-    which property types to ask for, and whether county ownership counts."""
-
-    source_order: tuple[str, ...]
-    property_types: tuple[str, ...]
-    prefer_public: bool
-    hosts: str  # plain words for the prompt and the timeline
-
-
-_PUBLIC = Profile(
-    PUBLIC_FIRST, ("Office", "Retail", "Flex"), True, "the county's own public buildings"
-)
-_INDUSTRIAL = Profile(
-    PRIVATE_FIRST,
-    ("Industrial", "Flex", "Retail"),
-    False,
-    "large industrial, flex or retail buildings",
-)
-_COMMERCIAL = Profile(
-    PRIVATE_FIRST, ("Industrial", "Retail", "Office", "Flex"), False, "large commercial buildings"
-)
-
-# By the main catalogue's project type (data/solutions.json).
-PROFILES: dict[str, Profile] = {
-    "resilience_hub": _PUBLIC,
-    "weatherization_clinic": _PUBLIC,
-    "public_ev_charging": _PUBLIC,
-    "shade_trees_depaving": _PUBLIC,
-    "school_heat_pumps": _PUBLIC,
-    "community_solar": _INDUSTRIAL,
-    "repower_fossil_plant": _INDUSTRIAL,
-    "wind_on_reclaimed_land": _INDUSTRIAL,
-}
-_PUBLIC_WORDS = (
-    "school",
-    "library",
-    "librar",
-    "public building",
-    "community cent",
-    "civic",
-    "clinic",
-    "hub",
-)
-_INDUSTRIAL_WORDS = (
-    "industrial",
-    "warehouse",
-    "factory",
-    "plant",
-    "brownfield",
-    "reuse",
-    "convert",
-    "vacant",
-)
-
-
-def profile_for(solution_id: str | None, focus: str | None) -> Profile:
-    """The profile for an opportunity: by project type, else by words in its
-    title (an idea of Gemini's own), else large commercial buildings."""
-    if solution_id and solution_id in PROFILES:
-        return PROFILES[solution_id]
-    text = (focus or "").lower()
-    if any(w in text for w in _PUBLIC_WORDS):
-        return _PUBLIC
-    if any(w in text for w in _INDUSTRIAL_WORDS):
-        return _INDUSTRIAL
-    return _COMMERCIAL
+# Kept here so main.py can call scout_agent.profile_for.
+profile_for = profiles.profile_for
 
 
 RULES = (
@@ -206,6 +136,8 @@ def build_prompt(state: ScoutState) -> str:
         "- search_properties(property_types, min_sqft?, max_stories?): property records by type "
         "word (Industrial, Warehouse, Retail, Office, Flex, Multifamily), size and storeys.\n"
         "- search_public_buildings(kinds): the county's schools, libraries and colleges.\n"
+        "- search_report_sites(): the sites the county report already found for this project, "
+        "such as its landfills, brownfields, power plants or dams.\n"
         "- search_scans(keywords): scanned buildings whose name or room labels contain a keyword.\n"
         "- search_imagery(text, near_building_id?): buildings found by describing them, e.g. "
         '"large flat-roofed warehouse with a big parking lot".\n'
@@ -218,8 +150,15 @@ def build_prompt(state: ScoutState) -> str:
         f"Rules:\n{rules}\n\n"
         f"Focus: {state.focus_hosts}. Search {state.source_order[0]} first"
         + (f", asking for {', '.join(state.property_types)}" if state.property_types else "")
-        + ".\n\n"
-        f"Needs, highest priority first:\n{json.dumps(needs, ensure_ascii=False)}\n\n"
+        + ".\n"
+        + (
+            "This project goes on a site, not in a building: start with search_report_sites, "
+            "then use search_imagery with a plain description to find more sites like them. "
+            "inspect_roof reads the site's parcel from the air.\n\n"
+            if state.land_mode
+            else "\n"
+        )
+        + f"Needs, highest priority first:\n{json.dumps(needs, ensure_ascii=False)}\n\n"
         f"Project types:\n{json.dumps(projects)}\n\n"
         f"Buildings seen so far:\n{json.dumps(buildings, ensure_ascii=False)}\n\n"
         f"Budget: {json.dumps(budget)}\n\n"
@@ -252,7 +191,7 @@ def problem(action: AgentAction, state: ScoutState) -> str | None:
         if not insp.roof_checked:
             return "evaluate_site: inspect the roof first"
         known = {s.id for s in state.solutions}
-        if action.solution_ids and not set(action.solution_ids) & known:
+        if not state.land_mode and action.solution_ids and not set(action.solution_ids) & known:
             return "evaluate_site: none of those project types exist"
     if action.tool == "search_imagery" and not (action.text or "").strip():
         return "search_imagery needs text describing what to look for"
@@ -275,6 +214,8 @@ def _code_text(action: AgentAction, state: ScoutState) -> str:
     return {
         "search_properties": "Searching the property records for "
         + (", ".join(action.property_types[:5]) or "commercial buildings"),
+        "search_report_sites": "Starting from the sites the county report found: "
+        + state.focus_hosts,
         "search_public_buildings": "Searching the county's public buildings for "
         + (", ".join(action.kinds[:3]) or "schools, libraries and colleges"),
         "search_scans": "Searching the 3D scan library for "
@@ -293,6 +234,8 @@ async def run_tool(action: AgentAction, state: ScoutState) -> str:
         return await tools.search_properties(
             state, action.property_types, action.min_sqft, action.max_stories, limit
         )
+    if action.tool == "search_report_sites":
+        return await tools.search_report_sites(state, limit)
     if action.tool == "search_public_buildings":
         return await tools.search_public_buildings(state, action.kinds, limit)
     if action.tool == "search_scans":
@@ -321,6 +264,18 @@ def rule_actions(state: ScoutState) -> AgentAction:
     for source in state.source_order:
         if source in searched:
             continue
+        if source == "search_report_sites":
+            if state.report_sites:
+                return AgentAction(thought="", tool="search_report_sites")
+            continue
+        if source == "search_imagery":
+            near = next(iter(state.seen), None)
+            return AgentAction(
+                thought="",
+                tool="search_imagery",
+                text=state.imagery_text or "large open site",
+                near_building_id=near,
+            )
         if source == "search_public_buildings":
             if state.public_buildings:
                 return AgentAction(thought="", tool="search_public_buildings")
@@ -364,7 +319,9 @@ async def run_scout(
     energy_community_checked: bool = False,
     focus: str | None = None,
     public_buildings: list[Asset] | None = None,
-    profile: Profile | None = None,
+    profile: profiles.Profile | None = None,
+    report_sites: list[Asset] | None = None,
+    site_solution: matching.Solution | None = None,
 ) -> AsyncIterator[ScoutEvent]:
     """Run the agent for one county, yielding steps, candidates and finally
     the result. Never raises past the result event."""
@@ -380,10 +337,14 @@ async def run_scout(
         energy_community=energy_community,
         energy_community_checked=energy_community_checked,
         public_buildings=public_buildings or [],
-        source_order=(profile or _COMMERCIAL).source_order,
-        property_types=list((profile or _COMMERCIAL).property_types),
-        prefer_public=(profile or _COMMERCIAL).prefer_public,
-        focus_hosts=(profile or _COMMERCIAL).hosts,
+        source_order=(profile or profiles.COMMERCIAL).source_order,
+        property_types=list((profile or profiles.COMMERCIAL).property_types),
+        prefer_public=(profile or profiles.COMMERCIAL).prefer_public,
+        focus_hosts=(profile or profiles.COMMERCIAL).hosts,
+        land_mode=bool(profile and profile.land),
+        imagery_text=(profile.imagery_text if profile else None),
+        report_sites=report_sites or [],
+        site_solution=site_solution,
     )
     decide = decider or await gemini_decider(settings)
     generated_by: Literal["gemini", "rules"] = "gemini"
@@ -395,7 +356,7 @@ async def run_scout(
         state,
         "plan",
         (
-            f"Scouting {county.name} for buildings to host: {focus}. "
+            f"Scouting {county.name} for places to host: {focus}. "
             if focus
             else f"Scouting {county.name}. "
         )

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
+from app import matching
 from app.config import Settings, get_settings
 from app.geo import County, CountyIndex
 from app.models import (
@@ -244,6 +245,31 @@ async def scout(
         except Exception:  # the parquet file is optional here
             energy_community, checked = None, False
         provider = scout_provider.get_provider(client, settings)
+        profile = scout_agent.profile_for(body.solution_id, body.focus)
+        own = [a for a in report.assets if a.id in body.asset_ids]
+        report_sites = own + [
+            a for a in report.assets if a.type in profile.site_types and a.id not in body.asset_ids
+        ]
+        report_sites = [a for a in report_sites if a.type in profile.site_types] or own
+        # The two EPA lists name the same landfill differently; keep the first.
+        unique: list = []
+        for a in report_sites:
+            same = any(
+                a.name.lower() == u.name.lower()
+                or (abs(a.lat - u.lat) < 0.003 and abs(a.lon - u.lon) < 0.003)
+                for u in unique
+            )
+            if not same:
+                unique.append(a)
+        report_sites = unique
+        site_solution = next(
+            (
+                s
+                for s in matching.load_solutions(settings.data_dir / "solutions.json")
+                if s.id == body.solution_id
+            ),
+            None,
+        )
         needs = report.needs
         if body.need_ids:
             needs = [n for n in needs if n.id in body.need_ids] or needs
@@ -257,7 +283,9 @@ async def scout(
             energy_community=energy_community,
             energy_community_checked=checked,
             focus=body.focus,
-            profile=scout_agent.profile_for(body.solution_id, body.focus),
+            profile=profile,
+            report_sites=report_sites,
+            site_solution=site_solution,
             public_buildings=[
                 a for a in report.assets if a.type in ("school", "library", "college")
             ],

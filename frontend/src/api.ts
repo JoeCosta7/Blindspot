@@ -56,13 +56,20 @@ export async function scout(
   needIds: NeedId[],
   focus: string,
   solutionId: string | null,
+  assetIds: string[],
   onEvent: (event: ScoutEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const resp = await fetch(`/api/scout${FIXTURE_MODE ? "?fixture=1" : ""}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fips, need_ids: needIds, focus, solution_id: solutionId }),
+    body: JSON.stringify({
+      fips,
+      need_ids: needIds,
+      focus,
+      solution_id: solutionId,
+      asset_ids: assetIds,
+    }),
     signal,
   });
   if (!resp.ok) throw new Error(await readError(resp));

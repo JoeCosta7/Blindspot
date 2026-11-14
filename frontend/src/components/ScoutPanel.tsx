@@ -250,13 +250,13 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
     return (
       <div className="scout-intro">
         <p className="muted">
-          Find specific commercial buildings that could host <strong>{title}</strong>. An agent
-          searches CoStar property records and the Matterport 3D scan library, inspects each roof
+          Find specific places that could host <strong>{title}</strong>. An agent
+          searches the county report's own sites, CoStar records, the Matterport 3D scan library and Vexcel imagery, inspects each place
           from Vexcel aerial imagery, and checks the layers against each other. Code measures and
           scores every site; Gemini only chooses where to look.
         </p>
         <button type="button" className="button" onClick={onStart}>
-          Scout buildings for this
+          Find sites for this
         </button>
       </div>
     );
