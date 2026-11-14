@@ -570,6 +570,16 @@ body.panel-resizing .map {
   font-size: 0.9rem;
   pointer-events: none;
   white-space: nowrap;
+  max-width: min(520px, calc(100% - 24px));
+  text-align: center;
+}
+
+.map-hint-quiet {
+  opacity: 0.85;
+  font-size: 0.82rem;
+  white-space: normal;
+  border-radius: 8px;
+  line-height: 1.3;
 }
 
 .legend {
@@ -611,6 +621,25 @@ body.panel-resizing .map {
   border: 2px dashed var(--accent);
   background: var(--select-fill);
   pointer-events: none;
+}
+
+.box-select-count {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(280px, 90%);
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
 }
 
 .asset-popup {
