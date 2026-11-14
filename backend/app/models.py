@@ -311,6 +311,31 @@ class CountyReport(BaseModel):
     source_status: list[SourceStatus]
 
 
+class NeedMapLayer(BaseModel):
+    """One Census need for every county, for coloring the map."""
+
+    id: NeedId
+    label: str
+    theme: NeedTheme
+    unit: NeedUnit
+    national_value: float
+    # True where a lower figure is the worse one (income).
+    lower_is_worse: bool
+    # County FIPS -> [value, ratio]. The ratio is county against national,
+    # turned so that above 1 always means worse off, exactly as needs are
+    # scored. Counties the Census publishes no figure for are left out.
+    counties: dict[str, tuple[float, float]]
+
+
+class NeedMapResponse(BaseModel):
+    layers: list[NeedMapLayer]
+    # Ratio thresholds between the map's color classes, ascending: the US
+    # figure itself, the "elevated" and "high" need thresholds, and the ratio
+    # at which severity reaches 100.
+    ratio_breaks: list[float]
+    source: str
+
+
 class AnalyzeResponse(BaseModel):
     counties: list[CountyReport]
     truncated: bool = False

@@ -22,8 +22,11 @@ from app.models import (
     AnalyzeResponse,
     CountyReport,
     HealthResponse,
+    NeedMapResponse,
 )
+from app.needmap import build_need_map
 from app.pipeline import analyze_county
+from app.sources import SourceError, census
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +104,22 @@ async def counties_geojson(request: Request) -> FileResponse:
     return FileResponse(
         path, media_type="application/geo+json", headers={"Cache-Control": "max-age=86400"}
     )
+
+
+@app.get("/api/need-map")
+async def need_map(request: Request) -> NeedMapResponse:
+    """Every Census need for every county, for coloring the map. Two Census
+    calls, both cached for 30 days and shared with the reports."""
+    settings: Settings = request.app.state.settings
+    client: httpx.AsyncClient = request.app.state.client
+    try:
+        (all_values, _), (national, _) = await asyncio.gather(
+            census.fetch_all_counties(client, settings),
+            census.fetch_national(client, settings),
+        )
+    except SourceError as exc:
+        raise HTTPException(503, f"County figures could not be loaded: {exc}") from exc
+    return build_need_map(all_values, national, settings)
 
 
 @app.post("/api/analyze")

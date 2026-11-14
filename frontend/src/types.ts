@@ -237,6 +237,29 @@ export interface CountyReport {
   source_status: SourceStatus[];
 }
 
+/** One Census need for every county, for coloring the map. */
+export interface NeedMapLayer {
+  id: NeedId;
+  label: string;
+  theme: NeedTheme;
+  unit: NeedUnit;
+  national_value: number;
+  /** True where a lower figure is the worse one (income). */
+  lower_is_worse: boolean;
+  /** County FIPS -> [value, ratio]. The ratio is county against national,
+   * turned so that above 1 always means worse off, as needs are scored.
+   * Counties with no published figure are left out. */
+  counties: Record<string, [number, number]>;
+}
+
+export interface NeedMapResponse {
+  layers: NeedMapLayer[];
+  /** Ratio thresholds between the color classes, ascending: the US figure,
+   * the "elevated" and "high" need thresholds, and where severity reaches 100. */
+  ratio_breaks: number[];
+  source: string;
+}
+
 export interface AnalyzeResponse {
   counties: CountyReport[];
   truncated: boolean;

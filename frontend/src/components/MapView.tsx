@@ -1,16 +1,32 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useRef, useState } from "react";
-import { ASSET_STYLES, formatAcres, formatNumber } from "../format";
-import type { Asset, Bounds, CountyCollection, LonLat } from "../types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ASSET_STYLES, formatAcres, formatNeedValue, formatNumber } from "../format";
+import type {
+  Asset,
+  Bounds,
+  CountyCollection,
+  LonLat,
+  NeedId,
+  NeedMapLayer,
+  NeedMapResponse,
+} from "../types";
 import { startBoxSelect } from "./boxSelect";
 import { type LoadingArea, playFinishFlare, startLoadingSweep } from "./loadingSweep";
+import {
+  NEED_CLASS_STATE,
+  NEED_FILL_OPACITY,
+  needClass,
+  needClassLabels,
+  needRamp,
+} from "./needMap";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 
 const COUNTY_SOURCE = "counties";
 const ASSET_SOURCE = "assets";
 const COUNTY_FILL = "counties-fill";
+const COUNTY_NEED = "counties-need";
 const OPPORTUNITY_DOT = "opportunities-dot";
 const OPPORTUNITY_HALO = "opportunities-halo";
 
@@ -70,8 +86,65 @@ interface Props {
   loadingArea: LoadingArea | null;
   /** Played once each time a new object arrives: the report has loaded. */
   flare: { area: LoadingArea } | null;
+  /** Census needs for every county, for coloring the map. Null until loaded. */
+  needMap: NeedMapResponse | null;
+  needMapError: string | null;
+  /** The need the map is colored by, if any. */
+  needId: NeedId | null;
+  onNeedChange: (id: NeedId | null) => void;
   onCountyClick: (fips: string) => void;
   onBoxSelect: (sw: LonLat, ne: LonLat) => void;
+}
+
+/** The class a county falls in for a need, as a fill color. Counties with no
+ * figure have no class and stay clear. */
+function needFillColor(ramp: string[]): mapboxgl.ExpressionSpecification {
+  return [
+    "match",
+    ["number", ["feature-state", NEED_CLASS_STATE], -1],
+    ...ramp.flatMap((color, i): [number, string] => [i, color]),
+    "rgba(0, 0, 0, 0)",
+  ] as unknown as mapboxgl.ExpressionSpecification;
+}
+
+function NeedLegend({
+  layer,
+  needMap,
+  ramp,
+  hovered,
+}: {
+  layer: NeedMapLayer;
+  needMap: NeedMapResponse;
+  ramp: string[];
+  hovered: { name: string; fips: string } | null;
+}) {
+  const labels = needClassLabels(layer, needMap.ratio_breaks);
+  const figure = hovered ? layer.counties[hovered.fips]?.[0] : undefined;
+  return (
+    <div className="legend-need">
+      <strong>{layer.label}</strong>
+      <div className="legend-note">
+        United States: {formatNeedValue(layer.national_value, layer.unit)} · {needMap.source}
+      </div>
+      {labels.map((label, i) => (
+        <div key={label} className="legend-row">
+          <span className="legend-swatch" style={{ background: ramp[i], opacity: NEED_FILL_OPACITY }} />
+          {label}
+        </div>
+      ))}
+      <div className="legend-row">
+        <span className="legend-swatch legend-swatch-empty" />
+        No figure published
+      </div>
+      <div className="legend-readout" aria-live="polite">
+        {hovered
+          ? `${hovered.name}: ${
+              figure !== undefined ? formatNeedValue(figure, layer.unit) : "no figure published"
+            }`
+          : "Point at a county to see its figure."}
+      </div>
+    </div>
+  );
 }
 
 function popupContent(asset: Asset): HTMLElement {
@@ -145,9 +218,28 @@ export function MapView(props: Props) {
     focusAsset,
     loadingArea,
     flare,
+    needMap,
+    needMapError,
+    needId,
+    onNeedChange,
     onCountyClick,
     onBoxSelect,
   } = props;
+  const needLayer = needMap?.layers.find((layer) => layer.id === needId) ?? null;
+  const ramp = needRamp(basemap, theme);
+  // The county under the pointer, for the legend's readout.
+  const [hoveredFips, setHoveredFips] = useState<string | null>(null);
+  const countyNames = useMemo(
+    () =>
+      new Map(
+        (counties?.features ?? []).map((f) => [
+          f.properties.GEOID,
+          `${f.properties.NAMELSAD}, ${f.properties.STUSPS}`,
+        ]),
+      ),
+    [counties],
+  );
+  const hoveredName = hoveredFips ? countyNames.get(hoveredFips) : undefined;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
@@ -265,6 +357,21 @@ export function MapView(props: Props) {
     const colors = countyColors(latest.current.basemap, latest.current.theme);
 
     map.addSource(COUNTY_SOURCE, { type: "geojson", data: counties, promoteId: "GEOID" });
+    // Under the hover and selection fill. Its colors are set by the effect below.
+    map.addLayer({
+      id: COUNTY_NEED,
+      type: "fill",
+      source: COUNTY_SOURCE,
+      paint: {
+        "fill-color": "rgba(0, 0, 0, 0)",
+        "fill-opacity": [
+          "case",
+          [">=", ["number", ["feature-state", NEED_CLASS_STATE], -1], 0],
+          NEED_FILL_OPACITY,
+          0,
+        ],
+      },
+    });
     map.addLayer({
       id: COUNTY_FILL,
       type: "fill",
@@ -344,10 +451,12 @@ export function MapView(props: Props) {
     };
     map.on("mousemove", COUNTY_FILL, (event) => {
       const id = event.features?.[0]?.id;
+      setHoveredFips(typeof id === "string" ? id : null);
       setHover(latest.current.mode === "county" && typeof id === "string" ? id : null);
       map.getCanvas().style.cursor = latest.current.mode === "county" ? "pointer" : "";
     });
     map.on("mouseleave", COUNTY_FILL, () => {
+      setHoveredFips(null);
       setHover(null);
       map.getCanvas().style.cursor = "";
     });
@@ -370,6 +479,28 @@ export function MapView(props: Props) {
       if (typeof county?.id === "string") latest.current.onCountyClick(county.id);
     });
   }, [styleVersion, counties]);
+
+  // --- map colored by a need -----------------------------------------------------
+  // Every county's class is kept in feature state, beside hover and selected.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || layersVersion === 0 || !counties) return;
+    const breaks = needMap?.ratio_breaks ?? [];
+    for (const feature of counties.features) {
+      const id = feature.properties.GEOID;
+      const ratio = needLayer?.counties[id]?.[1];
+      map.setFeatureState(
+        { source: COUNTY_SOURCE, id },
+        { [NEED_CLASS_STATE]: ratio === undefined ? -1 : needClass(ratio, breaks) },
+      );
+    }
+  }, [layersVersion, counties, needMap, needLayer]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || layersVersion === 0 || !map.getLayer(COUNTY_NEED)) return;
+    map.setPaintProperty(COUNTY_NEED, "fill-color", needFillColor(needRamp(basemap, theme)));
+  }, [layersVersion, basemap, theme]);
 
   // --- selection highlight ----------------------------------------------------
   useEffect(() => {
@@ -502,6 +633,24 @@ export function MapView(props: Props) {
           Satellite
         </button>
       </div>
+      <label className="need-select">
+        <span>Color counties by</span>
+        <select
+          value={needId ?? ""}
+          disabled={!needMap}
+          onChange={(event) => onNeedChange((event.target.value || null) as NeedId | null)}
+        >
+          <option value="">
+            {needMap ? "Nothing" : needMapError ? "Unavailable" : "Loading figures…"}
+          </option>
+          {needMap?.layers.map((layer) => (
+            <option key={layer.id} value={layer.id}>
+              {layer.label}
+            </option>
+          ))}
+        </select>
+        {needMapError && <span className="need-select-error">{needMapError}</span>}
+      </label>
       {satelliteBlocked && (
         <div className="map-notice" role="status">
           Satellite view is off: Mapbox refused the imagery (usage limit or no access). Check
@@ -511,12 +660,22 @@ export function MapView(props: Props) {
       {mode === "box" && (
         <div className="map-hint">Drag a box over the counties to analyze. Esc cancels.</div>
       )}
-      {assets.length > 0 && (
+      {(assets.length > 0 || (needLayer && needMap)) && (
         <div className="legend">
-          <div className="legend-row">
-            <span className="legend-dot legend-dot-opportunity" />
-            Opportunity sites
-          </div>
+          {needLayer && needMap && (
+            <NeedLegend
+              layer={needLayer}
+              needMap={needMap}
+              ramp={ramp}
+              hovered={hoveredFips && hoveredName ? { fips: hoveredFips, name: hoveredName } : null}
+            />
+          )}
+          {assets.length > 0 && (
+            <div className="legend-row">
+              <span className="legend-dot legend-dot-opportunity" />
+              Opportunity sites
+            </div>
+          )}
         </div>
       )}
     </div>

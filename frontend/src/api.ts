@@ -1,4 +1,9 @@
-import type { AnalyzeRequest, AnalyzeResponse, CountyCollection } from "./types";
+import type {
+  AnalyzeRequest,
+  AnalyzeResponse,
+  CountyCollection,
+  NeedMapResponse,
+} from "./types";
 
 /** `?fixture=1` in the page URL serves saved reports: the demo works offline. */
 export const FIXTURE_MODE = new URLSearchParams(window.location.search).get("fixture") === "1";
@@ -19,6 +24,12 @@ export async function fetchCounties(): Promise<CountyCollection> {
   const resp = await fetch("/api/counties.geojson");
   if (!resp.ok) throw new Error(await readError(resp));
   return (await resp.json()) as CountyCollection;
+}
+
+export async function fetchNeedMap(): Promise<NeedMapResponse> {
+  const resp = await fetch("/api/need-map");
+  if (!resp.ok) throw new Error(await readError(resp));
+  return (await resp.json()) as NeedMapResponse;
 }
 
 export async function analyze(

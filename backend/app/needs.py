@@ -71,19 +71,24 @@ def score_ratio(ratio: float, settings: Settings) -> tuple[int, NeedLevel | None
     return severity, level
 
 
+def acs_ratio(rule: AcsNeedRule, value: float | None, baseline: float | None) -> float | None:
+    """County-to-national ratio where above 1 means the county is worse off.
+    None when either figure is missing or unusable."""
+    if value is None or baseline is None or baseline <= 0:
+        return None
+    if rule.lower_is_worse:
+        return baseline / value if value > 0 else None
+    return value / baseline
+
+
 def acs_needs(county: AcsMetrics, national: AcsMetrics, settings: Settings) -> list[Need]:
     needs: list[Need] = []
     for rule in ACS_RULES:
         value = getattr(county, rule.metric)
         baseline = getattr(national, rule.metric)
-        if value is None or baseline is None or baseline <= 0:
+        ratio = acs_ratio(rule, value, baseline)
+        if ratio is None:
             continue
-        if rule.lower_is_worse:
-            if value <= 0:
-                continue
-            ratio = baseline / value
-        else:
-            ratio = value / baseline
         severity, level = score_ratio(ratio, settings)
         if level is None:
             continue

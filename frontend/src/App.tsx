@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { analyze, fetchCounties, FIXTURE_MODE } from "./api";
+import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE } from "./api";
 import { CountySearch } from "./components/CountySearch";
 import type { LoadingArea } from "./components/loadingSweep";
 import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
@@ -13,6 +13,8 @@ import type {
   CountyCollection,
   CountyFeature,
   LonLat,
+  NeedId,
+  NeedMapResponse,
 } from "./types";
 
 // View preferences are remembered per browser. Storage can be unavailable
@@ -108,6 +110,10 @@ export function App() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [focusAsset, setFocusAsset] = useState<Asset | null>(null);
   const [flare, setFlare] = useState<{ area: LoadingArea } | null>(null);
+  const [needMap, setNeedMap] = useState<NeedMapResponse | null>(null);
+  const [needMapError, setNeedMapError] = useState<string | null>(null);
+  // The need the map is colored by, if any.
+  const [needId, setNeedId] = useState<NeedId | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [basemap, setBasemap] = useState<Basemap>(
@@ -136,6 +142,10 @@ export function App() {
       .catch((err: unknown) =>
         setCountiesError(err instanceof Error ? err.message : "Unknown error."),
       );
+    // Figures for coloring the map by a need. The map works without them.
+    fetchNeedMap()
+      .then(setNeedMap)
+      .catch((err: unknown) => setNeedMapError(err instanceof Error ? err.message : "Unknown error."));
   }, []);
 
   const featuresByFips = useMemo(
@@ -299,6 +309,10 @@ export function App() {
           focusAsset={focusAsset}
           loadingArea={loading ? (pending?.area ?? null) : null}
           flare={flare}
+          needMap={needMap}
+          needMapError={needMapError}
+          needId={needId}
+          onNeedChange={setNeedId}
           onCountyClick={selectCounty}
           onBoxSelect={selectBox}
         />

@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from app import cache, main
 from app.models import CountyContext, CountyReport, Narrative, Resources
+from app.sources import SourceError, census
+from tests.conftest import make_metrics
 
 
 def minimal_report(county) -> CountyReport:
@@ -122,3 +124,41 @@ def test_cache_round_trip_ttl_and_disk(tmp_path):
 
     time.sleep(0.02)
     assert cache.cache_get(tmp_path, "src", args, 0.01) is None  # expired
+
+
+def test_need_map_scores_every_county_like_a_report(client, monkeypatch):
+    async def all_counties(*args):
+        return {
+            # income 40,000 against 80,000; 70 of 100 homes rented against 35%
+            "99001": {
+                "B19013_001E": 40_000.0,
+                "B25003_001E": 100.0,
+                "B25003_003E": 70.0,
+            },
+            "99002": {"B19013_001E": None, "B25003_001E": 100.0, "B25003_003E": 35.0},
+        }, True
+
+    async def national(*args):
+        return make_metrics(), True
+
+    monkeypatch.setattr(census, "fetch_all_counties", all_counties)
+    monkeypatch.setattr(census, "fetch_national", national)
+
+    body = client.get("/api/need-map").json()
+    layers = {layer["id"]: layer for layer in body["layers"]}
+
+    assert body["ratio_breaks"] == [1.0, 1.1, 1.25, 1.5]
+    assert set(layers) == {"low_income", "renters"}  # no county has the other figures
+    income = layers["low_income"]
+    assert income["lower_is_worse"] is True and income["national_value"] == 80_000.0
+    assert income["counties"] == {"99001": [40_000.0, 2.0]}  # no figure, no entry
+    assert layers["renters"]["counties"] == {"99001": [0.7, 2.0], "99002": [0.35, 1.0]}
+
+
+def test_need_map_is_503_when_census_fails(client, monkeypatch):
+    async def down(*args):
+        raise SourceError("CENSUS_API_KEY is not set")
+
+    monkeypatch.setattr(census, "fetch_all_counties", down)
+    resp = client.get("/api/need-map")
+    assert resp.status_code == 503 and "CENSUS_API_KEY" in resp.json()["detail"]

@@ -435,6 +435,84 @@ button {
   filter: invert(1);
 }
 
+.need-select {
+  position: absolute;
+  z-index: 2;
+  top: 52px;
+  left: 10px;
+  /* As wide as the longest need's name, so the dropdown stays inside the box. */
+  width: max-content;
+  max-width: calc(100% - 20px);
+  padding: 6px 8px;
+  display: grid;
+  gap: 3px;
+  background: var(--overlay-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px var(--shadow);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.need-select select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.need-select-error {
+  max-width: 240px;
+  color: var(--warn-text);
+}
+
+:root[data-theme="dark"] .need-select {
+  border-color: var(--map-control-edge);
+}
+
+.legend-need {
+  display: grid;
+  gap: 3px;
+  max-width: 270px;
+}
+
+.legend-need + .legend-row {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.legend-note {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.legend-swatch {
+  flex: none;
+  width: 16px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 20%);
+}
+
+.legend-swatch-empty {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+
+.legend-readout {
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
 .map-hint {
   position: absolute;
   top: 12px;
