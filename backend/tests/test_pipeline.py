@@ -210,8 +210,23 @@ def test_full_report(sources, settings):
         "landfill_gas_uncaptured",
         "hazard_risk",
     }
-    severities = [n.severity for n in report.needs]
-    assert severities == sorted(severities, reverse=True)
+    # Ordered by priority, not severity. Hazard risk and landfill gas count in
+    # full and lead; income and housing count 0.7; the charger gap is the most
+    # severe need here, but transportation counts half, so it comes last.
+    assert [(n.id, n.severity, n.priority) for n in report.needs] == [
+        ("hazard_risk", 75, 75),
+        ("landfill_gas_uncaptured", 75, 75),
+        ("low_income", 91, 64),
+        ("old_housing", 80, 56),
+        ("ev_charging_gap", 100, 50),
+    ]
+    assert report.opportunities[0].solution_id == "landfill_gas_energy"
+    # The same holds for opportunities: chargers at the library rank below every
+    # solution that answers an energy, waste, equity or resilience need.
+    charging = [o for o in report.opportunities if o.solution_id == "public_ev_charging"]
+    assert charging and all(o.score == 50 for o in charging)
+    assert report.opportunities[-1].solution_id == "public_ev_charging"
+    assert all(o.score > 50 for o in report.opportunities if o.solution_id != "public_ev_charging")
 
     # Points outside the county polygon are dropped.
     names = {a.name for a in report.assets}

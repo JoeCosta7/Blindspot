@@ -1,9 +1,9 @@
 """The API contract. Change this file first, then mirror it in
 frontend/src/types.ts. Do not let the two drift."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # --- request ---------------------------------------------------------------
 
@@ -84,10 +84,22 @@ class Need(BaseModel):
     national_value: float | None
     unit: NeedUnit
     severity: int = Field(ge=0, le=100)
+    # Severity scaled by how much the need counts for sustainability
+    # (the need_priority_* weights in config). Needs are ordered by it and opportunity
+    # scores are built from it. Equal to severity until the pipeline sets it,
+    # and for reports saved before it existed.
+    priority: int = Field(ge=0, le=100)
     level: NeedLevel
     source: str
     # Plain-language specifics, e.g. which hazard is rated high.
     detail: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _priority_defaults_to_severity(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "priority" not in data:
+            return {**data, "priority": data.get("severity")}
+        return data
 
 
 class Asset(BaseModel):

@@ -52,7 +52,8 @@ async def main(argv: list[str]) -> int:
 
             print(f"\n{report.name}, {report.state} ({fips})  {elapsed:.1f} s")
             print(f"  population: {report.population}")
-            print(f"  needs: {[(n.id, n.level, n.severity) for n in report.needs]}")
+            ranked = [(n.id, n.priority, n.severity) for n in report.needs]
+            print(f"  needs (priority, severity): {ranked}")
             print(f"  assets found: {report.asset_counts}  (on map: {len(report.assets)})")
             print(f"  not found: {report.missing_asset_types}")
             for o in report.opportunities:

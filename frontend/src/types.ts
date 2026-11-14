@@ -68,6 +68,9 @@ export interface Need {
   national_value: number | null;
   unit: NeedUnit;
   severity: number;
+  /** Severity weighted by how much the need's theme counts for sustainability.
+   * The backend orders needs by it and builds opportunity scores from it. */
+  priority: number;
   level: NeedLevel;
   source: string;
   detail: string | null;

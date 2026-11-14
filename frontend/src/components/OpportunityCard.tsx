@@ -54,7 +54,7 @@ export function OpportunityCard({ rank, opportunity, asset, needs, note, onShowO
       <header className="opportunity-head">
         <span className="rank">{rank}</span>
         <h3>{opportunity.title}</h3>
-        <span className="score" title="Mean severity of the needs addressed, reduced when the site lacks the data an estimate needs">
+        <span className="score" title="Halfway between the highest and the mean priority of the needs addressed (priority is severity weighted by how much each kind of need counts for sustainability), reduced when the site lacks the data an estimate needs">
           Score {opportunity.score}
         </span>
       </header>

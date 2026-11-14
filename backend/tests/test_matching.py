@@ -76,7 +76,21 @@ def test_no_host_asset_means_no_opportunity():
     assert run([make_need("low_income", 80)], [make_asset("s", "ev_station")]) == []
 
 
-def test_score_is_mean_severity_times_asset_factor():
+def test_score_follows_priority_not_severity():
+    # needs.prioritize halves transportation needs: the charger gap is the more
+    # severe need here, but the weatherization clinic outranks the chargers.
+    needs = [
+        make_need("ev_charging_gap", 100).model_copy(update={"priority": 50}),
+        make_need("old_housing", 80),
+    ]
+    matches = run(needs, [make_asset("lib", "library")])
+    assert [(m.solution.id, m.score) for m in matches] == [
+        ("weatherization_clinic", 80),
+        ("public_ev_charging", 50),
+    ]
+
+
+def test_score_blends_highest_and_mean_priority_times_asset_factor():
     needs = [make_need("low_income", 80), make_need("renters", 40), make_need("old_housing", 100)]
     assets = [
         make_asset("big", "brownfield", acres=50.0, pv_scale="utility"),
@@ -86,8 +100,9 @@ def test_score_is_mean_severity_times_asset_factor():
 
     assert [m.asset.id for m in matches] == ["big", "unsized"]
     assert [n.id for n in matches[0].needs] == ["low_income", "renters"]
-    assert matches[0].score == 60  # mean(80, 40) * 1.0
-    assert matches[1].score == 42  # mean(80, 40) * 0.7
+    # Highest priority 80, mean 60: halfway is 70.
+    assert matches[0].score == 70  # 70 * 1.0
+    assert matches[1].score == 49  # 70 * 0.7
     assert matches[0].id == "community_solar:big"
     assert matches[0].title == "Community solar on Site big"
 

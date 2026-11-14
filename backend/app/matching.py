@@ -130,8 +130,14 @@ def match_opportunities(
 ) -> list[Match]:
     """Up to `max_opportunities`, ranked by score.
 
-    score = mean severity of the matched needs * asset factor, where the factor
-    is 1.0 if the asset has the data its estimate needs and 0.7 otherwise.
+    score = need score * asset factor. The need score is halfway between the
+    highest priority among the matched needs and their mean priority: the mean
+    alone marks a solution down for also answering lesser needs, and the highest
+    alone ignores them. The factor is 1.0 if the asset has the data its estimate
+    needs and 0.7 otherwise.
+    A need's priority is its severity weighted by theme (needs.prioritize), so
+    a solution that only answers transportation needs ranks below one that
+    answers energy, pollution or resilience needs of the same severity.
 
     Each solution's best site is selected before any solution's second site, so
     a second charger location cannot push a whole solution off the list. The
@@ -142,7 +148,8 @@ def match_opportunities(
         matched = [n for n in needs if n.id in solution.triggers]
         if not matched:
             continue
-        mean_severity = sum(n.severity for n in matched) / len(matched)
+        priorities = [n.priority for n in matched]
+        need_score = (max(priorities) + sum(priorities) / len(priorities)) / 2
         picked: list[Asset | None]
         if solution.asset_kind == "county":
             picked = [None]
@@ -151,7 +158,7 @@ def match_opportunities(
         for rank, asset in enumerate(picked):
             has_data = has_estimate_inputs(solution.asset_kind, asset.attributes if asset else {})
             factor = 1.0 if has_data else MISSING_DATA_FACTOR
-            score = round(mean_severity * factor)
+            score = round(need_score * factor)
             match = Match(solution=solution, asset=asset, needs=matched, score=score)
             matches.append(((rank, -score, order), match))
     matches.sort(key=lambda m: m[0])
