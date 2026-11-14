@@ -39,7 +39,7 @@ from app.cache import DAY, cache_get, cache_set
 from app.config import Settings
 from app.estimates import format_number, round_sig
 from app.matching import Solution
-from app.models import Asset, Factor, Need, SourceStatus
+from app.models import Asset, Factor, Highlight, Need, SourceStatus
 from app.narrative import extract_numbers, format_need_value
 
 log = logging.getLogger(__name__)
@@ -50,8 +50,10 @@ SOURCE = "gemini"
 # text is only rejected past the limit times LENGTH_SLACK.
 TITLE_MAX_WORDS = 12
 TEXT_MAX_WORDS = 50
-STEP_MAX_WORDS = 20
-MAX_STEPS = 3
+STEP_MAX_WORDS = 25
+MAX_STEPS = 6
+MAX_COMPLIANCE = 4
+MAX_DOCUMENTS = 5
 SUMMARY_MAX_WORDS = 90
 LENGTH_SLACK = 1.3
 
@@ -84,8 +86,19 @@ PROMPT_RULES = (
     "Put the factor_id values it relies on in factor_ids and the site_id values of the "
     "places it would use in site_ids, exactly as given. Leave site_ids empty only for a "
     "county-wide program.",
-    "The needs are listed from highest to lowest priority. Answer the first ones before "
-    "the later ones, and do not spend two opportunities on the same idea.",
+    "Variety first. Do not give two opportunities the same project_type. Community solar, "
+    "wind on reclaimed land and public EV charging are allowed at most once each across "
+    "the whole list. Prefer a mix of catalogued project_types and "
+    f'"{OTHER_PROJECT_TYPE}" ideas that fit this county.',
+    'Lead with what makes this county unusual. The "standouts" list is what it has more '
+    "of than a typical US county. At least half of the opportunities must draw on a "
+    "standout factor or on a kind of site that is scarce in most counties (a dam, "
+    "landfill gas candidate, power plant, large livestock farms, or a named school, "
+    "library or college).",
+    "Cover different needs. An opportunity's top need is the highest-priority need_id it "
+    "lists. Do not give more than two opportunities the same top need. Secondary needs "
+    "may repeat. Answer high-priority needs, but spread across the list rather than "
+    "stacking every opportunity on the first need.",
     "Fit each opportunity to the county. Where its weather, terrain, land cover, "
     "workforce, industries or community change what the project should be, who it "
     "should reach first or who would build it, shape the project around that, say so "
@@ -95,12 +108,34 @@ PROMPT_RULES = (
     "Use only numbers that appear in the input, copied exactly. Do not calculate, "
     "round or estimate: no costs, savings, sizes, percentages, dates or time frames "
     "of your own.",
-    "Do not name funding programs, grants or tax credits, and do not promise results.",
+    "Do not name funding programs, grants or tax credits, and do not promise results. "
+    "Code will attach funding leads separately.",
+    "Write plan as a start-to-finish course of action a county official can follow "
+    f"(about {MAX_STEPS} steps). Write compliance as checks with the right owner or "
+    "agency that follow from facts in the input (owner type, cleanup status, candidate "
+    "status, federal vs local dam, and so on). Do not invent statute numbers, ordinance "
+    "codes or agency rule citations.",
+    "For every site_id you list, add a matching entry in site_plans with that site_id, "
+    "a course_of_action for that site, compliance checks specific to it, and "
+    "documents_needed (forms and agreements to gather for that site, names only). For a "
+    "county-wide program with no sites, leave site_plans empty and put the full plan "
+    "in plan and documents_needed.",
+    "documents_needed are short names of forms or packets to gather: grant applications, "
+    "property or lease agreements, interconnection requests, environmental review forms, "
+    "and the like. Do not invent URLs, form numbers or PDF links; code attaches real "
+    "links separately when it has them.",
     'Do not rely on a kind of site listed under "not_found".',
     'If the opportunity is one of the kinds under "project_types", built at a listed '
     "site of a kind that entry names, give that project_type exactly as written. "
     f'Otherwise give "{OTHER_PROJECT_TYPE}".',
 )
+
+
+class _ModelSitePlan(BaseModel):
+    site_id: str
+    course_of_action: list[str]
+    compliance: list[str] = []
+    documents_needed: list[str] = []
 
 
 class _ModelOpportunity(BaseModel):
@@ -111,7 +146,13 @@ class _ModelOpportunity(BaseModel):
     project_type: str
     what: str
     why_here: str
-    first_steps: list[str]
+    # County-wide start-to-finish plan. Also accepted as first_steps from older
+    # cached Gemini responses.
+    plan: list[str] = []
+    first_steps: list[str] = []
+    compliance: list[str] = []
+    documents_needed: list[str] = []
+    site_plans: list[_ModelSitePlan] = []
 
 
 class ModelPlan(BaseModel):
@@ -122,19 +163,34 @@ class ModelPlan(BaseModel):
 
 
 @dataclass(frozen=True)
+class SiteDraft:
+    site_id: str
+    course_of_action: list[str]
+    compliance: list[str]
+    documents_needed: list[str]
+
+
+@dataclass(frozen=True)
 class Draft:
     """One opportunity as Gemini wrote it, checked against the digest. The
-    pipeline adds the score, estimates and funding."""
+    pipeline adds the score, estimates, funding and document links."""
 
     title: str
     summary: str
     rationale: str
-    first_steps: list[str]
+    plan: list[str]
+    compliance: list[str]
+    documents_needed: list[str]
+    site_plans: list[SiteDraft]
     need_ids: list[str]
     factor_ids: list[str]
     asset_ids: list[str]
     # A project type from data/solutions.json, or None for an idea of its own.
     solution_id: str | None
+
+    @property
+    def first_steps(self) -> list[str]:
+        return self.plan
 
 
 @dataclass(frozen=True)
@@ -223,10 +279,12 @@ def build_digest(
     missing_types: list[str],
     solutions: tuple[Solution, ...] | list[Solution],
     sites_per_type: int,
+    standouts: list[Highlight] | None = None,
 ) -> dict[str, Any]:
     """What the model may reason from, and nothing else. `assets` is every
     asset found, best first within its type; only `sites_per_type` of each
-    type are listed, with the exact count beside them."""
+    type are listed, with the exact count beside them. `standouts` are the
+    factors that beat a typical US county, already computed by highlights.py."""
     by_type: dict[str, list[Asset]] = {}
     for asset in assets:
         by_type.setdefault(asset.type, []).append(asset)
@@ -265,6 +323,19 @@ def build_digest(
                 }
             )
             for n in sorted(needs, key=lambda n: (-n.priority, -n.severity))
+        ],
+        "standouts": [
+            _compact(
+                {
+                    "factor_id": h.factor_id,
+                    "label": h.label,
+                    "value": h.value,
+                    "compared_to": h.benchmark,
+                    "times_above_typical": h.times_better,
+                    "why_it_matters": h.why,
+                }
+            )
+            for h in standouts or []
         ],
         "factors": [
             _compact(
@@ -331,6 +402,14 @@ def _invented(text: str, digest: dict[str, Any]) -> str | None:
     return ", ".join(format_number(n) for n in invented[:5])
 
 
+def _plan_steps(item: _ModelOpportunity) -> list[str]:
+    """Prefer `plan`; fall back to `first_steps` so older cached answers still work."""
+    steps = [step for step in item.plan if step.strip()]
+    if steps:
+        return steps
+    return [step for step in item.first_steps if step.strip()]
+
+
 def opportunity_problem(item: _ModelOpportunity, digest: dict[str, Any]) -> str | None:
     """Why one opportunity must be dropped, or None if it is usable."""
     if not item.title.strip() or not item.what.strip() or not item.why_here.strip():
@@ -340,22 +419,58 @@ def opportunity_problem(item: _ModelOpportunity, digest: dict[str, Any]) -> str 
         return "it addresses no need"
     if not set(item.need_ids) <= known_needs:
         return "it names a need that is not in the input"
-    if not set(item.site_ids) <= _site_ids(digest):
+    known_sites = _site_ids(digest)
+    if not set(item.site_ids) <= known_sites:
         return "it names a site that is not in the input"
     known_factors = {f["factor_id"] for f in digest["factors"]}
     if not item.site_ids and not set(item.factor_ids) & known_factors:
         return "it draws on none of the county's factors or sites"
-    steps = [step for step in item.first_steps if step.strip()]
+    steps = _plan_steps(item)
     if not steps:
-        return "it has no first steps"
+        return "it has no plan"
+    site_plan_ids = [plan.site_id.strip() for plan in item.site_plans if plan.site_id.strip()]
+    if not set(site_plan_ids) <= known_sites:
+        return "a site plan names a site that is not in the input"
+    if any(
+        plan.site_id.strip() and not [s for s in plan.course_of_action if s.strip()]
+        for plan in item.site_plans
+    ):
+        return "a site plan has no course of action"
+    compliance = [line for line in item.compliance if line.strip()]
+    site_compliance = [line for plan in item.site_plans for line in plan.compliance if line.strip()]
+    site_steps = [
+        step for plan in item.site_plans for step in plan.course_of_action if step.strip()
+    ]
+    documents = [line for line in item.documents_needed if line.strip()]
+    site_documents = [
+        line for plan in item.site_plans for line in plan.documents_needed if line.strip()
+    ]
     if (
         _over(item.title, TITLE_MAX_WORDS)
         or _over(item.what, TEXT_MAX_WORDS)
         or _over(item.why_here, TEXT_MAX_WORDS)
         or any(_over(step, STEP_MAX_WORDS) for step in steps)
+        or any(_over(step, STEP_MAX_WORDS) for step in site_steps)
+        or any(_over(line, STEP_MAX_WORDS) for line in compliance + site_compliance)
+        or any(_over(line, STEP_MAX_WORDS) for line in documents + site_documents)
     ):
         return "it is too long"
-    invented = _invented(" ".join([item.title, item.what, item.why_here, *steps]), digest)
+    invented = _invented(
+        " ".join(
+            [
+                item.title,
+                item.what,
+                item.why_here,
+                *steps,
+                *compliance,
+                *documents,
+                *site_steps,
+                *site_compliance,
+                *site_documents,
+            ]
+        ),
+        digest,
+    )
     if invented:
         return f"it contains numbers that are not in the input: {invented}"
     return None
@@ -377,38 +492,97 @@ def _unique(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
+def _primary_need(need_ids: list[str], digest: dict[str, Any]) -> str | None:
+    """The highest-priority need the opportunity answers. Digest needs are
+    already ordered highest first."""
+    order = {need["need_id"]: index for index, need in enumerate(digest["needs"])}
+    ranked = [need_id for need_id in _unique(need_ids) if need_id in order]
+    return min(ranked, key=order.__getitem__) if ranked else None
+
+
 def keep_valid(
     model: ModelPlan, digest: dict[str, Any], limit: int
 ) -> tuple[list[Draft], list[str]]:
-    """The usable opportunities, at most `limit`, and why each other one was dropped."""
+    """The usable opportunities, at most `limit`, and why each other one was dropped.
+
+    Variety is enforced here as well as in the prompt: a second copy of the
+    same catalogued project_type is dropped, and a third opportunity whose
+    top need is the same as two already kept is dropped, so solar and EV
+    cannot fill the list."""
     known_factors = {f["factor_id"] for f in digest["factors"]}
     project_types = {p["project_type"] for p in digest["project_types"]}
     kept: list[Draft] = []
     dropped: list[str] = []
     titles: set[str] = set()
+    used_types: set[str] = set()
+    primary_uses: dict[str, int] = {}
     for item in model.opportunities:
         title = item.title.strip()
         problem = opportunity_problem(item, digest)
+        project_type = item.project_type.strip()
+        catalogued = project_type if project_type in project_types else None
+        primary = _primary_need(item.need_ids, digest)
         if problem is None and title.lower() in titles:
             problem = "it repeats another opportunity"
+        if problem is None and catalogued is not None and catalogued in used_types:
+            problem = "it repeats a project type already kept"
+        if problem is None and primary is not None and primary_uses.get(primary, 0) >= 2:
+            problem = "it spends a third opportunity on the same top need"
         if problem:
             dropped.append(problem)
             continue
         if len(kept) >= limit:
             continue  # more than asked for; not a fault
         titles.add(title.lower())
-        project_type = item.project_type.strip()
+        if catalogued is not None:
+            used_types.add(catalogued)
+        if primary is not None:
+            primary_uses[primary] = primary_uses.get(primary, 0) + 1
+        named_sites = _unique(item.site_ids)
+        plan_steps = _plan_steps(item)[:MAX_STEPS]
+        county_compliance = [s.strip() for s in item.compliance if s.strip()][:MAX_COMPLIANCE]
+        county_documents = [s.strip() for s in item.documents_needed if s.strip()][:MAX_DOCUMENTS]
+        site_plans = [
+            SiteDraft(
+                site_id=plan.site_id.strip(),
+                course_of_action=[s.strip() for s in plan.course_of_action if s.strip()][
+                    :MAX_STEPS
+                ],
+                compliance=[s.strip() for s in plan.compliance if s.strip()][:MAX_COMPLIANCE],
+                documents_needed=[s.strip() for s in plan.documents_needed if s.strip()][
+                    :MAX_DOCUMENTS
+                ],
+            )
+            for plan in item.site_plans
+            if plan.site_id.strip() in set(named_sites)
+        ]
+        # If Gemini named sites but skipped site_plans, reuse the county plan
+        # so the UI still has a course of action per site.
+        covered = {plan.site_id for plan in site_plans}
+        for site_id in named_sites:
+            if site_id not in covered:
+                site_plans.append(
+                    SiteDraft(
+                        site_id=site_id,
+                        course_of_action=list(plan_steps),
+                        compliance=list(county_compliance),
+                        documents_needed=list(county_documents),
+                    )
+                )
         kept.append(
             Draft(
                 title=title,
                 summary=item.what.strip(),
                 rationale=item.why_here.strip(),
-                first_steps=[s.strip() for s in item.first_steps if s.strip()][:MAX_STEPS],
+                plan=plan_steps,
+                compliance=county_compliance,
+                documents_needed=county_documents,
+                site_plans=site_plans,
                 need_ids=_unique(item.need_ids),
                 # A factor id the input does not have is a slip, not a false claim.
                 factor_ids=[f for f in _unique(item.factor_ids) if f in known_factors],
                 asset_ids=_unique(item.site_ids),
-                solution_id=project_type if project_type in project_types else None,
+                solution_id=catalogued,
             )
         )
     return kept, dropped
@@ -421,27 +595,29 @@ def build_prompt(digest: dict[str, Any], limit: int) -> str:
     rules = "\n".join(f"{i}. {rule}" for i, rule in enumerate(PROMPT_RULES, start=1))
     return (
         "You are advising a US county government on sustainability. The county data below "
-        "has three parts:\n"
+        "has four parts:\n"
         "- needs: the county's environmental and socioeconomic problems, measured from "
         "public data.\n"
+        "- standouts: the few things this county has more of than a typical US county, "
+        "with why each one matters for local projects. Start here.\n"
         "- factors: what the county has to work with: its climate and weather, energy "
         "system, land cover and terrain, buildings, workforce and industries, economy, "
         "community, infrastructure and farms. A factor is not good or bad in itself. A "
         "weakness in one place can be the raw material for a fix in another.\n"
         "- sites: specific places in the county, with what is known about each.\n\n"
         f"Create up to {limit} opportunities. An opportunity is a concrete project or "
-        "program that uses the county's factors and sites to meet its needs. Look for "
-        "three kinds:\n"
-        "- A need answered by a strength, such as costly or dirty power where the sun is "
-        "strong and reclaimed land is free.\n"
+        "program that uses the county's factors and sites to meet its needs. The list "
+        "should look like this county, not like a generic solar-and-chargers pack.\n"
+        "Look for three kinds:\n"
+        "- A need answered by a local strength or standout, such as a trade the county "
+        "is strong in, spare land, a dam, a landfill, farms or a public building.\n"
         "- Something the county already has, made better, such as a plan to repair and "
         "upgrade an old building stock.\n"
         "- Two problems that solve each other, such as residents out of work and a local "
         "construction trade put to work on homes or public works that need it.\n"
-        "Read the comparison beside each factor. Where the county stands well apart from "
-        "the US figure it has something unusual to use: spare labor, empty homes, idle "
-        "land, a trade it is strong in. Where the data supports it, make at least one "
-        "opportunity of the third kind.\n"
+        "Community solar, wind on reclaimed land and public EV charging may appear at "
+        "most once each. Fill the rest with other project_types, or with "
+        f'"{OTHER_PROJECT_TYPE}" ideas that only fit this county\'s standouts and sites.\n'
         "The factors also say what a project here has to look like. Heating and cooling "
         "degree days, hot days, rain and snow say which building upgrades matter most. "
         "Wind speed, terrain and land cover say what reclaimed or open land suits. The "
@@ -455,8 +631,15 @@ def build_prompt(digest: dict[str, Any], limit: int) -> str:
         f"- what: at most {TEXT_MAX_WORDS} words on what would be done.\n"
         f"- why_here: at most {TEXT_MAX_WORDS} words on which factors and sites make it fit "
         "this county, pointing to its data.\n"
-        f"- first_steps: 2 or {MAX_STEPS} actions the county could take first, at most "
-        f"{STEP_MAX_WORDS} words each.\n\n"
+        f"- plan: {MAX_STEPS - 2} to {MAX_STEPS} steps from start to finish for a county "
+        f"official, at most {STEP_MAX_WORDS} words each.\n"
+        f"- compliance: up to {MAX_COMPLIANCE} checks with owners or agencies, grounded in "
+        f"input facts, at most {STEP_MAX_WORDS} words each.\n"
+        f"- documents_needed: up to {MAX_DOCUMENTS} form or packet names to gather "
+        f"(grant applications, leases, interconnection, environmental review), at most "
+        f"{STEP_MAX_WORDS} words each. Names only; no URLs.\n"
+        "- site_plans: one per site_id, each with course_of_action, compliance and "
+        "documents_needed for that site. Empty when the opportunity is county-wide.\n\n"
         f"Also write summary: at most {SUMMARY_MAX_WORDS} words on the county's main needs "
         "and how your opportunities use what it has to meet them. The same rules apply.\n\n"
         "Plain sentences only: no headings, bullet characters or markdown.\n\n"

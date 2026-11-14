@@ -225,6 +225,48 @@ class FundingMatch(BaseModel):
     note: str | None = None
 
 
+DocumentKind = Literal[
+    "grant_application",
+    "program_guide",
+    "tax_form",
+    "property_agreement",
+    "environmental_review",
+    "interconnection",
+    "other",
+]
+
+
+class ProjectDocument(BaseModel):
+    """A form or packet the county may need. Curated by code (with a real URL
+    when we have one) or named by Gemini as something to gather locally
+    (source_url null). Gemini never invents URLs."""
+
+    id: str
+    name: str
+    kind: DocumentKind
+    description: str
+    agency: str | None = None
+    source_url: str | None = None
+    verified_on: str | None = None
+
+
+class SiteActionPlan(BaseModel):
+    """How to carry out the opportunity at one named site.
+
+    Written by Gemini from facts about that site (owner type, cleanup status,
+    gas-project candidate, and so on). Not legal advice: compliance lines are
+    checks to make with the right agency, not citations of local law.
+    """
+
+    site_id: str
+    # Start-to-finish course of action at this site.
+    course_of_action: list[str] = Field(default_factory=list)
+    # Agency and ownership checks that follow from known site facts.
+    compliance: list[str] = Field(default_factory=list)
+    # Forms and agreements to gather for this site (names only; no invented URLs).
+    documents_needed: list[str] = Field(default_factory=list)
+
+
 class Opportunity(BaseModel):
     """A way to meet one or more needs with what the county has.
 
@@ -242,11 +284,19 @@ class Opportunity(BaseModel):
     # What would be done, and why it fits this county. Null for a rule match.
     summary: str | None = None
     rationale: str | None = None
+    # County-wide course of action (start to finish). Also kept as first_steps
+    # for older callers; the two are the same list when Gemini wrote them.
+    plan: list[str] = Field(default_factory=list)
     first_steps: list[str] = Field(default_factory=list)
+    # County-level compliance checks (permits, agencies, eligibility).
+    compliance: list[str] = Field(default_factory=list)
     need_ids: list[NeedId]
     # The mapped sites it would use, the main one first. Empty for a county-wide
     # opportunity.
     asset_ids: list[str] = Field(default_factory=list)
+    # Per-site course of action and compliance. Empty when county-wide or when
+    # Gemini did not write one for a named site.
+    site_plans: list[SiteActionPlan] = Field(default_factory=list)
     # The factors it draws on.
     factor_ids: list[str] = Field(default_factory=list)
     score: int = Field(ge=0, le=100)
@@ -254,7 +304,21 @@ class Opportunity(BaseModel):
     # The curated table's matches plus live Grants.gov listings (program_id
     # "grantsgov:<id>", found by the searches in data/grants_queries.json).
     funding: list[FundingMatch]
+    # Grant packets and guides matched by code, plus application pages from
+    # funding leads. Never invented by Gemini.
+    documents: list[ProjectDocument] = Field(default_factory=list)
+    # Forms to gather that have no single national URL (leases, local permits).
+    # Named by Gemini from site facts; shown as a checklist.
+    documents_needed: list[str] = Field(default_factory=list)
     generated_by: Literal["gemini", "rules"]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plan_defaults_from_first_steps(cls, data: Any) -> Any:
+        """Reports saved before `plan` existed still open: copy first_steps."""
+        if isinstance(data, dict) and "plan" not in data and data.get("first_steps"):
+            return {**data, "plan": data["first_steps"]}
+        return data
 
 
 class OpportunityNote(BaseModel):

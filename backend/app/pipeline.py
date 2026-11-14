@@ -28,6 +28,7 @@ from typing import Any, Literal
 import httpx
 
 from app import (
+    documents,
     estimates,
     factors,
     funding,
@@ -50,6 +51,7 @@ from app.models import (
     Opportunity,
     PeerCounty,
     Resources,
+    SiteActionPlan,
     SourceStatus,
 )
 from app.sources import (
@@ -380,12 +382,61 @@ class _Proposal:
     generated_by: Literal["gemini", "rules"]
     summary: str | None = None
     rationale: str | None = None
-    first_steps: tuple[str, ...] = ()
+    plan: tuple[str, ...] = ()
+    compliance: tuple[str, ...] = ()
+    documents_needed: tuple[str, ...] = ()
+    site_plans: tuple[SiteActionPlan, ...] = ()
     factor_ids: tuple[str, ...] = ()
+
+    @property
+    def first_steps(self) -> tuple[str, ...]:
+        return self.plan
 
     @property
     def host(self) -> Asset | None:
         return self.assets[0] if self.solution and self.assets else None
+
+
+def _rule_plan(
+    solution: matching.Solution | None, assets: list[Asset]
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[SiteActionPlan, ...]]:
+    """A short start-to-finish plan when Gemini did not write one."""
+    name = solution.name if solution else "the project"
+    plan = (
+        f"Confirm the need and gather the figures in this report for {name}.",
+        "Identify the site or county-wide scope and talk to the owner or operator.",
+        "Check permits, environmental review and eligibility with the right agencies.",
+        "Match funding leads in this report and confirm deadlines with the agency.",
+        "Issue an RFP or partner agreement and start design.",
+        "Build, commission and report results to the public.",
+    )
+    compliance = (
+        "Confirm ownership and the right to use the site before spending public funds.",
+        "Ask the state environmental agency what permits and cleanup clearances apply.",
+        "Do not treat this checklist as legal advice; confirm local rules with counsel.",
+    )
+    documents_needed = (
+        "Site access or lease agreement with the owner",
+        "Funding application packet for the matched programs",
+        "Utility interconnection or net-metering application, if generating power",
+    )
+    site_plans = tuple(
+        SiteActionPlan(
+            site_id=asset.id,
+            course_of_action=list(plan),
+            compliance=[
+                *compliance,
+                *(
+                    [f"Confirm the {asset.attributes['owner_type']} owner will allow the project."]
+                    if isinstance(asset.attributes.get("owner_type"), str)
+                    else []
+                ),
+            ],
+            documents_needed=list(documents_needed),
+        )
+        for asset in assets
+    )
+    return plan, compliance, documents_needed, site_plans
 
 
 def proposals_from_drafts(
@@ -421,6 +472,17 @@ def proposals_from_drafts(
                     factor = matching.MISSING_DATA_FACTOR
             else:
                 solution = None
+        named_ids = {a.id for a in named}
+        site_plans = tuple(
+            SiteActionPlan(
+                site_id=plan.site_id,
+                course_of_action=list(plan.course_of_action),
+                compliance=list(plan.compliance),
+                documents_needed=list(plan.documents_needed),
+            )
+            for plan in draft.site_plans
+            if plan.site_id in named_ids
+        )
         proposals.append(
             _Proposal(
                 id=f"ai:{number}",
@@ -432,28 +494,40 @@ def proposals_from_drafts(
                 generated_by="gemini",
                 summary=draft.summary,
                 rationale=draft.rationale,
-                first_steps=tuple(draft.first_steps),
+                plan=tuple(draft.plan),
+                compliance=tuple(draft.compliance),
+                documents_needed=tuple(draft.documents_needed),
+                site_plans=site_plans,
                 factor_ids=tuple(draft.factor_ids),
             )
         )
-    # Stable: Gemini's order breaks ties.
+    # Stable: Gemini's order breaks ties. Top need first, then score.
     proposals.sort(key=lambda p: (matching.top_need_rank(p.needs, flagged), -p.score))
     return proposals
 
 
 def proposals_from_matches(matches: list[matching.Match]) -> list[_Proposal]:
-    return [
-        _Proposal(
-            id=match.id,
-            title=match.title,
-            solution=match.solution,
-            needs=match.needs,
-            assets=[match.asset] if match.asset else [],
-            score=match.score,
-            generated_by="rules",
+    """Rule matches keep the order matching.py already set (top need first)."""
+    proposals: list[_Proposal] = []
+    for match in matches:
+        assets = [match.asset] if match.asset else []
+        plan, compliance, documents_needed, site_plans = _rule_plan(match.solution, assets)
+        proposals.append(
+            _Proposal(
+                id=match.id,
+                title=match.title,
+                solution=match.solution,
+                needs=match.needs,
+                assets=assets,
+                score=match.score,
+                generated_by="rules",
+                plan=plan,
+                compliance=compliance,
+                documents_needed=documents_needed,
+                site_plans=site_plans,
+            )
         )
-        for match in matches
-    ]
+    return proposals
 
 
 def size_estimates(
@@ -742,6 +816,19 @@ async def analyze_county(
     missing = [t for source, types in searched if ok[source] for t in types if counts[t] == 0]
 
     # --- opportunities: Gemini writes them from the needs, factors and sites ------
+    # Standouts are computed first so Gemini can lead with what makes this
+    # county unusual, instead of defaulting to solar and EV every time.
+    county_highlights = highlights.find_highlights(
+        factors=county_factors,
+        profile=county_profile,
+        acs=acs,
+        acs_national=acs_national,
+        energy=energy,
+        ee_metrics=ee_metrics,
+        farm_row=farm_row,
+        assets=all_assets,
+        settings=settings,
+    )
     solutions = matching.load_solutions(data_dir / "solutions.json")
     digest = opportunities.build_digest(
         county.name,
@@ -752,6 +839,7 @@ async def analyze_county(
         missing,
         solutions,
         settings.digest_sites_per_type,
+        standouts=county_highlights,
     )
     failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
     plan, gemini_status = await opportunities.write_opportunities(digest, settings)
@@ -821,6 +909,7 @@ async def analyze_county(
     # Only a typed opportunity gets these: an idea of Gemini's own has no
     # project type to size or to look up in the funding table.
     programs = funding.load_programs(data_dir / "funding_programs.json")
+    project_docs = documents.load_documents(data_dir / "project_documents.json")
     built: list[Opportunity] = []
     for proposal in proposals:
         solution, host = proposal.solution, proposal.host
@@ -854,6 +943,17 @@ async def analyze_county(
             else []
         )
         leads.sort(key=lambda f: (funding.STATUS_ORDER[f.status], f.deadline or "9999"))
+        # Curated forms and packets only. Funding leads already carry their own
+        # source_url, so we do not duplicate those pages as documents.
+        docs = (
+            documents.match_documents(
+                project_docs,
+                solution.id if solution else None,
+                host.type if host else None,
+            )
+            if solution
+            else []
+        )
         built.append(
             Opportunity(
                 id=proposal.id,
@@ -861,13 +961,18 @@ async def analyze_county(
                 title=proposal.title,
                 summary=proposal.summary,
                 rationale=proposal.rationale,
-                first_steps=list(proposal.first_steps),
+                plan=list(proposal.plan),
+                first_steps=list(proposal.plan),
+                compliance=list(proposal.compliance),
                 need_ids=[n.id for n in proposal.needs],
                 asset_ids=[a.id for a in proposal.assets],
+                site_plans=list(proposal.site_plans),
                 factor_ids=list(proposal.factor_ids),
                 score=proposal.score,
                 estimates=figures,
                 funding=leads,
+                documents=docs,
+                documents_needed=list(proposal.documents_needed),
                 generated_by=proposal.generated_by,
             )
         )
@@ -919,17 +1024,7 @@ async def analyze_county(
         missing_asset_types=missing,  # type: ignore[arg-type]
         resources=resources,
         factors=county_factors,
-        highlights=highlights.find_highlights(
-            factors=county_factors,
-            profile=county_profile,
-            acs=acs,
-            acs_national=acs_national,
-            energy=energy,
-            ee_metrics=ee_metrics,
-            farm_row=farm_row,
-            assets=all_assets,
-            settings=settings,
-        ),
+        highlights=county_highlights,
         opportunities=built,
         peers=peer_counties,
         people_per_sq_mile=people_per_sq_mile,

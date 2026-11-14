@@ -884,6 +884,78 @@ button {
   border-radius: 2px;
 }
 
+.opportunity-toggle {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.opportunity-toggle:hover .opportunity-toggle-label {
+  color: var(--accent);
+}
+
+.opportunity-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.opportunity-toggle-label {
+  flex: 1;
+}
+
+.opportunity-chevron {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+.opportunity-collapsed {
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.opportunity-preview {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.opportunity-detail {
+  display: grid;
+  gap: 11px;
+}
+
+.opportunity-collapse {
+  justify-self: start;
+}
+
+.linkish {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.linkish:hover {
+  color: color-mix(in srgb, var(--accent) 80%, white);
+}
+
+.linkish:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 @keyframes opportunity-glow {
   0%,
   100% {
@@ -918,11 +990,83 @@ button {
 
 /* --- what Gemini wrote on an opportunity ----------------------------------------- */
 
+.opportunity-site-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.opportunity-site-picker h4,
+.site-action h4,
+.site-action h5,
+.funding-list h4,
+.first-steps h4,
+.caveats h4 {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .opportunity-sites {
   list-style: none;
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
+}
+
+.site-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+}
+
+.site-pick:hover {
+  border-color: var(--accent);
+}
+
+.site-pick-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.site-pick-text {
+  display: grid;
+  gap: 2px;
+}
+
+.site-pick-name {
+  font-weight: 650;
+}
+
+.site-pick-type {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.site-action {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 80%, var(--accent-soft));
+}
+
+.compliance-checks ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+
+.compliance-note {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
 }
 
 .chip-factor {
@@ -1010,17 +1154,49 @@ button {
   cursor: pointer;
 }
 
-.funding-list {
+.funding-list,
+.documents-list {
   display: grid;
   gap: 6px;
 }
 
-.funding-list h4,
-.first-steps h4,
-.caveats h4 {
-  font-size: 0.82rem;
+.document-cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.document-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 2px;
+  font-size: 0.88rem;
+}
+
+.document-kind {
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.document-name {
+  font-weight: 650;
+}
+
+.document-desc,
+.document-meta {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.documents-checklist ul {
+  margin: 0;
+  padding-left: 1.3em;
 }
 
 .funding {
