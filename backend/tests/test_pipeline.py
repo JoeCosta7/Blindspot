@@ -15,9 +15,11 @@ from app.sources import (
     geoapify,
     lmop,
     nri,
+    openmeteo,
     pvwatts,
     repowering,
     state_energy,
+    svi,
 )
 from tests.conftest import make_county, make_metrics
 
@@ -189,6 +191,12 @@ def sources(monkeypatch):
     monkeypatch.setattr(dams, "dams_for_county", lambda data_dir, fips: [])
     monkeypatch.setattr(farms, "farms_for_county", lambda data_dir, fips: None)
     monkeypatch.setattr(earthengine, "fetch_county_metrics", returning(None))
+    monkeypatch.setattr(svi, "svi_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(
+        openmeteo,
+        "fetch_climate",
+        returning({"heating_degree_days": 6500.0, "wind_speed_100m": 6.2}),
+    )
 
 
 def analyze(settings):
@@ -525,3 +533,26 @@ def test_earth_engine_failure_keeps_the_rest_of_the_report(sources, settings, mo
     status = next(s for s in report.source_status if s.source == "earthengine")
     assert not status.ok and "sign-in" in status.message
     assert report.needs and not {"urban_heat", "low_tree_canopy"} & {n.id for n in report.needs}
+
+
+def test_profile_combines_acs_and_climate(sources, settings, monkeypatch):
+    monkeypatch.setattr(
+        census, "fetch_county", returning(make_metrics(trades_occupation_share=0.15))
+    )
+    report = analyze(settings)
+    facts = {f.id: f for f in report.profile}
+    assert facts["trades_workers"].category == "workforce"
+    assert facts["heating_degree_days"].value == 6500.0
+    assert facts["wind_speed_100m"].unit == "m_per_s"
+    assert facts["heating_degree_days"].national_value is None
+
+
+def test_climate_failure_keeps_the_report(sources, settings, monkeypatch):
+    monkeypatch.setattr(
+        openmeteo, "fetch_climate", raising(SourceError("Open-Meteo rate limit reached"))
+    )
+    report = analyze(settings)
+    status = {s.source: s for s in report.source_status}
+    assert status["climate"].ok is False
+    assert not [f for f in report.profile if f.category == "climate"]
+    assert report.needs  # everything else still there

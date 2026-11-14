@@ -39,11 +39,13 @@ from app.models import (
     CountyContext,
     Need,
     Opportunity,
+    ProfileFact,
     Resources,
     SourceStatus,
     SuggestedSolution,
 )
 from app.narrative import extract_numbers, format_need_value
+from app.profile import format_profile_value
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +84,8 @@ PROMPT_RULES = (
     '"sites" where one fits. Put the site_id values of the places it would use in '
     "site_ids, exactly as given. Leave site_ids empty only for a county-wide program.",
     "State nothing about a site that the input does not say.",
+    'Where the county\'s "profile" (its workforce, industries, climate or land) makes a '
+    "solution easier or harder, say so in why_here and fit the solution to it.",
     'Do not repeat a project listed under "already_in_report". Propose different '
     "solutions, or ones that build on those projects.",
     "Use only numbers that appear in the input, copied exactly. Do not calculate, "
@@ -203,6 +207,7 @@ def build_digest(
     missing_types: list[str],
     opportunities: list[Opportunity],
     sites_per_type: int,
+    profile: list[ProfileFact] | None = None,
 ) -> dict[str, Any]:
     """What the model may reason from, and nothing else. `assets` is every
     asset found, best first within its type; only `sites_per_type` of each
@@ -248,6 +253,17 @@ def build_digest(
                 }
             )
             for n in sorted(needs, key=lambda n: (-n.priority, -n.severity))
+        ],
+        "profile": [
+            _compact(
+                {
+                    "label": f.label,
+                    "category": f.category,
+                    "county_value": format_profile_value(f.value, f.unit),
+                    "national_value": format_profile_value(f.national_value, f.unit),
+                }
+            )
+            for f in profile or []
         ],
         "sites": sites,
         "not_found": [ASSET_LABELS.get(t, t) for t in missing_types],

@@ -112,6 +112,37 @@ class Asset(BaseModel):
     source: str
 
 
+ProfileCategory = Literal["workforce", "economy", "community", "climate", "geography"]
+ProfileUnit = Literal[
+    "share",
+    "years",
+    "degree_days_f",  # per year, against 65 F
+    "days_per_year",
+    "inches_per_year",
+    "m_per_s",
+    "percentile",  # 0-1 rank among US counties
+    "feet",
+    "degrees",
+]
+
+
+class ProfileFact(BaseModel):
+    """Something the county has to work with (its workforce, industries,
+    climate, land) rather than a gap. Shown for context and given to Gemini's
+    suggestions; it never flags a need or changes a score."""
+
+    id: str
+    category: ProfileCategory
+    label: str
+    value: float
+    # Null when there is no national figure to compare against.
+    national_value: float | None = None
+    unit: ProfileUnit
+    source: str
+    # Plain-language specifics, e.g. what an occupation group includes.
+    note: str | None = None
+
+
 class Resources(BaseModel):
     solar_kwh_per_kw_year: float | None = None
     # USDA Census of Agriculture 2022. Null where the census withholds it.
@@ -212,6 +243,9 @@ class CountyReport(BaseModel):
     # Asset types searched for and not found, so the panel can say so.
     missing_asset_types: list[AssetType] = Field(default_factory=list)
     resources: Resources
+    # What the county has to work with; see ProfileFact. Empty for reports
+    # saved before it existed.
+    profile: list[ProfileFact] = Field(default_factory=list)
     opportunities: list[Opportunity]
     # Written by Gemini; empty when it was not used or every suggestion was
     # rejected. The `gemini_solutions` entry in `source_status` says which.

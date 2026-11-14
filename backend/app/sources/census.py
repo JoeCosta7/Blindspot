@@ -8,6 +8,7 @@ to /data/missing_key.html.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass
 
 import httpx
@@ -47,8 +48,28 @@ VARIABLES: list[str] = [
     "B08303_011E",  # 45 to 59 minutes
     "B08303_012E",  # 60 to 89 minutes
     "B08303_013E",  # 90 or more minutes
+    # Profile: what the county has to work with. Confirmed against
+    # https://api.census.gov/data/2024/acs/acs5/groups/<table>.json on 2026-11-14.
+    "B01002_001E",  # Median age: total
+    "B06009_001E",  # Educational attainment, population 25+: total
+    "B06009_002E",  # Less than high school graduate
+    "B06009_005E",  # Bachelor's degree
+    "B06009_006E",  # Graduate or professional degree
+    "B28002_001E",  # Internet subscriptions in household: total
+    "B28002_004E",  # With an Internet subscription: broadband of any type
+    # C24050: industry and occupation, civilian employed population 16+. Unlike
+    # C24010 and C24030 it has totals that are not split by sex.
+    "C24050_001E",  # Total
+    "C24050_002E",  # Industry: agriculture, forestry, fishing and hunting, and mining
+    "C24050_003E",  # Industry: construction
+    "C24050_004E",  # Industry: manufacturing
+    "C24050_007E",  # Industry: transportation and warehousing, and utilities
+    "C24050_057E",  # Occupation: natural resources, construction, and maintenance
+    "C24050_071E",  # Occupation: production, transportation, and material moving
 ]
 assert len(VARIABLES) <= 49  # the API allows 50 per call, NAME included
+# In every cache key, so adding a variable does not serve 30-day-old rows without it.
+VARIABLES_KEY = hashlib.sha256(",".join(VARIABLES).encode()).hexdigest()[:12]
 
 Values = dict[str, float | None]
 
@@ -67,6 +88,18 @@ class AcsMetrics:
     no_vehicle_share: float | None
     drive_alone_share: float | None
     long_commute_share: float | None
+    # Profile figures. Defaults keep older callers and tests working.
+    median_age: float | None = None
+    less_than_high_school_share: float | None = None  # of adults 25+
+    bachelors_or_higher_share: float | None = None  # of adults 25+
+    no_broadband_share: float | None = None  # of households
+    # Shares of the civilian employed population.
+    trades_occupation_share: float | None = None
+    production_transport_occupation_share: float | None = None
+    agriculture_mining_industry_share: float | None = None
+    construction_industry_share: float | None = None
+    manufacturing_industry_share: float | None = None
+    transport_utilities_industry_share: float | None = None
 
 
 def parse_response(body: list[list[str | None]]) -> Values:
@@ -121,7 +154,21 @@ def metrics_from_values(v: Values) -> AcsMetrics:
         no_vehicle_share=_share(v, ["B08201_002E"], "B08201_001E"),
         drive_alone_share=_share(v, ["B08301_003E"], "B08301_001E"),
         long_commute_share=_share(v, ["B08303_011E", "B08303_012E", "B08303_013E"], "B08303_001E"),
+        median_age=v.get("B01002_001E"),
+        less_than_high_school_share=_share(v, ["B06009_002E"], "B06009_001E"),
+        bachelors_or_higher_share=_share(v, ["B06009_005E", "B06009_006E"], "B06009_001E"),
+        no_broadband_share=_complement(_share(v, ["B28002_004E"], "B28002_001E")),
+        trades_occupation_share=_share(v, ["C24050_057E"], "C24050_001E"),
+        production_transport_occupation_share=_share(v, ["C24050_071E"], "C24050_001E"),
+        agriculture_mining_industry_share=_share(v, ["C24050_002E"], "C24050_001E"),
+        construction_industry_share=_share(v, ["C24050_003E"], "C24050_001E"),
+        manufacturing_industry_share=_share(v, ["C24050_004E"], "C24050_001E"),
+        transport_utilities_industry_share=_share(v, ["C24050_007E"], "C24050_001E"),
     )
+
+
+def _complement(share: float | None) -> float | None:
+    return None if share is None else 1.0 - share
 
 
 async def _fetch(client: httpx.AsyncClient, settings: Settings, geo: dict[str, str]) -> Values:
@@ -154,7 +201,12 @@ async def fetch_county(
     values, cached = await cached_fetch(
         settings.cache_dir,
         "census_county",
-        {"year": settings.acs_year, "state": state_fips, "county": county_code},
+        {
+            "year": settings.acs_year,
+            "state": state_fips,
+            "county": county_code,
+            "vars": VARIABLES_KEY,
+        },
         30 * DAY,
         lambda: _fetch(
             client, settings, {"for": f"county:{county_code}", "in": f"state:{state_fips}"}
@@ -167,7 +219,7 @@ async def fetch_national(client: httpx.AsyncClient, settings: Settings) -> tuple
     values, cached = await cached_fetch(
         settings.cache_dir,
         "census_national",
-        {"year": settings.acs_year},
+        {"year": settings.acs_year, "vars": VARIABLES_KEY},
         30 * DAY,
         lambda: _fetch(client, settings, {"for": "us:1"}),
     )

@@ -58,6 +58,40 @@ def test_census_metrics_formulas():
     assert m.long_commute_share == pytest.approx(0.10)
 
 
+def test_census_profile_formulas():
+    body = census_body(
+        {
+            "B01002_001E": "44.3",
+            "B06009_001E": "1000",
+            "B06009_002E": "120",
+            "B06009_005E": "150",
+            "B06009_006E": "50",
+            "B28002_001E": "800",
+            "B28002_004E": "600",
+            "C24050_001E": "2000",
+            "C24050_002E": "100",
+            "C24050_003E": "160",
+            "C24050_057E": "300",
+            "C24050_071E": "400",
+        }
+    )
+    m = census.metrics_from_values(census.parse_response(body))
+
+    assert m.median_age == pytest.approx(44.3)
+    assert m.less_than_high_school_share == pytest.approx(0.12)
+    assert m.bachelors_or_higher_share == pytest.approx(0.20)  # bachelor's + graduate
+    assert m.no_broadband_share == pytest.approx(0.25)  # 1 - broadband of any type
+    assert m.trades_occupation_share == pytest.approx(0.15)
+    assert m.production_transport_occupation_share == pytest.approx(0.20)
+    assert m.agriculture_mining_industry_share == pytest.approx(0.05)
+    assert m.construction_industry_share == pytest.approx(0.08)
+
+
+def test_census_variables_fit_one_call():
+    assert len(set(census.VARIABLES)) == len(census.VARIABLES)
+    assert len(census.VARIABLES) <= 49  # 50 per call, NAME included
+
+
 def test_census_sentinels_become_none():
     body = census_body({"B19013_001E": "-666666666", "B25040_003E": "-999999999"})
     m = census.metrics_from_values(census.parse_response(body))

@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from app import estimates, funding, matching, narrative, needs, suggestions
+from app import estimates, funding, matching, narrative, needs, profile, suggestions
 from app.config import Settings
 from app.geo import County
 from app.models import (
@@ -40,9 +40,11 @@ from app.sources import (
     geoapify,
     lmop,
     nri,
+    openmeteo,
     pvwatts,
     repowering,
     state_energy,
+    svi,
 )
 
 log = logging.getLogger(__name__)
@@ -62,6 +64,8 @@ SOURCE_NAMES = {
     "dams": "ORNL non-powered dams",
     "farms": "USDA farm census and EPA digester database",
     "earthengine": "Urban heat and tree canopy (Google Earth Engine)",
+    "svi": "CDC Social Vulnerability Index",
+    "climate": "Climate history (Open-Meteo)",
     "gemini": "Gemini narrative",
     "gemini_solutions": "Gemini suggested solutions",
 }
@@ -297,6 +301,14 @@ async def analyze_county(
             lambda: earthengine.fetch_county_metrics(settings, county),
             settings.ee_timeout_s,
         ),
+        _run("svi", _local(lambda: svi.svi_for_county(data_dir, county.fips)), timeout),
+        _run(
+            "climate",
+            lambda: openmeteo.fetch_climate(
+                client, settings, county.centroid_lat, county.centroid_lon
+            ),
+            timeout,
+        ),
     )
     (
         (acs, _),
@@ -312,6 +324,8 @@ async def analyze_county(
         (dam_rows, _),
         (farm_row, _),
         (ee_metrics, _),
+        (svi_row, _),
+        (climate, _),
     ) = results
     statuses: list[SourceStatus] = [status for _, status in results]
     ok = {status.source: status.ok for status in statuses}
@@ -466,6 +480,12 @@ async def analyze_county(
         land_in_farms_acres=farm_row.get("land_in_farms_acres") if farm_row else None,
         cropland_acres=farm_row.get("cropland_acres") if farm_row else None,
     )
+    county_profile = (
+        (profile.acs_profile(acs, acs_national, settings) if acs else [])
+        + profile.svi_profile(svi_row)
+        + profile.climate_profile(climate)
+        + profile.land_profile(ee_metrics)
+    )
 
     # --- Gemini: the brief and the suggested solutions, at the same time ----------
     failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
@@ -481,6 +501,7 @@ async def analyze_county(
         missing,
         opportunities,
         settings.digest_sites_per_type,
+        county_profile,
     )
     (brief, gemini_status), (suggested, suggestions_status) = await asyncio.gather(
         narrative.write_narrative(payload, failed, settings),
@@ -513,6 +534,7 @@ async def analyze_county(
         asset_counts=dict(counts),
         missing_asset_types=missing,  # type: ignore[arg-type]
         resources=resources,
+        profile=county_profile,
         opportunities=opportunities,
         suggested_solutions=suggested,
         narrative=brief,

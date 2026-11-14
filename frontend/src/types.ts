@@ -86,6 +86,32 @@ export interface Asset {
   source: string;
 }
 
+export type ProfileCategory = "workforce" | "economy" | "community" | "climate" | "geography";
+export type ProfileUnit =
+  | "share"
+  | "years"
+  | "degree_days_f" // per year, against 65 F
+  | "days_per_year"
+  | "inches_per_year"
+  | "m_per_s"
+  | "percentile" // 0-1 rank among US counties
+  | "feet"
+  | "degrees";
+
+/** Something the county has to work with (workforce, industries, climate,
+ * land) rather than a gap. Context only: never flags a need or changes a score. */
+export interface ProfileFact {
+  id: string;
+  category: ProfileCategory;
+  label: string;
+  value: number;
+  /** Null when there is no national figure to compare against. */
+  national_value: number | null;
+  unit: ProfileUnit;
+  source: string;
+  note: string | null;
+}
+
 export interface Resources {
   solar_kwh_per_kw_year: number | null;
   /** USDA Census of Agriculture 2022. Null where the census withholds it. */
@@ -180,6 +206,8 @@ export interface CountyReport {
   /** Asset types searched for and not found. */
   missing_asset_types: AssetType[];
   resources: Resources;
+  /** Empty for reports saved before it existed. */
+  profile: ProfileFact[];
   opportunities: Opportunity[];
   /** Empty when Gemini was not used or every suggestion was rejected; the
    * `gemini_solutions` entry in `source_status` says which. */

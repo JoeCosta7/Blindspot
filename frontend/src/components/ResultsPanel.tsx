@@ -10,13 +10,15 @@ import {
 import type { AnalyzeResponse, Asset, CountyReport } from "../types";
 import { NeedList } from "./NeedList";
 import { OpportunityCard } from "./OpportunityCard";
+import { ProfileList } from "./ProfileList";
 import { SuggestionCard } from "./SuggestionCard";
 
-type Tab = "opportunities" | "suggestions" | "needs";
+type Tab = "opportunities" | "suggestions" | "needs" | "profile";
 
 const LOADING_SOURCES = [
   "Census ACS: county and national figures",
   "FEMA National Risk Index",
+  "CDC Social Vulnerability Index",
   "EPA RE-Powering sites",
   "EPA landfill database",
   "EIA and EPA eGRID: state electricity bills and grid carbon",
@@ -25,6 +27,7 @@ const LOADING_SOURCES = [
   "OpenStreetMap: schools, libraries, colleges",
   "NLR: EV charging stations",
   "NLR PVWatts: solar yield",
+  "Open-Meteo: ten years of weather",
   "Gemini: written brief and suggested solutions",
 ];
 
@@ -183,6 +186,7 @@ function CountyView({
     ["opportunities", `Opportunities (${report.opportunities.length})`],
     ["suggestions", `Suggestions (${report.suggested_solutions.length})`],
     ["needs", `Needs (${report.needs.length})`],
+    ["profile", "Profile"],
   ];
 
   return (
@@ -257,6 +261,7 @@ function CountyView({
           <SuggestionList report={report} assetsById={assetsById} onShowOnMap={onShowOnMap} />
         )}
         {tab === "needs" && <NeedList needs={report.needs} />}
+        {tab === "profile" && <ProfileList profile={report.profile ?? []} />}
       </div>
 
       {report.narrative.caveats.length > 0 && (
