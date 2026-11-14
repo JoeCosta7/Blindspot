@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE, scout } from "./api";
 import { CountySearch } from "./components/CountySearch";
 import type { LoadingArea } from "./components/loadingSweep";
@@ -52,6 +60,27 @@ function writePref(key: string, value: string) {
   } catch {
     // not remembered; the toggle still works for this visit
   }
+}
+
+const PANEL_WIDTH_DEFAULT = 460;
+const PANEL_WIDTH_MIN = 320;
+const PANEL_WIDTH_MAX = 720;
+
+function clampPanelWidth(width: number): number {
+  const maxForViewport =
+    typeof window !== "undefined" ? Math.min(PANEL_WIDTH_MAX, window.innerWidth - 240) : PANEL_WIDTH_MAX;
+  return Math.round(Math.min(Math.max(width, PANEL_WIDTH_MIN), Math.max(PANEL_WIDTH_MIN, maxForViewport)));
+}
+
+function initialPanelWidth(): number {
+  try {
+    const raw = localStorage.getItem("panelWidth");
+    const parsed = raw ? Number(raw) : NaN;
+    if (Number.isFinite(parsed)) return clampPanelWidth(parsed);
+  } catch {
+    // fall through
+  }
+  return PANEL_WIDTH_DEFAULT;
 }
 
 function initialTheme(): Theme {
@@ -142,6 +171,8 @@ export function App() {
   const [basemap, setBasemap] = useState<Basemap>(
     () => readPref<Basemap>("basemap", ["streets", "satellite"]) ?? "streets",
   );
+  const [panelWidth, setPanelWidth] = useState(initialPanelWidth);
+  const resizing = useRef(false);
 
   // Before paint, so the page never flashes the other theme.
   useLayoutEffect(() => {
@@ -157,6 +188,37 @@ export function App() {
   const changeBasemap = (next: Basemap) => {
     setBasemap(next);
     writePref("basemap", next);
+  };
+
+  /** Drag the panel's left edge to resize it. Width is remembered in localStorage. */
+  const startPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    resizing.current = true;
+    handle.setPointerCapture(event.pointerId);
+    document.body.classList.add("panel-resizing");
+
+    const onMove = (move: PointerEvent) => {
+      if (!resizing.current) return;
+      const next = clampPanelWidth(window.innerWidth - move.clientX);
+      setPanelWidth(next);
+    };
+    const onUp = (up: PointerEvent) => {
+      resizing.current = false;
+      document.body.classList.remove("panel-resizing");
+      handle.releasePointerCapture(up.pointerId);
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      setPanelWidth((width) => {
+        writePref("panelWidth", String(width));
+        return width;
+      });
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
   };
 
   useEffect(() => {
@@ -442,7 +504,18 @@ export function App() {
           }
         />
 
-        <aside className="panel" aria-label="Results">
+        <aside className="panel" aria-label="Results" style={{ width: panelWidth }}>
+          <div
+            className="panel-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize results panel"
+            aria-valuenow={panelWidth}
+            aria-valuemin={PANEL_WIDTH_MIN}
+            aria-valuemax={PANEL_WIDTH_MAX}
+            title="Drag to resize"
+            onPointerDown={startPanelResize}
+          />
           {loading && pending && <LoadingPanel label={pending.label} />}
           {!loading && error && pending && (
             <div className="panel-body">
