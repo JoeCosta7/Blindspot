@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+.env.local
+
+# Backend runtime
+backend/.cache/
+backend/data/raw/
+
+# Frontend
+node_modules/
+frontend/dist/
+*.tsbuildinfo
