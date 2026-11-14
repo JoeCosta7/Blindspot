@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app import cache
-from app.sources import SourceError, afdc, census, overpass, pvwatts
+from app.sources import SourceError, afdc, census, geoapify, pvwatts
 
 
 def client_returning(handler) -> httpx.AsyncClient:
@@ -195,73 +195,116 @@ def test_stations_are_trimmed(settings):
     assert count == 2
 
 
-# --- overpass -------------------------------------------------------------------
+# --- geoapify -------------------------------------------------------------------
 
 
-def test_overpass_query_and_parsing():
-    query = overpass.build_query(42.0, -76.2, 42.4, -75.4, 15)
-    assert "[out:json][timeout:15]" in query
-    assert "(42.0,-76.2,42.4,-75.4)" in query  # south, west, north, east
+def feature(name, categories, lat=42.1, lon=-75.9, osm=("w", 1), place_id="p1"):
+    raw = {"osm_type": osm[0], "osm_id": osm[1]} if osm else {}
+    return {
+        "type": "Feature",
+        "properties": {
+            "name": name,
+            "categories": ["education", *categories],
+            "lat": lat,
+            "lon": lon,
+            "city": "Town",
+            "place_id": place_id,
+            "datasource": {"sourcename": "openstreetmap", "raw": raw},
+        },
+    }
 
-    elements = [
-        {
-            "type": "node",
-            "id": 1,
-            "lat": 42.1,
-            "lon": -75.9,
-            "tags": {"amenity": "library", "name": "Main Library"},
-        },
-        {
-            "type": "way",
-            "id": 2,
-            "center": {"lat": 42.2, "lon": -75.8},
-            "tags": {"amenity": "university", "name": "State U"},
-        },
-        {
-            "type": "node",
-            "id": 3,
-            "lat": 42.1,
-            "lon": -75.9,
-            "tags": {"amenity": "school"},
-        },  # unnamed
-        {"type": "way", "id": 4, "tags": {"amenity": "school", "name": "No center"}},
-        {
-            "type": "node",
-            "id": 5,
-            "lat": 42.1,
-            "lon": -75.9,
-            "tags": {"amenity": "cafe", "name": "Cafe"},
-        },
+
+def test_geoapify_parsing():
+    features = [
+        feature("Main Library", ["education.library", "building.college"], osm=("n", 1)),
+        feature("State U", ["education.university"], osm=("w", 2)),
+        feature("Old School", ["education.school"], osm=("r", 3)),
+        feature("", ["education.school"], osm=("n", 4)),  # unnamed
+        feature("Cafe", ["catering.cafe"], osm=("n", 5)),  # not a building type
+        feature("No OSM id", ["education.school"], osm=None, place_id="abc"),
     ]
-    parsed = overpass.parse_elements(elements)
+    parsed = geoapify.parse_features(features)
     assert [(b["osm_id"], b["type"], b["name"]) for b in parsed] == [
         ("node/1", "library", "Main Library"),
         ("way/2", "college", "State U"),
+        ("relation/3", "school", "Old School"),
+        ("geoapify/abc", "school", "No OSM id"),
     ]
+    assert parsed[0]["city"] == "Town"
 
 
-def test_overpass_sends_user_agent_and_reports_busy(settings):
+def fetch_buildings(settings, handler):
+    async def run():
+        async with client_returning(handler) as client:
+            return await geoapify.fetch_public_buildings(
+                client, settings, "36007", (-76.0, 42.0, -75.0, 43.0)
+            )
+
+    return asyncio.run(run())
+
+
+def test_geoapify_needs_a_key(settings):
+    with pytest.raises(SourceError, match="GEOAPIFY_API_KEY is not set"):
+        fetch_buildings(settings, lambda r: httpx.Response(200, json={"features": []}))
+
+
+def test_geoapify_request_and_errors(settings):
+    keyed = settings.model_copy(update={"geoapify_api_key": "k"})
     seen = {}
 
     def ok(request):
-        seen["ua"] = request.headers["user-agent"]
-        return httpx.Response(200, json={"elements": []})
+        seen.update(request.url.params)
+        return httpx.Response(200, json={"features": [feature("A School", ["education.school"])]})
 
-    async def run(handler):
-        async with client_returning(handler) as client:
-            return await overpass.fetch_public_buildings(
-                client, settings, "36007", (-76.2, 42.0, -75.4, 42.4)
-            )
+    rows, cached = fetch_buildings(keyed, ok)
+    assert [r["name"] for r in rows] == ["A School"] and cached is False
+    assert seen["filter"] == "rect:-76.0,42.0,-75.0,43.0"  # west, south, east, north
+    assert seen["limit"] == "500" and seen["apiKey"] == "k"
+    assert "education.school" in seen["categories"]
 
-    assert asyncio.run(run(ok)) == ([], False)
-    assert "county-sustainability-planner" in seen["ua"]
+    for status, message in [(401, "rejected"), (429, "quota"), (500, "HTTP 500")]:
+        cache.clear_memory()
+        for path in keyed.cache_dir.glob("geoapify_*"):
+            path.unlink()
+        with pytest.raises(SourceError, match=message):
+            fetch_buildings(keyed, lambda r, s=status: httpx.Response(s))
 
-    cache.clear_memory()
-    settings.cache_dir.joinpath("x").parent.mkdir(parents=True, exist_ok=True)
-    for path in settings.cache_dir.glob("overpass_*"):
-        path.unlink()
-    with pytest.raises(SourceError, match="busy"):
-        asyncio.run(run(lambda r: httpx.Response(429)))
+
+def test_geoapify_splits_full_boxes_and_dedupes(settings, monkeypatch):
+    """A box that comes back full (the API's 500 cap) is split into quarters.
+    Here the cap is 3 and only the whole county's box is full."""
+    monkeypatch.setattr(geoapify, "PAGE_LIMIT", 3)
+    keyed = settings.model_copy(update={"geoapify_api_key": "k"})
+    boxes = []
+
+    def handler(request):
+        box = request.url.params["filter"]
+        boxes.append(box)
+        if box == "rect:-76.0,42.0,-75.0,43.0":
+            names = ["A", "B", "C"]  # full: triggers the split
+            return httpx.Response(200, json={"features": [
+                feature(n, ["education.school"], osm=("w", i)) for i, n in enumerate(names)
+            ]})
+        # Every quarter returns place w/1 (an edge duplicate) plus one of its own.
+        own = len(boxes)
+        return httpx.Response(200, json={"features": [
+            feature("B", ["education.school"], osm=("w", 1)),
+            feature(f"Q{own}", ["education.school"], osm=("w", 100 + own)),
+        ]})
+
+    rows, _ = fetch_buildings(keyed, handler)
+    assert len(boxes) == 5  # the county box, then its four quarters
+    assert sorted(r["name"] for r in rows) == ["B", "Q2", "Q3", "Q4", "Q5"]
+
+
+def test_split_box():
+    quarters = geoapify.split_box((0.0, 0.0, 2.0, 2.0))
+    assert quarters == [
+        (0.0, 0.0, 1.0, 1.0),
+        (1.0, 0.0, 2.0, 1.0),
+        (0.0, 1.0, 1.0, 2.0),
+        (1.0, 1.0, 2.0, 2.0),
+    ]
 
 
 # --- state energy file -----------------------------------------------------------

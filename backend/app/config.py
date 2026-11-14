@@ -18,10 +18,8 @@ class Settings(BaseSettings):
     nlr_api_key: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
-
-    # Public Overpass instance. It was at capacity (HTTP 502) during testing on
-    # 2026-11-13; point this at another instance if that persists.
-    overpass_url: str = "https://overpass-api.de/api/interpreter"
+    # Geoapify Places API: OpenStreetMap schools, libraries and colleges.
+    geoapify_api_key: str = ""
 
     # --- request shape ----------------------------------------------------
     acs_year: int = 2024
@@ -32,6 +30,10 @@ class Settings(BaseSettings):
 
     # --- timeouts (seconds) -----------------------------------------------
     source_timeout_s: float = 15.0
+    # Public buildings for the largest counties take several Geoapify
+    # requests (Cook County, IL: 13 requests, 19 s on a cold cache). Most
+    # counties need one request and finish in about a second.
+    buildings_timeout_s: float = 45.0
     gemini_timeout_s: float = 20.0
 
     # --- need scoring (CLAUDE.md section 8) -------------------------------
