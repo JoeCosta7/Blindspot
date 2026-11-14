@@ -1,8 +1,8 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
-import { ASSET_STYLES, ASSET_TYPE_ORDER, formatAcres, formatNumber } from "../format";
-import type { Asset, AssetType, Bounds, CountyCollection, LonLat } from "../types";
+import { ASSET_STYLES, formatAcres, formatNumber } from "../format";
+import type { Asset, Bounds, CountyCollection, LonLat } from "../types";
 import { startBoxSelect } from "./boxSelect";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
@@ -10,7 +10,18 @@ const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 const COUNTY_SOURCE = "counties";
 const ASSET_SOURCE = "assets";
 const COUNTY_FILL = "counties-fill";
-const assetLayer = (type: AssetType) => `assets-${type}`;
+const OPPORTUNITY_DOT = "opportunities-dot";
+const OPPORTUNITY_HALO = "opportunities-halo";
+
+// Opportunity markers: a solid green dot with a soft halo that slowly grows
+// and fades, so the eye finds them without anything blinking.
+const OPPORTUNITY_GREEN = "#22c55e";
+const PULSE_MS = 1400;
+// Zoom level when a card's title flies to its site: close enough to see the site itself.
+const FOCUS_ZOOM = 16.5;
+const HALO_SMALL = { radius: 11, opacity: 0.45 };
+const HALO_LARGE = { radius: 24, opacity: 0.05 };
+const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 export type SelectMode = "county" | "box";
 export type Basemap = "streets" | "satellite";
@@ -44,6 +55,7 @@ interface Props {
   selectedFips: string[];
   /** Fit the map to this box when it changes. */
   fitTo: Bounds | null;
+  /** The sites that opportunities are built on. Only these get markers. */
   assets: Asset[];
   /** Fly to this asset and open its popup. */
   focusAsset: Asset | null;
@@ -277,20 +289,29 @@ export function MapView(props: Props) {
     });
 
     map.addSource(ASSET_SOURCE, { type: "geojson", data: toFeatureCollection([]) });
-    for (const type of ASSET_TYPE_ORDER) {
-      map.addLayer({
-        id: assetLayer(type),
-        type: "circle",
-        source: ASSET_SOURCE,
-        filter: ["==", ["get", "type"], type],
-        paint: {
-          "circle-color": ASSET_STYLES[type].color,
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3, 10, 6, 14, 9],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 1.2,
-        },
-      });
-    }
+    map.addLayer({
+      id: OPPORTUNITY_HALO,
+      type: "circle",
+      source: ASSET_SOURCE,
+      paint: {
+        "circle-color": OPPORTUNITY_GREEN,
+        "circle-radius": HALO_SMALL.radius,
+        "circle-opacity": HALO_SMALL.opacity,
+        "circle-radius-transition": { duration: PULSE_MS, delay: 0 },
+        "circle-opacity-transition": { duration: PULSE_MS, delay: 0 },
+      },
+    });
+    map.addLayer({
+      id: OPPORTUNITY_DOT,
+      type: "circle",
+      source: ASSET_SOURCE,
+      paint: {
+        "circle-color": OPPORTUNITY_GREEN,
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 7, 10, 9, 14, 11],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    });
     // Feature state and data did not survive the style swap; the effects
     // keyed on layersVersion restore them.
     highlighted.current = [];
@@ -300,7 +321,6 @@ export function MapView(props: Props) {
     // registered once.
     if (handlersBound.current) return;
     handlersBound.current = true;
-    const assetLayers = ASSET_TYPE_ORDER.map(assetLayer);
 
     let hovered: string | null = null;
     const setHover = (id: string | null) => {
@@ -321,7 +341,7 @@ export function MapView(props: Props) {
 
     map.on("click", (event) => {
       if (latest.current.mode !== "county") return;
-      const [marker] = map.queryRenderedFeatures(event.point, { layers: assetLayers });
+      const [marker] = map.queryRenderedFeatures(event.point, { layers: [OPPORTUNITY_DOT, OPPORTUNITY_HALO] });
       if (marker) {
         const asset = latest.current.assets.find((a) => a.id === marker.properties?.id);
         if (asset) {
@@ -365,6 +385,22 @@ export function MapView(props: Props) {
   }, [layersReady, fitTo]);
 
   // --- markers ------------------------------------------------------------------
+  // The halo breathes: every PULSE_MS it is told to grow or shrink, and the
+  // layer's paint transition animates the change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || layersVersion === 0 || reducedMotion()) return;
+    let grow = true;
+    const timer = window.setInterval(() => {
+      if (!map.getLayer(OPPORTUNITY_HALO)) return;
+      const next = grow ? HALO_LARGE : HALO_SMALL;
+      map.setPaintProperty(OPPORTUNITY_HALO, "circle-radius", next.radius);
+      map.setPaintProperty(OPPORTUNITY_HALO, "circle-opacity", next.opacity);
+      grow = !grow;
+    }, PULSE_MS);
+    return () => window.clearInterval(timer);
+  }, [layersVersion]);
+
   // New results close an open popup; a basemap swap does not.
   useEffect(() => {
     popupRef.current?.remove();
@@ -381,8 +417,8 @@ export function MapView(props: Props) {
     if (!map || !layersReady || !focusAsset) return;
     map.flyTo({
       center: [focusAsset.lon, focusAsset.lat],
-      zoom: Math.max(map.getZoom(), 12),
-      duration: 900,
+      zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+      duration: 1200,
     });
     popupRef.current?.remove();
     popupRef.current = new mapboxgl.Popup({ offset: 10, maxWidth: "280px" })
@@ -397,8 +433,6 @@ export function MapView(props: Props) {
     if (!map || !layersReady || mode !== "box") return;
     return startBoxSelect(map, (sw, ne) => latest.current.onBoxSelect(sw, ne));
   }, [layersReady, mode]);
-
-  const present = ASSET_TYPE_ORDER.filter((type) => assets.some((a) => a.type === type));
 
   if (!TOKEN || mapError) {
     return (
@@ -447,14 +481,12 @@ export function MapView(props: Props) {
       {mode === "box" && (
         <div className="map-hint">Drag a box over the counties to analyze. Esc cancels.</div>
       )}
-      {present.length > 0 && (
+      {assets.length > 0 && (
         <div className="legend">
-          {present.map((type) => (
-            <div key={type} className="legend-row">
-              <span className="legend-dot" style={{ background: ASSET_STYLES[type].color }} />
-              {ASSET_STYLES[type].plural}
-            </div>
-          ))}
+          <div className="legend-row">
+            <span className="legend-dot legend-dot-opportunity" />
+            Opportunity sites
+          </div>
         </div>
       )}
     </div>

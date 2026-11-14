@@ -1,4 +1,4 @@
-import { ASSET_STYLES, formatNumber } from "../format";
+import { formatNumber } from "../format";
 import type { Asset, Estimate, Need, Opportunity } from "../types";
 import { FundingBadge } from "./FundingBadge";
 
@@ -50,21 +50,28 @@ interface Props {
 export function OpportunityCard({ rank, opportunity, asset, needs, note, onShowOnMap }: Props) {
   const addressed = needs.filter((need) => opportunity.need_ids.includes(need.id));
   return (
-    <article className="card opportunity">
+    <article className="card opportunity opportunity-primary">
       <header className="opportunity-head">
         <span className="rank">{rank}</span>
-        <h3>{opportunity.title}</h3>
+        <h3>
+          {asset ? (
+            <button
+              type="button"
+              className="opportunity-title"
+              onClick={() => onShowOnMap(asset)}
+              title="Show this site on the map"
+            >
+              {opportunity.title}
+            </button>
+          ) : (
+            opportunity.title
+          )}
+        </h3>
         <span className="score" title="Mean severity of the needs addressed, reduced when the site lacks the data an estimate needs">
           Score {opportunity.score}
         </span>
       </header>
 
-      {asset && (
-        <button type="button" className="link-button" onClick={() => onShowOnMap(asset)}>
-          <span className="legend-dot" style={{ background: ASSET_STYLES[asset.type].color }} />
-          {ASSET_STYLES[asset.type].label} · Show on map
-        </button>
-      )}
       {asset?.type === "non_powered_dam" && <DamFacts asset={asset} />}
       {opportunity.asset_id === null && (
         <p className="muted">

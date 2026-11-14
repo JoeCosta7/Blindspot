@@ -209,7 +209,12 @@ export function App() {
   };
 
   const activeReport = response?.counties[activeIndex];
-  const assets = useMemo(() => activeReport?.assets ?? [], [activeReport]);
+  // Only the sites an opportunity is built on are drawn on the map.
+  const assets = useMemo(() => {
+    if (!activeReport) return [];
+    const used = new Set(activeReport.opportunities.map((o) => o.asset_id));
+    return activeReport.assets.filter((asset) => used.has(asset.id));
+  }, [activeReport]);
 
   return (
     <div className="app">
