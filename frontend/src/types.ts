@@ -21,7 +21,9 @@ export type NeedId =
   | "hazard_risk"
   | "high_electricity_cost"
   | "carbon_intensive_grid"
-  | "unmanaged_farm_waste";
+  | "unmanaged_farm_waste"
+  | "urban_heat"
+  | "low_tree_canopy";
 
 export type NeedTheme = "equity" | "energy" | "transportation" | "waste" | "resilience";
 export type NeedLevel = "elevated" | "high";
@@ -32,7 +34,8 @@ export type NeedUnit =
   | "count"
   | "rating"
   | "usd_per_month"
-  | "lb_co2_per_mwh";
+  | "lb_co2_per_mwh"
+  | "celsius";
 
 export type AssetType =
   | "brownfield"

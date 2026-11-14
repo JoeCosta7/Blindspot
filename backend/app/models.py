@@ -40,11 +40,20 @@ NeedId = Literal[
     "high_electricity_cost",  # state average, EIA
     "carbon_intensive_grid",  # state average, EPA eGRID
     "unmanaged_farm_waste",  # large livestock farms without digesters
+    "urban_heat",  # built-up land much hotter than the county's natural land (Landsat)
+    "low_tree_canopy",  # little tree canopy on the county's built-up land (USFS TCC)
 ]
 NeedTheme = Literal["equity", "energy", "transportation", "waste", "resilience"]
 NeedLevel = Literal["elevated", "high"]
 NeedUnit = Literal[
-    "share", "usd", "per_10k_residents", "count", "rating", "usd_per_month", "lb_co2_per_mwh"
+    "share",
+    "usd",
+    "per_10k_residents",
+    "count",
+    "rating",
+    "usd_per_month",
+    "lb_co2_per_mwh",
+    "celsius",  # a temperature difference in degrees Celsius
 ]
 
 AssetType = Literal[
