@@ -42,6 +42,19 @@ WIND_MAX_SITE_MW = 1600.0
 # building: we have no roof area data.
 RESILIENCE_HUB_KW = 100.0
 
+# Site Scout rooftop solar. The roof is measured (Vexcel footprint minus the
+# detected rooftop equipment), but the land figure above is the only sized
+# constant with a cited source, so it is applied to the roof as a conservative
+# floor: 6.9 acres per MW is 27,923 m² per MW, about 36 W per m². A rooftop
+# packing figure would be several times higher.
+# VERIFY: replace with the module power density and flat-roof coverage from
+# NREL's rooftop PV technical potential report (Gagnon et al. 2016, NREL/TP-6A20-65298).
+SQ_M_PER_ACRE = 4046.8564224  # exact definition of the international acre
+ROOF_M2_PER_MW = ACRES_PER_MW * SQ_M_PER_ACRE
+# Share of the clear roof kept free for fire-code access paths and edge setbacks.
+# VERIFY: our own planning assumption; no published source for this value.
+ROOF_SETBACK_FACTOR = 0.85
+
 
 def round_sig(value: float, digits: int = 3) -> float:
     """Round to significant figures so estimates do not imply false precision."""
@@ -123,6 +136,35 @@ def resilience_hub(yield_kwh_per_kw: float | None, site_specific_yield: bool) ->
     if yield_kwh_per_kw:
         estimates += _energy_and_households(
             RESILIENCE_HUB_KW, yield_kwh_per_kw, site_specific_yield, basis
+        )
+    return estimates
+
+
+def rooftop_solar(
+    footprint_m2: float,
+    obstruction_m2: float,
+    yield_kwh_per_kw: float | None,
+    site_specific_yield: bool,
+) -> list[Estimate]:
+    """Capacity on a measured flat roof, and energy and households when a
+    PVWatts yield is available."""
+    clear_m2 = max(footprint_m2 - obstruction_m2, 0.0)
+    usable_m2 = clear_m2 * ROOF_SETBACK_FACTOR
+    capacity_kw = usable_m2 / ROOF_M2_PER_MW * 1000
+    basis = [
+        f"Roof footprint {format_number(round(footprint_m2))} m² from the aerial property "
+        f"record, less {format_number(round(obstruction_m2))} m² of detected rooftop equipment",
+        f"{ROOF_SETBACK_FACTOR:.0%} of the clear roof usable after edge and access setbacks "
+        "(our own assumption)",
+        f"{ACRES_PER_MW} acres per MW, EPA's ground-mounted screening figure, applied to the "
+        "roof as a conservative floor; a rooftop layout would fit more",
+    ]
+    estimates = [
+        Estimate(label="Capacity", value=round_sig(capacity_kw), unit="kW", assumptions=basis)
+    ]
+    if yield_kwh_per_kw and capacity_kw > 0:
+        estimates += _energy_and_households(
+            capacity_kw, yield_kwh_per_kw, site_specific_yield, basis
         )
     return estimates
 

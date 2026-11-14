@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE } from "./api";
+import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE, scout } from "./api";
 import { CountySearch } from "./components/CountySearch";
 import type { LoadingArea } from "./components/loadingSweep";
 import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
-import { LoadingPanel, ResultsPanel } from "./components/ResultsPanel";
+import { PhotoViewer } from "./components/PhotoViewer";
+import { LoadingPanel, ResultsPanel, scoutKey } from "./components/ResultsPanel";
+import { bestCandidates, bestSites } from "./components/ScoutPanel";
 import { featureBounds, unionBounds } from "./format";
 import type {
   AnalyzeRequest,
@@ -15,7 +17,23 @@ import type {
   LonLat,
   NeedId,
   NeedMapResponse,
+  Opportunity,
+  ScoutRun,
+  SiteCandidate,
 } from "./types";
+
+/** A scouted building as a map marker. */
+function candidateAsset(candidate: SiteCandidate): Asset {
+  return {
+    id: candidate.building_id,
+    type: "commercial_building",
+    name: candidate.name,
+    lat: candidate.lat,
+    lon: candidate.lon,
+    attributes: { status: candidate.status, score: candidate.score },
+    source: "Site Scout",
+  };
+}
 
 // View preferences are remembered per browser. Storage can be unavailable
 // (private windows, blocked site data), so every access is guarded.
@@ -115,6 +133,11 @@ export function App() {
   // The need the map is colored by, if any.
   const [needId, setNeedId] = useState<NeedId | null>(null);
   const inFlight = useRef<AbortController | null>(null);
+  // One Site Scout run per opportunity, keyed by county and opportunity id.
+  const [scoutRuns, setScoutRuns] = useState<Record<string, ScoutRun>>({});
+  const scoutInFlight = useRef<Map<string, AbortController>>(new Map());
+  // The scouted site whose aerial photo is open over the map.
+  const [viewed, setViewed] = useState<SiteCandidate | null>(null);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [basemap, setBasemap] = useState<Basemap>(
     () => readPref<Basemap>("basemap", ["streets", "satellite"]) ?? "streets",
@@ -189,6 +212,10 @@ export function App() {
       setResponse(null);
       setFocusAsset(null);
       setActiveIndex(0);
+      for (const controller of scoutInFlight.current.values()) controller.abort();
+      scoutInFlight.current.clear();
+      setScoutRuns({});
+      setViewed(null);
       try {
         const result = await analyze(request.body, controller.signal);
         if (controller.signal.aborted) return;
@@ -237,6 +264,80 @@ export function App() {
     [run],
   );
 
+  /** Start Site Scout for one opportunity and follow its stream. The map
+   * follows each inspection; candidates become markers as they are evaluated. */
+  const startScout = useCallback((fips: string, opportunity: Opportunity) => {
+    const key = scoutKey(fips, opportunity.id);
+    scoutInFlight.current.get(key)?.abort();
+    const controller = new AbortController();
+    scoutInFlight.current.set(key, controller);
+    const update = (change: (run: ScoutRun) => ScoutRun) =>
+      setScoutRuns((runs) => (runs[key] ? { ...runs, [key]: change(runs[key]) } : runs));
+    setScoutRuns((runs) => ({
+      ...runs,
+      [key]: {
+        fips,
+        opportunityId: opportunity.id,
+        title: opportunity.title,
+        running: true,
+        steps: [],
+        candidates: [],
+        result: null,
+        error: null,
+      },
+    }));
+    scout(
+      fips,
+      opportunity.need_ids,
+      opportunity.title,
+      opportunity.solution_id,
+      opportunity.asset_ids,
+      (event) => {
+        if (controller.signal.aborted) return;
+        update((run) => {
+          if (event.type === "step" && event.step) {
+            return { ...run, steps: [...run.steps, event.step] };
+          }
+          if (event.type === "candidate" && event.candidate) {
+            const id = event.candidate.building_id;
+            const others = run.candidates.filter((c) => c.building_id !== id);
+            return { ...run, candidates: [...others, event.candidate] };
+          }
+          if (event.type === "result" && event.result) {
+            return {
+              ...run,
+              running: false,
+              result: event.result,
+              candidates: event.result.candidates,
+            };
+          }
+          return run;
+        });
+        // The map holds still while the agent works, then frames the final
+        // three sites once. Clicking a site afterwards flies to it.
+        if (event.type === "result" && event.result) {
+          const d = 0.004;
+          const box = unionBounds(
+            bestCandidates(event.result.candidates).map(
+              (c): Bounds => [c.lon - d, c.lat - d, c.lon + d, c.lat + d],
+            ),
+          );
+          if (box) setFitTo(box);
+        }
+      },
+      controller.signal,
+    )
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        const message = err instanceof Error ? err.message : "The request failed.";
+        update((run) => ({ ...run, running: false, error: message }));
+      })
+      .finally(() => {
+        if (controller.signal.aborted) return;
+        update((run) => ({ ...run, running: false }));
+      });
+  }, []);
+
   const switchCounty = (index: number) => {
     const county = response?.counties[index];
     if (!county) return;
@@ -246,12 +347,23 @@ export function App() {
   };
 
   const activeReport = response?.counties[activeIndex];
-  // Only the sites an opportunity is built on are drawn on the map.
-  const assets = useMemo(() => {
-    if (!activeReport) return [];
-    const used = new Set(activeReport.opportunities.flatMap((o) => o.asset_ids));
-    return activeReport.assets.filter((asset) => used.has(asset.id));
-  }, [activeReport]);
+  // Only the best scouted sites get markers; the report's own opportunities
+  // are county-wide initiatives and draw nothing. Clicking a marker opens the
+  // site's photo, so each marker remembers its candidate.
+  const scouted = useMemo(() => {
+    const byId = new Map<string, SiteCandidate>();
+    for (const run of Object.values(scoutRuns)) {
+      if (!activeReport || run.fips !== activeReport.fips) continue;
+      for (const c of bestSites(run)) byId.set(c.building_id, c);
+    }
+    return byId;
+  }, [activeReport, scoutRuns]);
+  const assets = useMemo(() => [...scouted.values()].map(candidateAsset), [scouted]);
+
+  const showCandidate = useCallback((candidate: SiteCandidate) => {
+    setFocusAsset(candidateAsset(candidate));
+    setViewed(candidate);
+  }, []);
 
   return (
     <div className="app">
@@ -315,6 +427,19 @@ export function App() {
           onNeedChange={setNeedId}
           onCountyClick={selectCounty}
           onBoxSelect={selectBox}
+          onAssetClick={(asset) => {
+            const candidate = scouted.get(asset.id);
+            if (candidate) showCandidate(candidate);
+          }}
+          overlay={
+            viewed ? (
+              <PhotoViewer
+                key={viewed.building_id}
+                candidate={viewed}
+                onClose={() => setViewed(null)}
+              />
+            ) : null
+          }
         />
 
         <aside className="panel" aria-label="Results">
@@ -335,8 +460,16 @@ export function App() {
               activeIndex={activeIndex}
               onSelectCounty={switchCounty}
               // A new object each time, so clicking the same site twice flies again.
-              onShowOnMap={(asset) => setFocusAsset({ ...asset })}
+              onShowOnMap={(asset) => {
+                setViewed(null);
+                setFocusAsset({ ...asset });
+              }}
               onAnalyzeCounty={selectCounty}
+              scout={{
+                scoutRuns,
+                onScout: startScout,
+                onShowCandidate: showCandidate,
+              }}
             />
           )}
           {!loading && !error && !response && <Intro countiesError={countiesError} />}
@@ -359,7 +492,9 @@ export function App() {
                 Weather data by Open-Meteo.com
               </a>{" "}
               (CC BY 4.0) · County boundaries: Census 2025 · Live federal listings: Grants.gov
-              (this product uses the Grants.gov API but is not endorsed or certified by HHS).
+              (this product uses the Grants.gov API but is not endorsed or certified by HHS) · Site
+              Scout: aerial imagery and property data by Vexcel Imaging; 3D scans by Matterport;
+              commercial property records by CoStar Group.
             </p>
             <p>
               This product uses the Census Bureau Data API but is not endorsed or certified by the

@@ -72,7 +72,8 @@ def test_solutions_table_is_consistent_with_the_contract():
 
 
 def test_funding_table_refers_only_to_known_solutions():
-    solution_ids = {s.id for s in SOLUTIONS}
+    scout = matching.load_solutions(DATA / "scout_solutions.json")
+    solution_ids = {s.id for s in SOLUTIONS} | {s.id for s in scout}
     raw = json.loads((DATA / "funding_programs.json").read_text())
     assert len({p["id"] for p in raw}) == len(raw)
     for program in PROGRAMS:
@@ -122,7 +123,7 @@ def test_score_blends_highest_and_mean_priority_times_asset_factor():
     assert matches[0].score == 70  # 70 * 1.0
     assert matches[1].score == 49  # 70 * 0.7
     assert matches[0].id == "community_solar:big"
-    assert matches[0].title == "Community solar on Site big"
+    assert matches[0].title == "Community solar on reclaimed land"  # the project, not the site
 
 
 def test_land_prefers_screened_sites_then_acreage():

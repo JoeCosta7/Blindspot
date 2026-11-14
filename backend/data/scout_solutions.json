@@ -1,0 +1,26 @@
+[
+  {
+    "id": "rooftop_solar_commercial",
+    "name": "Rooftop solar on a commercial building",
+    "title_template": "Rooftop solar on {asset}",
+    "asset_kind": "building",
+    "hosts": ["commercial_building"],
+    "triggers": ["renters", "low_income", "high_electricity_cost", "high_energy_burden", "carbon_intensive_grid", "poor_air_quality"]
+  },
+  {
+    "id": "parking_canopy_solar",
+    "name": "Solar canopy and depaving on an underused parking lot",
+    "title_template": "Solar canopy and depaving at {asset}",
+    "asset_kind": "building",
+    "hosts": ["commercial_building"],
+    "triggers": ["hazard_risk", "urban_heat", "low_tree_canopy", "renters", "high_electricity_cost", "high_energy_burden", "carbon_intensive_grid"]
+  },
+  {
+    "id": "cooling_center",
+    "name": "Cooling center and resilience hub in a large open building",
+    "title_template": "Cooling center and resilience hub at {asset}",
+    "asset_kind": "building",
+    "hosts": ["commercial_building"],
+    "triggers": ["hazard_risk", "urban_heat", "low_tree_canopy"]
+  }
+]

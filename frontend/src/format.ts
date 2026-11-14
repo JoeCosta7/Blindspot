@@ -6,6 +6,8 @@ import type {
   FundingStatus,
   NeedTheme,
   NeedUnit,
+  ScoutLayer,
+  SiteStatus,
 } from "./types";
 
 const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 });
@@ -115,6 +117,11 @@ export const ASSET_STYLES: Record<AssetType, AssetStyle> = {
     plural: "Power plants, 1 MW or more (EIA-860)",
     color: "#ea580c",
   },
+  commercial_building: {
+    label: "Scouted site",
+    plural: "Buildings found by Site Scout",
+    color: "#c026d3",
+  },
 };
 
 export const ASSET_TYPE_ORDER = Object.keys(ASSET_STYLES) as AssetType[];
@@ -167,6 +174,22 @@ export const SOURCE_NAMES: Record<string, string> = {
   waters: "EPA ATTAINS assessed waters",
   wind_turbines: "US Wind Turbine Database",
   transit: "BTS National Transit Map",
+  costar: "CoStar commercial property records",
+  vexcel: "Vexcel aerial imagery and property records",
+  matterport: "Matterport 3D scans",
+  scout_gemini: "Gemini scout decisions",
+};
+
+export const SCOUT_LAYER_LABELS: Record<ScoutLayer, string> = {
+  vexcel: "Vexcel aerial",
+  matterport: "Matterport 3D scan",
+  costar: "CoStar record",
+};
+
+export const SITE_STATUS: Record<SiteStatus, string> = {
+  shortlisted: "Shortlisted",
+  low_confidence: "Low confidence",
+  rejected: "Rejected",
 };
 
 /** Headings for the factor categories, in the order the backend sends them. */

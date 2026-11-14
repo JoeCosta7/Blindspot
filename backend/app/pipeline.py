@@ -54,6 +54,7 @@ from app.models import (
     SiteActionPlan,
     SourceStatus,
 )
+from app.scout import profiles
 from app.sources import (
     SourceError,
     afdc,
@@ -120,6 +121,11 @@ SOURCE_NAMES = {
     "transit": "BTS National Transit Map",
     "gemini": "Gemini opportunities and brief",
     "grants_gov": "Grants.gov live listings",
+    # Site Scout (app/scout/)
+    "costar": "CoStar commercial property records",
+    "vexcel": "Vexcel aerial imagery and property records",
+    "matterport": "Matterport 3D scans",
+    "scout_gemini": "Gemini scout decisions",
 }
 
 BUILDING_TYPES = ("school", "library", "college")
@@ -528,6 +534,24 @@ def proposals_from_matches(matches: list[matching.Match]) -> list[_Proposal]:
             )
         )
     return proposals
+
+
+def can_scout(
+    solution_id: str | None,
+    need_ids: list[str],
+    asset_ids: list[str],
+    scout_solutions: tuple[matching.Solution, ...],
+) -> bool:
+    """Whether Site Scout could find a place for this opportunity: it is not
+    county-wide, and either it is a site project (landfill, reclaimed land,
+    plant, dam: scout/profiles.py) or a building-hosted project type answers
+    one of its needs. Empty `scout_solutions` means no data for this county."""
+    if not asset_ids or not scout_solutions:
+        return False
+    if profiles.is_site_project(solution_id):
+        return True
+    needs = set(need_ids)
+    return any(needs & set(s.triggers) for s in scout_solutions)
 
 
 def size_estimates(
@@ -974,6 +998,12 @@ async def analyze_county(
                 documents=docs,
                 documents_needed=list(proposal.documents_needed),
                 generated_by=proposal.generated_by,
+                scoutable=can_scout(
+                    solution.id if solution else None,
+                    [n.id for n in proposal.needs],
+                    [a.id for a in proposal.assets],
+                    scout_solutions,
+                ),
             )
         )
 
@@ -1030,4 +1060,5 @@ async def analyze_county(
         people_per_sq_mile=people_per_sq_mile,
         narrative=brief,
         source_status=statuses,
+        scout_available=county.fips in settings.scout_counties,
     )

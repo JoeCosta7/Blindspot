@@ -662,7 +662,7 @@ def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, m
 
     by_solution = {o.solution_id: o for o in report.opportunities}
     hydro = by_solution["small_hydro"]
-    assert hydro.title == "Hydropower at Mill Pond Dam"
+    assert hydro.title == "Hydropower at an existing dam"  # the project, not the site
     assert hydro.asset_ids == ["dam:ZZ00001"]
     assert [e.label for e in hydro.estimates] == [
         "Capacity",
@@ -884,3 +884,16 @@ def test_grants_failure_keeps_the_report(sources, settings, monkeypatch):
     assert report.opportunities and not any(live(o) for o in report.opportunities)
     status = next(s for s in report.source_status if s.source == "grants_gov")
     assert not status.ok and "HTTP 503" in (status.message or "")
+
+
+def test_can_scout_needs_a_site_and_a_building_project():
+    from app import matching
+    from app.config import BACKEND_DIR
+    from app.pipeline import can_scout
+
+    scout = matching.load_solutions(BACKEND_DIR / "data" / "scout_solutions.json")
+    assert can_scout(None, ["hazard_risk"], ["school:1"], scout) is True
+    assert can_scout(None, ["impaired_waters"], ["school:1"], scout) is False  # no roof answers it
+    assert can_scout("landfill_composting", ["landfill_gas_uncaptured"], ["lmop:1"], scout)
+    assert can_scout(None, ["hazard_risk"], [], scout) is False  # county-wide
+    assert can_scout(None, ["hazard_risk"], ["school:1"], ()) is False  # no data here
