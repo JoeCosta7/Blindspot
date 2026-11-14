@@ -1,10 +1,8 @@
 import { useState } from "react";
 import {
   ASSET_STYLES,
-  ASSET_TYPE_ORDER,
   formatAcres,
   formatDollars,
-  formatNumber,
   formatShare,
   formatWhole,
   sourceName,
@@ -14,7 +12,7 @@ import { NeedList } from "./NeedList";
 import { OpportunityCard } from "./OpportunityCard";
 import { SuggestionCard } from "./SuggestionCard";
 
-type Tab = "opportunities" | "suggestions" | "needs" | "assets";
+type Tab = "opportunities" | "suggestions" | "needs";
 
 const LOADING_SOURCES = [
   "Census ACS: county and national figures",
@@ -125,75 +123,6 @@ function SourceNotice({ report }: { report: CountyReport }) {
   );
 }
 
-function AssetList({
-  report,
-  onShowOnMap,
-}: {
-  report: CountyReport;
-  onShowOnMap: (asset: Asset) => void;
-}) {
-  const types = ASSET_TYPE_ORDER.filter((type) => (report.asset_counts[type] ?? 0) > 0);
-  return (
-    <div className="asset-list">
-      {types.length === 0 && <p className="muted">No sites were found from the data that loaded.</p>}
-      {types.map((type) => {
-        const shown = report.assets.filter((asset) => asset.type === type);
-        const total = report.asset_counts[type] ?? shown.length;
-        return (
-          <details key={type} className="card asset-group">
-            <summary>
-              <span className="legend-dot" style={{ background: ASSET_STYLES[type].color }} />
-              <span className="asset-group-name">{ASSET_STYLES[type].plural}</span>
-              <span className="count">{formatWhole(total)}</span>
-            </summary>
-            {shown.length < total && (
-              <p className="muted">
-                Showing {formatWhole(shown.length)} of {formatWhole(total)} on the map and below,
-                largest first.
-              </p>
-            )}
-            <ul>
-              {shown.map((asset) => (
-                <li key={asset.id}>
-                  <button type="button" className="link-button" onClick={() => onShowOnMap(asset)}>
-                    {asset.name}
-                  </button>
-                  {typeof asset.attributes.acres === "number" && (
-                    <span className="muted"> · {formatAcres(asset.attributes.acres)}</span>
-                  )}
-                  {asset.attributes.is_candidate === true && (
-                    <span className="muted"> · EPA candidate for a gas project</span>
-                  )}
-                  {typeof asset.attributes.capacity_mw === "number" && (
-                    <span className="muted">
-                      {" "}
-                      · {formatNumber(asset.attributes.capacity_mw)} MW modelled by ORNL
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
-        );
-      })}
-      {report.missing_asset_types.length > 0 && (
-        <p className="muted">
-          Looked for and not found:{" "}
-          {report.missing_asset_types
-            .map((type) => ASSET_STYLES[type].plural.toLowerCase())
-            .join(", ")}
-          .
-        </p>
-      )}
-      <p className="muted">
-        EPA's landfill gas database does not list every US landfill. The RE-Powering dataset does
-        not record whether a landfill is open or closed. The dam list covers only the 2,616 dams
-        in the lower 48 states that ORNL assessed for hydropower.
-      </p>
-    </div>
-  );
-}
-
 function SuggestionList({
   report,
   assetsById,
@@ -250,12 +179,10 @@ function CountyView({
       ? report.narrative.opportunity_notes.map((note) => [note.opportunity_id, note.text])
       : [],
   );
-  const totalAssets = Object.values(report.asset_counts).reduce((sum, n) => sum + n, 0);
   const tabs: [Tab, string][] = [
     ["opportunities", `Opportunities (${report.opportunities.length})`],
     ["suggestions", `Suggestions (${report.suggested_solutions.length})`],
     ["needs", `Needs (${report.needs.length})`],
-    ["assets", `Sites (${formatWhole(totalAssets)})`],
   ];
 
   return (
@@ -296,10 +223,21 @@ function CountyView({
       <div role="tabpanel">
         {tab === "opportunities" &&
           (report.opportunities.length === 0 ? (
-            <p className="muted">
-              No opportunity could be matched. An opportunity needs a flagged need and a local site
-              that can host a fix for it. See the Needs and Sites tabs for what was found.
-            </p>
+            <div className="muted">
+              <p>
+                No opportunity could be matched. An opportunity needs a flagged need and a local
+                site that can host a fix for it. See the Needs tab for what was found.
+              </p>
+              {report.missing_asset_types.length > 0 && (
+                <p>
+                  Looked for and not found:{" "}
+                  {report.missing_asset_types
+                    .map((type) => ASSET_STYLES[type].plural.toLowerCase())
+                    .join(", ")}
+                  .
+                </p>
+              )}
+            </div>
           ) : (
             report.opportunities.map((opportunity, i) => (
               <OpportunityCard
@@ -319,7 +257,6 @@ function CountyView({
           <SuggestionList report={report} assetsById={assetsById} onShowOnMap={onShowOnMap} />
         )}
         {tab === "needs" && <NeedList needs={report.needs} />}
-        {tab === "assets" && <AssetList report={report} onShowOnMap={onShowOnMap} />}
       </div>
 
       {report.narrative.caveats.length > 0 && (

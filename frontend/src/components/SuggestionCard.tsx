@@ -50,7 +50,7 @@ export function SuggestionCard({ suggestion, assets, needs, onShowOnMap }: Props
                   className="legend-dot"
                   style={{ background: ASSET_STYLES[asset.type].color }}
                 />
-                {asset.name} · Show on map
+                {asset.name}
               </button>
             </li>
           ))}
