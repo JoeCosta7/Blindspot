@@ -46,6 +46,8 @@ export function formatNeedValue(value: number | null, unit: NeedUnit): string | 
       return `${formatDollars(value)} a month`;
     case "lb_co2_per_mwh":
       return `${formatWhole(value)} lb CO2 per MWh`;
+    case "celsius":
+      return `${value.toFixed(1)} °C`;
     case "rating":
       return null;
   }

@@ -35,6 +35,7 @@ from app.sources import (
     afdc,
     census,
     dams,
+    earthengine,
     farms,
     lmop,
     nri,
@@ -60,6 +61,7 @@ SOURCE_NAMES = {
     "state_energy": "State electricity bills and grid carbon (EIA, EPA eGRID)",
     "dams": "ORNL non-powered dams",
     "farms": "USDA farm census and EPA digester database",
+    "earthengine": "Urban heat and tree canopy (Google Earth Engine)",
     "gemini": "Gemini narrative",
 }
 
@@ -293,6 +295,11 @@ async def analyze_county(
         ),
         _run("dams", _local(lambda: dams.dams_for_county(data_dir, county.fips)), timeout),
         _run("farms", _local(lambda: farms.farms_for_county(data_dir, county.fips)), timeout),
+        _run(
+            "earthengine",
+            lambda: earthengine.fetch_county_metrics(settings, county),
+            settings.ee_timeout_s,
+        ),
     )
     (
         (acs, _),
@@ -307,6 +314,7 @@ async def analyze_county(
         (energy, _),
         (dam_rows, _),
         (farm_row, _),
+        (ee_metrics, _),
     ) = results
     statuses: list[SourceStatus] = [status for _, status in results]
     ok = {status.source: status.ok for status in statuses}
@@ -349,6 +357,8 @@ async def analyze_county(
         needs.electricity_cost_need(energy, settings),
         needs.grid_carbon_need(energy, settings),
         needs.farm_waste_need(farm_row, settings),
+        needs.urban_heat_need(ee_metrics, settings),
+        needs.low_tree_canopy_need(ee_metrics, settings),
     ):
         if extra:
             flagged.append(extra)

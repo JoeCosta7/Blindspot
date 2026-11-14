@@ -10,6 +10,7 @@ from app.sources import (
     afdc,
     census,
     dams,
+    earthengine,
     farms,
     lmop,
     nri,
@@ -187,6 +188,7 @@ def sources(monkeypatch):
     monkeypatch.setattr(state_energy, "for_state", lambda data_dir, state: None)
     monkeypatch.setattr(dams, "dams_for_county", lambda data_dir, fips: [])
     monkeypatch.setattr(farms, "farms_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(earthengine, "fetch_county_metrics", returning(None))
 
 
 def analyze(settings):
@@ -419,3 +421,29 @@ def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, m
     shown = {a.id for a in report.assets}
     assert all(o.asset_id in shown for o in report.opportunities if o.asset_id)
     assert any("state averages" in c for c in report.narrative.caveats)
+
+
+def test_earth_engine_needs_flow_into_the_report(sources, settings, monkeypatch):
+    metrics = {
+        "heat_island_c": 9.0,
+        "lst_built_up_c": 38.0,
+        "lst_natural_c": 29.0,
+        "built_up_share": 0.02,
+        "canopy_built_up": 0.05,
+    }
+    monkeypatch.setattr(earthengine, "fetch_county_metrics", returning(metrics))
+    report = analyze(settings)
+    ids = {n.id for n in report.needs}
+    assert {"urban_heat", "low_tree_canopy"} <= ids
+    assert any(o.solution_id == "shade_trees_depaving" for o in report.opportunities)
+    assert next(s for s in report.source_status if s.source == "earthengine").ok
+
+
+def test_earth_engine_failure_keeps_the_rest_of_the_report(sources, settings, monkeypatch):
+    monkeypatch.setattr(
+        earthengine, "fetch_county_metrics", raising(SourceError("Earth Engine sign-in failed"))
+    )
+    report = analyze(settings)
+    status = next(s for s in report.source_status if s.source == "earthengine")
+    assert not status.ok and "sign-in" in status.message
+    assert report.needs and not {"urban_heat", "low_tree_canopy"} & {n.id for n in report.needs}

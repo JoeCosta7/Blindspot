@@ -58,6 +58,14 @@
     "triggers": ["carbon_intensive_grid", "high_electricity_cost"]
   },
   {
+    "id": "shade_trees_depaving",
+    "name": "Shade trees and depaving at public buildings",
+    "title_template": "Shade trees and depaving at {asset}",
+    "asset_kind": "building",
+    "hosts": ["school", "library", "college"],
+    "triggers": ["urban_heat", "low_tree_canopy"]
+  },
+  {
     "id": "farm_digester",
     "name": "Manure digesters at large livestock farms",
     "title_template": "Manure digesters at the county's large livestock farms",
