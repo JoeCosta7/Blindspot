@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from app import pipeline
+from app import narrative, pipeline, suggestions
 from app.sources import (
     SourceError,
     afdc,
@@ -249,9 +249,12 @@ def test_full_report(sources, settings):
     asset_ids = {a.id for a in report.assets}
     assert all(o.asset_id in asset_ids for o in report.opportunities)
 
+    # With no Gemini key: the template brief, and no suggested solutions.
     assert report.narrative.generated_by == "template"
+    assert report.suggested_solutions == []
     status = {s.source: s for s in report.source_status}
-    assert all(s.ok for name, s in status.items() if name != "gemini")
+    assert all(s.ok for name, s in status.items() if not name.startswith("gemini"))
+    assert "GEMINI_API_KEY" in status["gemini_solutions"].message
     assert "no coordinates" in status["lmop"].message
 
 
@@ -327,6 +330,66 @@ def test_map_caps_keep_opportunity_assets(sources, settings, monkeypatch):
     assert report.asset_counts["brownfield"] == 10
     assert shown[:3] == ["repowering:10", "repowering:9", "repowering:8"]  # largest first
     assert "repowering:1" in shown and len(shown) == 4
+
+
+def test_gemini_suggestions_reach_the_report_and_the_map(sources, settings, monkeypatch):
+    rows = [
+        {
+            "site_id": i,
+            "name": f"Site {i}",
+            "site_type": "mine_land",
+            "program": "AML",
+            "lat": 0.5,
+            "lon": 0.5,
+            "acres": float(i),
+            "pv_scale": None,
+        }
+        for i in range(1, 11)
+    ]
+    monkeypatch.setattr(repowering, "sites_for_county", lambda data_dir, fips: rows)
+    prompts = []
+
+    async def fake_gemini(prompt, s):
+        prompts.append(prompt)
+        return suggestions.ModelSuggestions(
+            solutions=[
+                {
+                    "title": "Mine land solar",
+                    "need_ids": ["low_income"],
+                    "site_ids": ["repowering:8"],
+                    "what": "Offer Site 8 to a solar developer.",
+                    "why_here": "The county has 10 abandoned mine lands.",
+                    "first_steps": ["Check who owns the land."],
+                },
+                {
+                    "title": "Invented",
+                    "need_ids": ["low_income"],
+                    "site_ids": ["repowering:1"],  # in the county, not in the digest
+                    "what": "x",
+                    "why_here": "y",
+                    "first_steps": ["z"],
+                },
+            ]
+        )
+
+    monkeypatch.setattr(suggestions, "_call_gemini", fake_gemini)
+    monkeypatch.setattr(narrative, "_call_gemini", raising(RuntimeError("not under test")))
+    # The map shows only the largest mine land, so the suggested one must be kept.
+    keyed = settings.model_copy(update={"gemini_api_key": "k", "max_sites_per_county": 1})
+
+    report = analyze(keyed)
+
+    assert [s.title for s in report.suggested_solutions] == ["Mine land solar"]
+    assert report.suggested_solutions[0].asset_ids == ["repowering:8"]
+    shown = {a.id for a in report.assets}
+    assert {"repowering:10", "repowering:8"} <= shown and "repowering:7" not in shown
+    status = {s.source: s for s in report.source_status}
+    assert status["gemini_solutions"].ok and "1 of 2" in status["gemini_solutions"].message
+
+    # The model was sent the digest: three mine lands and a count, not all ten.
+    assert len(prompts) == 1
+    assert '"count": 10' in prompts[0]
+    assert "repowering:8" in prompts[0] and "repowering:7" not in prompts[0]
 
 
 def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, monkeypatch):

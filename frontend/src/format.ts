@@ -136,6 +136,7 @@ export const SOURCE_NAMES: Record<string, string> = {
   dams: "ORNL non-powered dams",
   farms: "USDA farm census and EPA digester database",
   gemini: "Gemini narrative",
+  gemini_solutions: "Gemini suggested solutions",
 };
 
 export const sourceName = (source: string): string => SOURCE_NAMES[source] ?? source;

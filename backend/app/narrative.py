@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from app import gemini
 from app.cache import DAY, cache_get, cache_set
 from app.config import Settings
 from app.estimates import format_number
@@ -281,19 +282,7 @@ def build_prompt(payload: dict[str, Any]) -> str:
 
 
 async def _call_gemini(prompt: str, settings: Settings) -> ModelNarrative:
-    # Imported here so the app starts, and tests run, without the SDK configured.
-    from google import genai
-
-    client = genai.Client(api_key=settings.gemini_api_key)
-    # Config keys confirmed against GenerateContentConfig in google-genai 3.3.0.
-    resp = await client.aio.models.generate_content(
-        model=settings.gemini_model,
-        contents=prompt,
-        config={"response_mime_type": "application/json", "response_schema": ModelNarrative},
-    )
-    if isinstance(resp.parsed, ModelNarrative):
-        return resp.parsed
-    return ModelNarrative.model_validate_json(resp.text or "")
+    return await gemini.generate(prompt, ModelNarrative, settings)
 
 
 def _from_model(
@@ -354,7 +343,9 @@ async def write_narrative(
         )
     except Exception as exc:  # any SDK, network or parsing failure
         log.warning("Gemini call failed: %r", exc)
-        return fallback(f"Gemini call failed ({type(exc).__name__}); template narrative used")
+        return fallback(
+            f"Gemini call failed ({gemini.describe_error(exc)}); template narrative used"
+        )
 
     problem = validation_error(model, payload)
     if problem:

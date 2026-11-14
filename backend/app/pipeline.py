@@ -1,5 +1,5 @@
 """analyze_county(): run every source concurrently, then needs -> matching ->
-estimates -> funding -> narrative.
+estimates -> funding -> narrative and Gemini's suggested solutions.
 
 A failed source never fails the request. Each one runs under a timeout and
 reports into `source_status`; the rest of the report is built from whatever
@@ -17,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from app import estimates, funding, matching, narrative, needs
+from app import estimates, funding, matching, narrative, needs, suggestions
 from app.config import Settings
 from app.geo import County
 from app.models import (
@@ -61,6 +61,7 @@ SOURCE_NAMES = {
     "dams": "ORNL non-powered dams",
     "farms": "USDA farm census and EPA digester database",
     "gemini": "Gemini narrative",
+    "gemini_solutions": "Gemini suggested solutions",
 }
 
 BUILDING_TYPES = ("school", "library", "college")
@@ -438,7 +439,48 @@ async def analyze_county(
         ("dams", ("non_powered_dam",)),
     ]
     missing = [t for source, types in searched if ok[source] for t in types if counts[t] == 0]
+
+    population = acs.population if acs else None
+    context = CountyContext(
+        median_household_income=acs.median_household_income if acs else None,
+        poverty_rate=acs.poverty_rate if acs else None,
+        unemployment_rate=acs.unemployment_rate if acs else None,
+        electric_heat_share=acs.electric_heat_share if acs else None,
+        state_electricity_price_cents_kwh=(
+            energy["state"].get("residential_price_cents_kwh") if energy else None
+        ),
+        state_grid_co2_lb_per_mwh=energy["state"].get("grid_co2_lb_per_mwh") if energy else None,
+    )
+    resources = Resources(
+        solar_kwh_per_kw_year=round(centroid_yield) if centroid_yield else None,
+        land_in_farms_acres=farm_row.get("land_in_farms_acres") if farm_row else None,
+        cropland_acres=farm_row.get("cropland_acres") if farm_row else None,
+    )
+
+    # --- Gemini: the brief and the suggested solutions, at the same time ----------
+    failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
+    payload = narrative.build_payload(county.name, county.state, flagged, opportunities)
+    digest = suggestions.build_digest(
+        county.name,
+        county.state,
+        population,
+        context,
+        resources,
+        flagged,
+        all_assets,
+        missing,
+        opportunities,
+        settings.digest_sites_per_type,
+    )
+    (brief, gemini_status), (suggested, suggestions_status) = await asyncio.gather(
+        narrative.write_narrative(payload, failed, settings),
+        suggestions.suggest_solutions(digest, settings),
+    )
+    statuses += [gemini_status, suggestions_status]
+
+    # --- what the map gets: capped, but never without a site the report names -----
     used = {o.asset_id for o in opportunities if o.asset_id}
+    used.update(asset_id for s in suggested for asset_id in s.asset_ids)
     shown_assets = _cap_for_map(
         [
             (sites, settings.max_sites_per_county),
@@ -450,39 +492,19 @@ async def analyze_county(
         used,
     )
 
-    # --- narrative --------------------------------------------------------------
-    failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
-    payload = narrative.build_payload(county.name, county.state, flagged, opportunities)
-    brief, gemini_status = await narrative.write_narrative(payload, failed, settings)
-    statuses.append(gemini_status)
-
     return CountyReport(
         fips=county.fips,
         name=county.name,
         state=county.state,
-        population=acs.population if acs else None,
-        context=CountyContext(
-            median_household_income=acs.median_household_income if acs else None,
-            poverty_rate=acs.poverty_rate if acs else None,
-            unemployment_rate=acs.unemployment_rate if acs else None,
-            electric_heat_share=acs.electric_heat_share if acs else None,
-            state_electricity_price_cents_kwh=(
-                energy["state"].get("residential_price_cents_kwh") if energy else None
-            ),
-            state_grid_co2_lb_per_mwh=(
-                energy["state"].get("grid_co2_lb_per_mwh") if energy else None
-            ),
-        ),
+        population=population,
+        context=context,
         needs=flagged,
         assets=shown_assets,
         asset_counts=dict(counts),
         missing_asset_types=missing,  # type: ignore[arg-type]
-        resources=Resources(
-            solar_kwh_per_kw_year=round(centroid_yield) if centroid_yield else None,
-            land_in_farms_acres=farm_row.get("land_in_farms_acres") if farm_row else None,
-            cropland_acres=farm_row.get("cropland_acres") if farm_row else None,
-        ),
+        resources=resources,
         opportunities=opportunities,
+        suggested_solutions=suggested,
         narrative=brief,
         source_status=statuses,
     )

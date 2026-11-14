@@ -64,11 +64,17 @@ async def main(argv: list[str]) -> int:
                 print(f"       estimates: {figures or 'none'}")
                 print(f"       funding:   {funds or 'none'}")
             print(f"  narrative ({report.narrative.generated_by}): {report.narrative.summary}")
+            for suggestion in report.suggested_solutions:
+                needs = ", ".join(suggestion.need_ids)
+                print(f"  suggestion: {suggestion.title}  (needs: {needs})")
             for s in report.source_status:
                 state = "ok" if s.ok else "FAILED"
                 note = " (cached)" if s.cached else ""
                 print(f"  {s.source:18s} {state}{note}{'  ' + s.message if s.message else ''}")
-            failures += sum(1 for s in report.source_status if not s.ok and s.source != "gemini")
+            # Gemini entries are not data: without them the report is still complete.
+            failures += sum(
+                1 for s in report.source_status if not s.ok and not s.source.startswith("gemini")
+            )
 
             if save:
                 fixtures.mkdir(parents=True, exist_ok=True)
