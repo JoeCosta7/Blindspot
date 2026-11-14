@@ -201,6 +201,14 @@ export interface SiteActionPlan {
   documents_needed: string[];
 }
 
+/** How an opportunity reduces one of the needs it addresses, in Gemini's
+ * words. Code decides which needs count: one Gemini did not explain, or one the
+ * project type is not catalogued to answer, is not in need_ids at all. */
+export interface NeedFit {
+  need_id: NeedId;
+  text: string;
+}
+
 /** A way to meet one or more needs with what the county has. Written by Gemini
  * from the needs, factors and sites, or matched by rule when Gemini is
  * unavailable. Code supplies the score, estimates, funding and document links. */
@@ -220,6 +228,9 @@ export interface Opportunity {
   /** County-level compliance checks. */
   compliance: string[];
   need_ids: NeedId[];
+  /** One per need in need_ids when Gemini wrote the opportunity: how the
+   * project reduces that need. Empty for a rule match. */
+  need_fits: NeedFit[];
   /** The mapped sites it would use, the main one first. Empty when county-wide. */
   asset_ids: string[];
   /** Per-site course of action and compliance. */

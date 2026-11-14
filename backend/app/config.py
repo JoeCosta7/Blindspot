@@ -18,6 +18,17 @@ class Settings(BaseSettings):
     nlr_api_key: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash"
+    # How much Gemini reasons before it starts to write. This, not the size of
+    # the prompt, is what the wait is made of. Measured 2026-11-14 on one county
+    # with gemini-3.8-flash: at the model's default ("medium") it reasoned for
+    # 64 s and the answer took 86 s; at "low" it began writing after 2 s and
+    # took 34 s, and the same number of opportunities passed the checks.
+    # gemini-3.8-flash accepts low, medium and high (its model page, read
+    # 2026-11-14); other models accept other levels and reject the rest. The
+    # default model above, gemini-3.5-flash, accepted "low" in a live call the
+    # same day.
+    # Empty sends no level: the model's own default.
+    gemini_thinking_level: str = "low"
     # Geoapify Places API: schools, libraries and colleges.
     geoapify_api_key: str = ""
     # Site Scout layers (app/scout/). Vexcel: long-life key in the X-API-KEY
@@ -48,7 +59,7 @@ class Settings(BaseSettings):
     # requests (Cook County, IL: 13 requests, 19 s on a cold cache). Most
     # counties need one request and finish in about a second.
     buildings_timeout_s: float = 45.0
-    gemini_timeout_s: float = 60.0
+    gemini_timeout_s: float = 70.0
 
     # --- need scoring (CLAUDE.md section 8) -------------------------------
     need_ratio_elevated: float = 1.10
@@ -164,6 +175,10 @@ class Settings(BaseSettings):
     # Sites of each type listed in the digest sent to Gemini, best first. The
     # digest gives the exact count for the rest.
     digest_sites_per_type: int = 3
+    # A factor within this share of the US figure is left out of the prompt
+    # (opportunities.shrink_digest): it says the county is typical. Our own
+    # cut-off. 0 keeps every factor.
+    digest_near_typical_share: float = 0.10
 
     # --- highlights (highlights.py) -----------------------------------------
     # A factor is a highlight only if the county is at least this many times

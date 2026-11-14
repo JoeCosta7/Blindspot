@@ -175,6 +175,8 @@ export function OpportunityCard({
   scout,
 }: Props) {
   const addressed = needs.filter((need) => opportunity.need_ids.includes(need.id));
+  // Absent in reports saved before the field existed.
+  const fits = new Map((opportunity.need_fits ?? []).map((fit) => [fit.need_id, fit.text]));
   const drawsOn = factors.filter((factor) => opportunity.factor_ids.includes(factor.id));
   const byGemini = opportunity.generated_by === "gemini";
   const typed = opportunity.solution_id !== null;
@@ -229,7 +231,7 @@ export function OpportunityCard({
 
       {opportunity.summary && <p className="note">{opportunity.summary}</p>}
 
-      {addressed.length > 0 && (
+      {addressed.length > 0 && fits.size === 0 && (
         <div className="chips">
           <span className="chips-label">Addresses</span>
           {addressed.map((need) => (
@@ -237,6 +239,21 @@ export function OpportunityCard({
               {need.label}
             </span>
           ))}
+        </div>
+      )}
+      {addressed.length > 0 && fits.size > 0 && (
+        // Each need with how the project reduces it, so the tie to the
+        // county's problems can be read without opening the card.
+        <div className="need-fits">
+          <span className="chips-label">Addresses</span>
+          <ul>
+            {addressed.map((need) => (
+              <li key={need.id}>
+                <span className={`chip chip-${need.level}`}>{need.label}</span>
+                {fits.get(need.id) && <span className="need-fit-text">{fits.get(need.id)}</span>}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

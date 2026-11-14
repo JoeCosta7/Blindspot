@@ -480,7 +480,12 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
             opportunities=[
                 {  # a catalogued project type at a site it can be built at
                     "title": "Mine land solar",
-                    "need_ids": ["low_income"],
+                    # Old housing is not something solar reduces: code removes it.
+                    "need_ids": ["old_housing", "low_income"],
+                    "need_fits": [
+                        {"need_id": "old_housing", "how": "Old homes get clean power."},
+                        {"need_id": "low_income", "how": "Subscribers get a lower bill."},
+                    ],
                     "factor_ids": ["solar_resource", "sites_mine_land"],
                     "site_ids": ["repowering:8"],
                     "project_type": "community_solar",
@@ -491,6 +496,10 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
                 {  # an idea of Gemini's own: two problems that solve each other
                     "title": "Home repair crews",
                     "need_ids": ["old_housing", "low_income"],
+                    "need_fits": [
+                        {"need_id": "old_housing", "how": "Repairs cut heat loss."},
+                        {"need_id": "low_income", "how": "Crews earn a wage."},
+                    ],
                     "factor_ids": ["unemployment", "construction_jobs", "housing_pre1980"],
                     "site_ids": [],
                     "project_type": "other",
@@ -501,6 +510,9 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
                 {  # claims a project type, but at a site that type cannot use
                     "title": "Gas study",
                     "need_ids": ["landfill_gas_uncaptured"],
+                    "need_fits": [
+                        {"need_id": "landfill_gas_uncaptured", "how": "Gas gets captured."}
+                    ],
                     "factor_ids": [],
                     "site_ids": ["repowering:9"],
                     "project_type": "landfill_gas_energy",
@@ -511,6 +523,7 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
                 {
                     "title": "Invented",
                     "need_ids": ["low_income"],
+                    "need_fits": [{"need_id": "low_income", "how": "It helps."}],
                     "factor_ids": [],
                     "site_ids": ["repowering:1"],  # in the county, not in the digest
                     "project_type": "other",
@@ -541,6 +554,13 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
     assert solar.summary == "Offer Site 8 to a solar developer."
     assert solar.factor_ids == ["solar_resource", "sites_mine_land"]
     assert solar.first_steps == ["Check who owns the land."]
+    # Credited only with the need solar is catalogued to reduce, with how.
+    assert solar.need_ids == ["low_income"]
+    assert [(f.need_id, f.text) for f in solar.need_fits] == [
+        ("low_income", "Subscribers get a lower bill.")
+    ]
+    assert [f.need_id for f in crews.need_fits] == crews.need_ids
+    assert set(crews.need_ids) == {"old_housing", "low_income"}
     assert [e.label for e in solar.estimates] == [
         "Capacity",
         "Annual energy",
@@ -571,10 +591,10 @@ def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, sett
     # One call. The model was sent the needs, the factors and a digest of the
     # sites: three mine lands and a count, not all ten.
     assert len(prompts) == 1
-    assert '"count": 10' in prompts[0]
+    assert '"count":10' in prompts[0]
     assert "repowering:8" in prompts[0] and "repowering:7" not in prompts[0]
-    assert '"factor_id": "construction_jobs"' in prompts[0]
-    assert '"need_id": "old_housing"' in prompts[0]
+    assert '"factor_id":"construction_jobs"' in prompts[0]
+    assert '"need_id":"old_housing"' in prompts[0]
 
 
 def test_rule_matches_are_served_when_gemini_fails(sources, settings, monkeypatch):
@@ -775,6 +795,7 @@ def test_profile_factors_reach_gemini_and_can_be_cited(sources, settings, monkey
                 opportunities._ModelOpportunity(
                     title="Cold-climate heat pumps",
                     need_ids=["old_housing"],
+                    need_fits=[{"need_id": "old_housing", "how": "Old homes cost less to heat."}],
                     factor_ids=["heating_degree_days", "housing_pre1980"],
                     site_ids=[],
                     project_type="other",
@@ -788,9 +809,9 @@ def test_profile_factors_reach_gemini_and_can_be_cited(sources, settings, monkey
     monkeypatch.setattr(opportunities, "_call_gemini", fake)
     report = analyze(settings.model_copy(update={"gemini_api_key": "test-key"}))
 
-    assert '"factor_id": "heating_degree_days"' in prompts[0]
-    assert '"value": "6,500 degree days"' in prompts[0]
-    assert '"factor_id": "wind_speed_100m"' in prompts[0]
+    assert '"factor_id":"heating_degree_days"' in prompts[0]
+    assert '"value":"6,500 degree days"' in prompts[0]
+    assert '"factor_id":"wind_speed_100m"' in prompts[0]
     [only] = report.opportunities
     # The 6,500 in why_here is in the digest, so the opportunity is kept.
     assert only.generated_by == "gemini"

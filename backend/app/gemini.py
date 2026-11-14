@@ -3,7 +3,7 @@ object out. Callers own the timeout, the cache and what to do on failure."""
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -18,10 +18,11 @@ async def generate(prompt: str, schema: type[T], settings: Settings) -> T:
     from google import genai
 
     client = genai.Client(api_key=settings.gemini_api_key)
+    config: dict[str, Any] = {"response_mime_type": "application/json", "response_schema": schema}
+    if settings.gemini_thinking_level:
+        config["thinking_config"] = {"thinking_level": settings.gemini_thinking_level}
     resp = await client.aio.models.generate_content(
-        model=settings.gemini_model,
-        contents=prompt,
-        config={"response_mime_type": "application/json", "response_schema": schema},
+        model=settings.gemini_model, contents=prompt, config=config
     )
     if isinstance(resp.parsed, schema):
         return resp.parsed

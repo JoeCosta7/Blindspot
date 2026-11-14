@@ -114,6 +114,10 @@ def item(**overrides):
     base = {
         "title": "Solar for renters at the Old Mill",
         "need_ids": ["low_income", "hazard_risk"],
+        "need_fits": [
+            {"need_id": "low_income", "how": "Subscribers on low incomes get a lower bill."},
+            {"need_id": "hazard_risk", "how": "Panels keep working after a wildfire."},
+        ],
         "factor_ids": ["solar_resource"],
         "site_ids": ["repowering:4242"],
         "project_type": "community_solar",
@@ -352,6 +356,94 @@ def test_summary_is_checked_like_an_opportunity():
     assert "empty" in opportunities.summary_problem("  ", digest)
 
 
+# --- shrink_digest -----------------------------------------------------------------
+
+
+def test_shrinking_drops_what_the_model_cannot_use_and_changes_no_figure():
+    digest = sample_digest()
+    weather = "Modelled weather for one point at the county's center."
+    digest["factors"] += [
+        # Within 10% of the US figure: the county is typical.
+        {"factor_id": "median_age", "kind": "community", "label": "Median age",
+         "value": "40.1 years", "comparison": "US: 38.9 years"},
+        {"factor_id": "hot_days", "kind": "climate", "label": "Hot days", "value": "9 days",
+         "note": f"Averaged over 2016-2025. {weather}"},
+        {"factor_id": "snowfall", "kind": "climate", "label": "Snowfall", "value": "15 inches",
+         "note": f"Snow, not rain. {weather}"},
+    ]  # fmt: skip
+    small = opportunities.shrink_digest(digest, 0.10)
+
+    assert set(small["factors"]) == {"climate", "workforce", "buildings"}
+    by_id = {f["factor_id"]: f for group in small["factors"].values() for f in group}
+    assert "median_age" not in by_id and "kind" not in by_id["hot_days"]
+    # Far from the US figure, and a factor with no US figure: both stay as written.
+    assert by_id["unemployment"]["comparison"] == "US: 5.2%"
+    assert by_id["solar_resource"]["value"] == "1,200 kWh a year per kW of panels"
+    # A repeated sentence stays on the first factor that carried it.
+    assert by_id["hot_days"]["note"] == f"Averaged over 2016-2025. {weather}"
+    assert by_id["snowfall"]["note"] == "Snow, not rain."
+
+    # A project type goes when it answers none of the county's needs (here
+    # low income and hazard risk), or the county has no kind of site for it.
+    def types(d):
+        return {p["project_type"] for p in d["project_types"]}
+
+    assert len(types(digest)) == len(SOLUTIONS)
+    assert types(small) == {"community_solar", "resilience_hub"}
+    no_library = {**digest, "sites": [g for g in digest["sites"] if g["kind"] != "Libraries"]}
+    assert types(opportunities.shrink_digest(no_library, 0.10)) == {"community_solar"}
+
+    # Needs, standouts and sites are untouched, and nothing new can be cited.
+    assert all(small[key] == digest[key] for key in ("county", "needs", "standouts", "sites"))
+    assert opportunities.allowed_numbers(small) <= opportunities.allowed_numbers(digest)
+    assert len(opportunities.build_prompt(small, 6)) < len(opportunities.build_prompt(digest, 6))
+
+
+def test_a_standout_is_kept_even_when_it_reads_as_typical():
+    digest = sample_digest()
+    for f in digest["factors"]:
+        if f["factor_id"] == "construction_jobs":
+            f["value"] = "7.0%"
+
+    def by_id(d):
+        return {f["factor_id"] for group in d["factors"].values() for f in group}
+
+    assert "construction_jobs" in by_id(opportunities.shrink_digest(digest, 0.10))
+    digest["standouts"] = []
+    assert "construction_jobs" not in by_id(opportunities.shrink_digest(digest, 0.10))
+    # A share of 0 keeps every factor.
+    assert "construction_jobs" in by_id(opportunities.shrink_digest(digest, 0.0))
+
+
+LONG_ID = "geoapify:51273bc5bc274654c0593fafe49851af4240f00102f90198cddf2000000000920318"
+
+
+def with_long_library_id(digest, site_id=LONG_ID):
+    """The sample digest with the library under a Geoapify-length id."""
+    sites = [
+        {**g, "examples": [{**e, "site_id": site_id} for e in g["examples"]]}
+        if g["kind"] == "Libraries"
+        else g
+        for g in digest["sites"]
+    ]
+    return {**digest, "sites": sites}
+
+
+def test_long_site_ids_are_sent_under_short_stand_ins():
+    digest = with_long_library_id(sample_digest())
+    # A stand-in never collides with an id the county already has.
+    digest["sites"][0]["examples"][0]["site_id"] = "site:1"
+    sent, real = opportunities.shorten_site_ids(digest)
+
+    assert real == {"site:2": LONG_ID}
+    ids = opportunities._site_ids(sent)
+    assert LONG_ID not in ids and {"site:1", "site:2", "repowering:2", "lmop:7"} <= ids
+    # Everything else is as it was, groups with no listed sites included.
+    assert [g["kind"] for g in sent["sites"]] == [g["kind"] for g in digest["sites"]]
+    assert {"kind": "Public EV charging stations", "count": 2} in sent["sites"]
+    assert opportunities.shorten_site_ids(sample_digest()) == (sample_digest(), {})
+
+
 # --- prompt ----------------------------------------------------------------------
 
 
@@ -380,6 +472,52 @@ def test_digest_includes_standouts():
     ]
 
 
+def needs_kept(**overrides):
+    kept, dropped = opportunities.keep_valid(model(item(**overrides)), sample_digest(), limit=6)
+    return (kept[0].need_ids if kept else None), dropped
+
+
+def test_a_need_counts_only_if_the_project_type_answers_it():
+    digest = sample_digest()
+    answers = {p["project_type"]: p.get("answers") for p in digest["project_types"]}
+    # From data/solutions.json, limited to the needs flagged here, top need first.
+    assert answers["community_solar"] == ["low_income"]
+    assert answers["resilience_hub"] == ["hazard_risk", "low_income"]
+    assert answers["small_hydro"] is None
+
+    # Solar lists the county's top need, hazard risk, which solar does not reduce.
+    [draft], dropped = opportunities.keep_valid(model(item()), digest, limit=6)
+    assert draft.need_ids == ["low_income"] and not dropped
+    assert draft.need_fits == {"low_income": "Subscribers on low incomes get a lower bill."}
+
+    # With nothing else to its name, it is dropped rather than ranked first.
+    needs, dropped = needs_kept(need_ids=["hazard_risk"])
+    assert needs is None and "answers none of the needs it lists" in dropped[0]
+    # A hub is catalogued for hazard risk; an idea of the model's own has no catalogue.
+    assert needs_kept(project_type="resilience_hub", site_ids=["osm:node/1"])[0] == [
+        "low_income",
+        "hazard_risk",
+    ]
+    assert needs_kept(project_type="other")[0] == ["low_income", "hazard_risk"]
+
+
+def test_a_need_counts_only_if_the_model_says_how_the_project_reduces_it():
+    hazard_only = [{"need_id": " hazard_risk ", "how": "Backup power through a wildfire."}]
+    blank = [{"need_id": "low_income", "how": "  "}]
+    assert needs_kept(project_type="other", need_fits=hazard_only)[0] == ["hazard_risk"]
+    # An explanation for a need it did not list adds nothing.
+    assert needs_kept(project_type="other", need_ids=["low_income"], need_fits=hazard_only) == (
+        None,
+        ["it does not say how it reduces any need it lists"],
+    )
+    assert needs_kept(need_fits=blank)[0] is None and needs_kept(need_fits=[])[0] is None
+    # The sentence is held to the same checks as the rest of the text.
+    invented = [{"need_id": "low_income", "how": "Cuts bills by 30 percent."}]
+    assert "numbers that are not" in needs_kept(need_fits=invented)[1][0]
+    wordy = [{"need_id": "low_income", "how": "word " * 40}]
+    assert "too long" in needs_kept(need_fits=wordy)[1][0]
+
+
 def test_keep_valid_drops_a_repeated_project_type():
     kept, dropped = opportunities.keep_valid(
         model(
@@ -391,7 +529,7 @@ def test_keep_valid_drops_a_repeated_project_type():
             ),
             item(
                 title="Clinic",
-                project_type="weatherization_clinic",
+                project_type="resilience_hub",
                 need_ids=["hazard_risk"],
                 site_ids=["osm:node/1"],
                 factor_ids=["housing_pre1980"],
@@ -409,10 +547,10 @@ def test_keep_valid_drops_a_third_use_of_the_same_top_need():
     # the first two; a third whose top need is also hazard_risk is dropped.
     kept, dropped = opportunities.keep_valid(
         model(
-            item(title="One", project_type="community_solar", need_ids=["hazard_risk"]),
+            item(title="One", project_type="other", need_ids=["hazard_risk"]),
             item(
                 title="Two",
-                project_type="weatherization_clinic",
+                project_type="resilience_hub",
                 need_ids=["hazard_risk", "low_income"],
                 site_ids=["osm:node/1"],
                 factor_ids=["housing_pre1980"],
@@ -426,9 +564,9 @@ def test_keep_valid_drops_a_third_use_of_the_same_top_need():
             ),
             item(
                 title="Income help",
-                project_type="public_ev_charging",
+                project_type="community_solar",
                 need_ids=["low_income"],
-                site_ids=["osm:node/1"],
+                site_ids=["repowering:4242"],
                 factor_ids=["unemployment"],
             ),
         ),
@@ -483,9 +621,34 @@ def test_valid_opportunities_are_used_then_cached(monkeypatch, settings):
     assert "1 of 2 opportunities dropped" in status1.message
     assert len(calls) == 1
 
+    # The model is sent the shrunk digest: factors grouped by kind, no indentation.
+    assert '"factors":{"climate":[{"factor_id":"solar_resource"' in calls[0]
+
     # A different county digest is a different cache entry.
     write({**sample_digest(), "county": "Other County, ZZ"}, keyed)
     assert len(calls) == 2
+
+
+def test_the_answer_comes_back_under_the_real_site_ids(monkeypatch, settings):
+    digest = with_long_library_id(sample_digest())
+    prompts = []
+
+    async def fake(prompt, s):
+        prompts.append(prompt)
+        plans = [{"site_id": " site:1 ", "course_of_action": ["Meet the library board."]}]
+        return model(item(site_ids=["site:1", "repowering:4242"], site_plans=plans))
+
+    keyed = with_fake_gemini(monkeypatch, settings, fake)
+    plan, _ = write(digest, keyed)
+    again, status = write(digest, keyed)
+
+    assert '"site_id":"site:1"' in prompts[0] and LONG_ID not in prompts[0]
+    [draft] = plan.drafts
+    assert draft.asset_ids == [LONG_ID, "repowering:4242"]
+    # The model's own plan for the library, found under the real id.
+    by_site = {p.site_id: p.course_of_action for p in draft.site_plans}
+    assert by_site[LONG_ID] == ["Meet the library board."]
+    assert status.cached and again == plan and len(prompts) == 1
 
 
 def test_a_bad_summary_does_not_cost_the_opportunities(monkeypatch, settings):

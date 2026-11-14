@@ -268,6 +268,15 @@ class SiteActionPlan(BaseModel):
     documents_needed: list[str] = Field(default_factory=list)
 
 
+class NeedFit(BaseModel):
+    """How an opportunity reduces one of the needs it addresses, in Gemini's
+    words. Code decides which needs count: one Gemini did not explain, or one
+    the project type is not catalogued to answer, is not in need_ids at all."""
+
+    need_id: NeedId
+    text: str
+
+
 class Opportunity(BaseModel):
     """A way to meet one or more needs with what the county has.
 
@@ -292,6 +301,9 @@ class Opportunity(BaseModel):
     # County-level compliance checks (permits, agencies, eligibility).
     compliance: list[str] = Field(default_factory=list)
     need_ids: list[NeedId]
+    # One per need in need_ids when Gemini wrote the opportunity: how the
+    # project reduces that need. Empty for a rule match.
+    need_fits: list[NeedFit] = Field(default_factory=list)
     # The mapped sites it would use, the main one first. Empty for a county-wide
     # opportunity.
     asset_ids: list[str] = Field(default_factory=list)

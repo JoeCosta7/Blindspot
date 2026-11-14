@@ -668,6 +668,30 @@ button {
   color: var(--muted);
 }
 
+/* A need with the sentence on how the opportunity reduces it. */
+.need-fits {
+  display: grid;
+  gap: 5px;
+}
+
+.need-fits ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.need-fits li {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+
+.need-fit-text {
+  font-size: 0.88rem;
+}
+
 /* --- panel: intro and loading ---------------------------------------------- */
 
 .intro h2 {
