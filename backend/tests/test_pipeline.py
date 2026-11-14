@@ -286,9 +286,15 @@ def test_full_report(sources, settings):
         ("old_housing", 80, 56),
         ("ev_charging_gap", 100, 50),
     ]
-    assert report.opportunities[0].solution_id == "landfill_gas_energy"
-    # The same holds for opportunities: chargers at the library rank below every
-    # solution that answers an energy, waste, equity or resilience need.
+    # Opportunities follow the needs: the top one answers the top need (hazard
+    # risk, at the school), and each comes no earlier than the needs it meets.
+    assert report.opportunities[0].solution_id == "resilience_hub"
+    assert "hazard_risk" in report.opportunities[0].need_ids
+    rank = {n.id: i for i, n in enumerate(report.needs)}
+    tops = [min(rank[i] for i in o.need_ids) for o in report.opportunities]
+    assert tops == sorted(tops)
+    # Chargers at the library answer only the charger gap, the last need, so
+    # they come last.
     charging = [o for o in report.opportunities if o.solution_id == "public_ev_charging"]
     assert charging and all(o.score == 50 for o in charging)
     assert report.opportunities[-1].solution_id == "public_ev_charging"
@@ -576,7 +582,7 @@ def test_rule_matches_are_served_when_gemini_fails(sources, settings, monkeypatc
     report = analyze(settings.model_copy(update={"gemini_api_key": "k"}))
 
     assert report.opportunities and {o.generated_by for o in report.opportunities} == {"rules"}
-    assert report.opportunities[0].solution_id == "landfill_gas_energy"
+    assert report.opportunities[0].solution_id == "resilience_hub"  # the top need
     assert report.narrative.generated_by == "template"
     status = next(s for s in report.source_status if s.source == "gemini")
     assert not status.ok and "RuntimeError" in status.message

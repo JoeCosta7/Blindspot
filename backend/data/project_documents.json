@@ -1,0 +1,115 @@
+[
+  {
+    "id": "epa_brownfields_marc_packet",
+    "name": "EPA Brownfields MARC grant application resources",
+    "kind": "grant_application",
+    "description": "Forms and instructions for Assessment, Cleanup and Revolving Loan Fund grants (FY 2027).",
+    "agency": "EPA",
+    "source_url": "https://www.epa.gov/brownfields/multipurpose-assessment-rlf-and-cleanup-marc-grant-application-resources",
+    "eligible_solutions": ["community_solar"],
+    "eligible_asset_types": ["brownfield"],
+    "verified_on": "2026-11-13"
+  },
+  {
+    "id": "irs_elective_pay_overview",
+    "name": "Elective pay for clean electricity credits: how governments can use them",
+    "kind": "program_guide",
+    "description": "Overview of direct pay under 48E / 45Y for local governments, schools and nonprofits. Confirm current IRS forms and pre-filing registration on irs.gov.",
+    "agency": "IRS",
+    "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits",
+    "eligible_solutions": [
+      "community_solar",
+      "resilience_hub",
+      "wind_on_reclaimed_land",
+      "small_hydro",
+      "repower_fossil_plant"
+    ],
+    "eligible_asset_types": null,
+    "verified_on": "2026-11-13"
+  },
+  {
+    "id": "energy_community_bonus_briefing",
+    "name": "Energy community bonus: location rules",
+    "kind": "program_guide",
+    "description": "How the 10-point energy community adder works. The project's census tract or brownfield status still needs checking against the IRS lists.",
+    "agency": "IRS",
+    "source_url": "https://www.eesi.org/briefings/view/121225tax",
+    "eligible_solutions": ["community_solar", "wind_on_reclaimed_land", "repower_fossil_plant"],
+    "eligible_asset_types": null,
+    "verified_on": "2026-11-14"
+  },
+  {
+    "id": "usda_reap_status",
+    "name": "USDA REAP: current status and notices",
+    "kind": "grant_application",
+    "description": "Rural Energy for America Program. Confirm whether a notice is open; applicants are farms and rural small businesses, not governments.",
+    "agency": "USDA",
+    "source_url": "https://opengrants.io/usda-rural-development-grants-2026-whats-open-now/",
+    "eligible_solutions": ["community_solar", "farm_digester"],
+    "eligible_asset_types": null,
+    "verified_on": "2026-11-13"
+  },
+  {
+    "id": "epa_lmop_landfill_gas",
+    "name": "EPA Landfill Methane Outreach Program resources",
+    "kind": "program_guide",
+    "description": "Background on landfill gas-to-energy projects. Pair with the site's LMOP status in this report.",
+    "agency": "EPA",
+    "source_url": "https://www.epa.gov/lmop/lmop-landfill-and-project-database",
+    "eligible_solutions": ["landfill_gas_energy", "landfill_composting"],
+    "eligible_asset_types": ["lmop_landfill", "landfill"],
+    "verified_on": "2026-11-14"
+  },
+  {
+    "id": "epa_repowering_screening",
+    "name": "EPA RE-Powering: how to identify sites",
+    "kind": "environmental_review",
+    "description": "How EPA screens contaminated land, landfills and mine lands for renewable energy. Use with the site's RE-Powering facts in this report.",
+    "agency": "EPA",
+    "source_url": "https://www.epa.gov/re-powering/how-identify-sites",
+    "eligible_solutions": ["community_solar", "wind_on_reclaimed_land"],
+    "eligible_asset_types": ["brownfield", "landfill", "mine_land", "contaminated_site"],
+    "verified_on": "2026-11-14"
+  },
+  {
+    "id": "site_access_agreement",
+    "name": "Site access or lease agreement with the owner",
+    "kind": "property_agreement",
+    "description": "A written right to enter and use the site. There is no single national form; use the county attorney's template or the owner's.",
+    "agency": null,
+    "source_url": null,
+    "eligible_solutions": [
+      "community_solar",
+      "resilience_hub",
+      "public_ev_charging",
+      "landfill_gas_energy",
+      "small_hydro",
+      "wind_on_reclaimed_land",
+      "shade_trees_depaving",
+      "school_heat_pumps",
+      "landfill_composting",
+      "repower_fossil_plant"
+    ],
+    "eligible_asset_types": null,
+    "verified_on": "2026-11-14"
+  },
+  {
+    "id": "utility_interconnection_request",
+    "name": "Utility interconnection or net-metering application",
+    "kind": "interconnection",
+    "description": "The local electric utility's form to connect generation. Get it from the utility that serves the site; there is no single national form.",
+    "agency": null,
+    "source_url": null,
+    "eligible_solutions": [
+      "community_solar",
+      "resilience_hub",
+      "landfill_gas_energy",
+      "small_hydro",
+      "wind_on_reclaimed_land",
+      "farm_digester",
+      "repower_fossil_plant"
+    ],
+    "eligible_asset_types": null,
+    "verified_on": "2026-11-14"
+  }
+]

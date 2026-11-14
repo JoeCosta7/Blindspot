@@ -5,7 +5,7 @@ import pytest
 
 from app import matching, opportunities
 from app.config import BACKEND_DIR
-from app.models import Asset, Factor
+from app.models import Asset, Factor, Highlight
 from tests.conftest import make_need
 
 SOLUTIONS = matching.load_solutions(BACKEND_DIR / "data" / "solutions.json")
@@ -97,6 +97,16 @@ def sample_digest(sites_per_type: int = 2):
         ["college", "mine_land"],
         SOLUTIONS,
         sites_per_type,
+        standouts=[
+            Highlight(
+                factor_id="construction_jobs",
+                label="Jobs in construction",
+                value="11.3%",
+                benchmark="US: 6.9%",
+                times_better=1.6,
+                why="A construction sector that can take on local projects.",
+            )
+        ],
     )
 
 
@@ -109,7 +119,33 @@ def item(**overrides):
         "project_type": "community_solar",
         "what": "Lease the 69 acres at Old Mill for a solar project that serves renters.",
         "why_here": "The sun yields 1,200 kWh a year per kW and the site is in Erie.",
-        "first_steps": ["Ask the owner about a lease.", "Confirm cleanup status with the state."],
+        "plan": [
+            "Ask the owner about a lease.",
+            "Confirm cleanup status with the state.",
+            "Size the array from the acreage in this report.",
+            "Match funding leads and confirm deadlines.",
+            "Issue an RFP and start interconnection talks.",
+            "Build, interconnect and enroll subscribers.",
+        ],
+        "compliance": [
+            "Confirm the owner will allow a community solar lease.",
+            "Ask the state what cleanup clearances still apply.",
+        ],
+        "site_plans": [
+            {
+                "site_id": "repowering:4242",
+                "course_of_action": [
+                    "Walk the 69 acres at Old Mill with the owner.",
+                    "Confirm cleanup status with the state.",
+                    "Order a site survey and interconnection study.",
+                    "Close the lease and start construction.",
+                ],
+                "compliance": [
+                    "Confirm the owner of Old Mill will lease for solar.",
+                    "Ask the state what cleanup clearances still apply at Old Mill.",
+                ],
+            }
+        ],
     }
     return opportunities._ModelOpportunity(**{**base, **overrides})
 
@@ -256,11 +292,14 @@ def test_a_grounded_opportunity_passes():
         ({"site_ids": [], "factor_ids": []}, "none of the county's factors or sites"),
         ({"site_ids": [], "factor_ids": ["made_up"]}, "none of the county's factors or sites"),
         ({"what": "Build a 5 MW array that saves $300 a year."}, "numbers that are not"),
-        ({"first_steps": ["Hire a consultant within 90 days."]}, "numbers that are not"),
+        (
+            {"plan": ["Hire a consultant within 90 days."], "first_steps": []},
+            "numbers that are not",
+        ),
         ({"why_here": "About 9% of people are out of work."}, "numbers that are not"),  # rounded
         ({"what": "word " * 80}, "too long"),
         ({"title": " "}, "required field is empty"),
-        ({"first_steps": []}, "no first steps"),
+        ({"plan": [], "first_steps": []}, "no plan"),
     ],
 )
 def test_ungrounded_opportunities_are_rejected(overrides, expected):
@@ -298,7 +337,9 @@ def test_keep_valid_drops_bad_ones_and_keeps_the_rest():
     assert first.summary.startswith("Lease the 69 acres")
     assert second.need_ids == ["hazard_risk"] and second.asset_ids == []
     assert second.solution_id is None  # not a catalogued project type
-    assert len(dropped) == 2 and "150" in dropped[0] and "repeats" in dropped[1]
+    # Bad invents a number; "first" repeats the title; "Third" repeats community_solar.
+    assert len(dropped) == 3
+    assert "150" in dropped[0] and "repeats" in dropped[1] and "project type" in dropped[2]
 
 
 def test_summary_is_checked_like_an_opportunity():
@@ -321,6 +362,81 @@ def test_prompt_carries_the_rules_and_the_digest():
     assert "Create up to 6 opportunities" in prompt
     assert "repowering:4242" in prompt and "hazard_risk" in prompt
     assert "construction_jobs" in prompt and "community_solar" in prompt
+    assert '"standouts"' in prompt and "times_above_typical" in prompt
+    assert "generic solar-and-chargers pack" in prompt
+
+
+def test_digest_includes_standouts():
+    digest = sample_digest()
+    assert digest["standouts"] == [
+        {
+            "factor_id": "construction_jobs",
+            "label": "Jobs in construction",
+            "value": "11.3%",
+            "compared_to": "US: 6.9%",
+            "times_above_typical": 1.6,
+            "why_it_matters": "A construction sector that can take on local projects.",
+        }
+    ]
+
+
+def test_keep_valid_drops_a_repeated_project_type():
+    kept, dropped = opportunities.keep_valid(
+        model(
+            item(title="Solar A", project_type="community_solar"),
+            item(
+                title="Solar B",
+                project_type="community_solar",
+                site_ids=["repowering:2"],
+            ),
+            item(
+                title="Clinic",
+                project_type="weatherization_clinic",
+                need_ids=["hazard_risk"],
+                site_ids=["osm:node/1"],
+                factor_ids=["housing_pre1980"],
+            ),
+        ),
+        sample_digest(),
+        limit=6,
+    )
+    assert [d.title for d in kept] == ["Solar A", "Clinic"]
+    assert any("project type" in reason for reason in dropped)
+
+
+def test_keep_valid_drops_a_third_use_of_the_same_top_need():
+    # hazard_risk outranks low_income in the digest, so it is the top need for
+    # the first two; a third whose top need is also hazard_risk is dropped.
+    kept, dropped = opportunities.keep_valid(
+        model(
+            item(title="One", project_type="community_solar", need_ids=["hazard_risk"]),
+            item(
+                title="Two",
+                project_type="weatherization_clinic",
+                need_ids=["hazard_risk", "low_income"],
+                site_ids=["osm:node/1"],
+                factor_ids=["housing_pre1980"],
+            ),
+            item(
+                title="Three",
+                project_type="other",
+                need_ids=["hazard_risk"],
+                site_ids=[],
+                factor_ids=["unemployment"],
+            ),
+            item(
+                title="Income help",
+                project_type="public_ev_charging",
+                need_ids=["low_income"],
+                site_ids=["osm:node/1"],
+                factor_ids=["unemployment"],
+            ),
+        ),
+        sample_digest(),
+        limit=6,
+    )
+    assert [d.title for d in kept] == ["One", "Two", "Income help"]
+    assert any("same top need" in reason for reason in dropped)
 
 
 # --- write_opportunities -----------------------------------------------------------

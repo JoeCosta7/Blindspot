@@ -168,9 +168,42 @@ export interface FundingMatch {
 }
 
 
+export type DocumentKind =
+  | "grant_application"
+  | "program_guide"
+  | "tax_form"
+  | "property_agreement"
+  | "environmental_review"
+  | "interconnection"
+  | "other";
+
+/** A form or packet the county may need. Curated by code (with a real URL when
+ * we have one) or named by Gemini as something to gather locally (source_url
+ * null). Gemini never invents URLs. */
+export interface ProjectDocument {
+  id: string;
+  name: string;
+  kind: DocumentKind;
+  description: string;
+  agency: string | null;
+  source_url: string | null;
+  verified_on: string | null;
+}
+
+/** How to carry out the opportunity at one named site. */
+export interface SiteActionPlan {
+  site_id: string;
+  /** Start-to-finish course of action at this site. */
+  course_of_action: string[];
+  /** Agency and ownership checks from known site facts — not legal advice. */
+  compliance: string[];
+  /** Forms and agreements to gather for this site (names only). */
+  documents_needed: string[];
+}
+
 /** A way to meet one or more needs with what the county has. Written by Gemini
  * from the needs, factors and sites, or matched by rule when Gemini is
- * unavailable. Code supplies the score, estimates and funding either way. */
+ * unavailable. Code supplies the score, estimates, funding and document links. */
 export interface Opportunity {
   id: string;
   /** A catalogued project type. Null for an idea of Gemini's that fits none;
@@ -180,10 +213,17 @@ export interface Opportunity {
   /** What would be done, and why it fits this county. Null for a rule match. */
   summary: string | null;
   rationale: string | null;
+  /** County-wide start-to-finish course of action. */
+  plan: string[];
+  /** Same list as plan for older callers. */
   first_steps: string[];
+  /** County-level compliance checks. */
+  compliance: string[];
   need_ids: NeedId[];
   /** The mapped sites it would use, the main one first. Empty when county-wide. */
   asset_ids: string[];
+  /** Per-site course of action and compliance. */
+  site_plans: SiteActionPlan[];
   /** The factors it draws on. */
   factor_ids: string[];
   score: number;
@@ -191,6 +231,11 @@ export interface Opportunity {
   /** The curated table's matches plus live Grants.gov listings
    * (program_id "grantsgov:<id>"). */
   funding: FundingMatch[];
+  /** Grant packets and guides matched by code, plus application pages from
+   * funding leads. Never invented by Gemini. */
+  documents: ProjectDocument[];
+  /** Forms to gather that have no single national URL. Named by Gemini. */
+  documents_needed: string[];
   generated_by: "gemini" | "rules";
   /** Site Scout can look for a building to host this: it names a site and a
    * building-hosted project type answers one of its needs. */

@@ -25,7 +25,9 @@ STATUS_WORDS = {
 AI_CAVEAT = (
     "The opportunities were written by Gemini from the needs, factors and sites in this "
     "report. Each was checked to use only this report's needs, sites and numbers. "
-    "Feasibility and cost were not checked."
+    "Feasibility and cost were not checked. Course-of-action and compliance lines are "
+    "planning checks, not legal advice; confirm permits and local rules with counsel "
+    "and the right agencies."
 )
 
 
