@@ -375,6 +375,14 @@ button {
   cursor: help;
 }
 
+.tag-ai {
+  flex: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  cursor: help;
+}
+
 .tag-fixture {
   background: var(--warn-bg);
   color: var(--warn-text);
@@ -594,6 +602,25 @@ button {
   font-size: 0.92rem;
 }
 
+/* --- AI-suggested solutions ---------------------------------------------------- */
+
+.suggestion-sites {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.first-steps {
+  display: grid;
+  gap: 4px;
+  font-size: 0.92rem;
+}
+
+.first-steps ol {
+  padding-left: 1.3em;
+}
+
 .estimates {
   list-style: none;
   padding: 0;
@@ -632,6 +659,7 @@ button {
 }
 
 .funding-list h4,
+.first-steps h4,
 .caveats h4 {
   font-size: 0.82rem;
   text-transform: uppercase;
