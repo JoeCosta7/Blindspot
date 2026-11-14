@@ -2038,3 +2038,10 @@ button {
 .photo-viewer.in-workspace {
   top: 236px;
 }
+
+.scout-image-open {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}

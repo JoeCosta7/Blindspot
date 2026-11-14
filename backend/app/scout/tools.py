@@ -60,6 +60,23 @@ TOOLS = (
 )
 # Project types that need a scanned interior to be judged at all.
 INTERIOR_SOLUTIONS = {"cooling_center"}
+# Which checks a project needs. A check runs only when a kept project is in its group.
+SOLAR_PROJECTS = {
+    "rooftop_solar_commercial",
+    "parking_canopy_solar",
+    "resilience_hub",
+    "community_solar",
+}
+VEHICLE_PROJECTS = {"public_ev_charging", "mobility_hub", "parking_canopy_solar"}
+INTERIOR_PROJECTS = {
+    "cooling_center",
+    "resilience_hub",
+    "weatherization_clinic",
+    "utility_assistance_drive",
+    "school_heat_pumps",
+}
+# Projects sized from the measured roof (Vexcel footprint less rooftop equipment).
+MEASURED_ROOF_PROJECTS = {"rooftop_solar_commercial", "resilience_hub"}
 # Project types that need a flat roof with no solar on it.
 ROOF_SOLUTIONS = {"rooftop_solar_commercial"}
 DEFAULT_KEYWORDS = (
@@ -269,10 +286,13 @@ async def search_report_sites(state: ScoutState, limit: int) -> str:
 async def search_public_buildings(state: ScoutState, kinds: list[str], limit: int) -> str:
     """Schools, libraries and colleges from the county report, as candidates.
     A nearby 3D scan is linked when the scan index is available."""
-    wanted = [k.strip().lower() for k in kinds if k.strip().lower() in PUBLIC_KINDS] or list(
-        PUBLIC_KINDS
-    )
-    pool = [a for a in state.public_buildings if a.type in wanted]
+    own_hosts = state.site_solution.hosts if state.site_solution else []
+    hosts = [h for h in own_hosts if h in PUBLIC_KINDS]
+    asked = [k.strip().lower() for k in kinds if k.strip().lower() in PUBLIC_KINDS]
+    # Only the kinds the project can be hosted at, in its catalogue order
+    # (a weatherization clinic: libraries before schools).
+    wanted = [k for k in asked if not hosts or k in hosts] or hosts or list(PUBLIC_KINDS)
+    pool = [a for kind in wanted for a in state.public_buildings if a.type == kind]
     if not pool:
         add_step(
             state,
@@ -307,6 +327,7 @@ async def search_public_buildings(state: ScoutState, kinds: list[str], limit: in
                 rooms=scan.rooms if scan else None,
                 room_labels=scan.room_labels if scan else (),
                 building_type=a.type,
+                report_asset=a,
             )
         )
         if len(picked) >= limit:
@@ -786,17 +807,16 @@ async def evaluate_site(
     roof, interior = insp.roof, insp.interior
     known = {s.id: s for s in state.solutions}
     wanted = [known[s] for s in dict.fromkeys(solution_ids) if s in known] or list(state.solutions)
-    if state.land_mode and state.site_solution is not None:
+    if state.site_solution is not None:
+        # The opportunity's own project, not the generic building projects.
         wanted = [state.site_solution]
 
     kept: list[matching.Solution] = []
     need_ids: list[str] = []
     dropped: list[str] = []
     for solution in wanted:
-        matched = [
-            n for n in state.needs if n.id in solution.triggers and need_applies(solution.id, n)
-        ]
-        if not matched and state.land_mode:
+        matched = [n for n in state.needs if solution.answers(n) and need_applies(solution.id, n)]
+        if not matched and state.site_solution is not None:
             matched = list(state.needs)  # the opportunity's own needs, already scoped
         if not matched:
             dropped.append(f"{solution.id}: answers no flagged need")
@@ -823,18 +843,19 @@ async def evaluate_site(
         need_ids += [n.id for n in matched if n.id not in need_ids]
 
     checks: list[LayerCheck] = []
-    if roof is not None:
+    kept_ids = {s.id for s in kept}
+    if roof is not None and kept_ids:
         tolerance = state.settings.scout_footprint_tolerance
-        checks += [
-            c
-            for c in (
-                measure.footprint_check(roof, interior, tolerance),
-                measure.record_check(roof, b, tolerance),
-                measure.solar_check(roof),
-                measure.vehicle_check(roof),
-            )
-            if c
-        ]
+        wanted_checks = []
+        if kept_ids & INTERIOR_PROJECTS:
+            wanted_checks.append(measure.footprint_check(roof, interior, tolerance))
+        if kept_ids & (INTERIOR_PROJECTS | SOLAR_PROJECTS):
+            wanted_checks.append(measure.record_check(roof, b, tolerance))
+        if kept_ids & SOLAR_PROJECTS:
+            wanted_checks.append(measure.solar_check(roof))
+        if kept_ids & VEHICLE_PROJECTS:
+            wanted_checks.append(measure.vehicle_check(roof))
+        checks += [c for c in wanted_checks if c]
     factor, reasons = measure.confidence_factor(
         roof, interior, checks, state.settings, land=state.land_mode
     )
@@ -854,12 +875,13 @@ async def evaluate_site(
         )
 
     figures: list[Estimate] = []
-    if state.land_mode and kept and b.report_asset is not None:
+    if kept and b.report_asset is not None:
         from app.pipeline import size_estimates
 
         site_yield, specific = await _site_yield(state, b)
         figures = size_estimates(kept[0].id, b.report_asset, site_yield, specific)
-    if any(s.id in ROOF_SOLUTIONS for s in kept) and roof is not None and roof.footprint_m2:
+    if kept_ids & MEASURED_ROOF_PROJECTS and roof is not None and roof.footprint_m2:
+        # A measured roof replaces any illustrative array size.
         hvac = measure.detections_on_roof(roof.detections, roof.footprint_wkt, "rooftop hvac unit")
         site_yield, specific = await _site_yield(state, b)
         figures = estimates.rooftop_solar(
@@ -874,9 +896,9 @@ async def evaluate_site(
         for lead in funding.match_funding(
             state.programs,
             solution.id,
-            (b.report_asset.type if b.report_asset else None)
-            if state.land_mode
-            else "commercial_building",
+            b.report_asset.type
+            if b.report_asset
+            else (None if state.land_mode else "commercial_building"),
             energy_community=state.energy_community,
             energy_community_checked=state.energy_community_checked,
         ):

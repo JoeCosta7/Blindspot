@@ -191,7 +191,8 @@ def problem(action: AgentAction, state: ScoutState) -> str | None:
         if not insp.roof_checked:
             return "evaluate_site: inspect the roof first"
         known = {s.id for s in state.solutions}
-        if not state.land_mode and action.solution_ids and not set(action.solution_ids) & known:
+        own = state.site_solution is not None
+        if not own and action.solution_ids and not set(action.solution_ids) & known:
             return "evaluate_site: none of those project types exist"
     if action.tool == "search_imagery" and not (action.text or "").strip():
         return "search_imagery needs text describing what to look for"

@@ -112,11 +112,18 @@ export function SiteCard({
 
       {candidate.image_url && (
         <figure className="scout-image">
-          <img
-            src={candidate.image_url}
-            alt={`Aerial view of ${candidate.name} with the parcel, footprint and detected objects outlined`}
-            loading="lazy"
-          />
+          <button
+            type="button"
+            className="scout-image-open"
+            onClick={() => onShowOnMap(candidate)}
+            title="Open the photos"
+          >
+            <img
+              src={candidate.image_url}
+              alt={`Aerial view of ${candidate.name} with the parcel, footprint and detected objects outlined`}
+              loading="lazy"
+            />
+          </button>
           <figcaption className="muted">
             {candidate.image_view === "oblique"
               ? "Vexcel side-angle (oblique) photo. "
