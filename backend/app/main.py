@@ -257,6 +257,7 @@ async def scout(
             energy_community=energy_community,
             energy_community_checked=checked,
             focus=body.focus,
+            profile=scout_agent.profile_for(body.solution_id, body.focus),
             public_buildings=[
                 a for a in report.assets if a.type in ("school", "library", "college")
             ],

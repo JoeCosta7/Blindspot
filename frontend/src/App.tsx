@@ -5,7 +5,7 @@ import type { LoadingArea } from "./components/loadingSweep";
 import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { LoadingPanel, ResultsPanel, scoutKey } from "./components/ResultsPanel";
-import { bestSites } from "./components/ScoutPanel";
+import { bestCandidates, bestSites } from "./components/ScoutPanel";
 import { featureBounds, unionBounds } from "./format";
 import type {
   AnalyzeRequest,
@@ -290,6 +290,7 @@ export function App() {
       fips,
       opportunity.need_ids,
       opportunity.title,
+      opportunity.solution_id,
       (event) => {
         if (controller.signal.aborted) return;
         update((run) => {
@@ -311,10 +312,16 @@ export function App() {
           }
           return run;
         });
-        const step = event.step;
-        if (step && step.lat !== null && step.lon !== null && step.kind === "action") {
-          const d = 0.003;
-          setFitTo([step.lon - d, step.lat - d, step.lon + d, step.lat + d]);
+        // The map holds still while the agent works, then frames the final
+        // three sites once. Clicking a site afterwards flies to it.
+        if (event.type === "result" && event.result) {
+          const d = 0.004;
+          const box = unionBounds(
+            bestCandidates(event.result.candidates).map(
+              (c): Bounds => [c.lon - d, c.lat - d, c.lon + d, c.lat + d],
+            ),
+          );
+          if (box) setFitTo(box);
         }
       },
       controller.signal,

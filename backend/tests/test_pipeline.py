@@ -656,7 +656,7 @@ def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, m
 
     by_solution = {o.solution_id: o for o in report.opportunities}
     hydro = by_solution["small_hydro"]
-    assert hydro.title == "Hydropower at Mill Pond Dam"
+    assert hydro.title == "Hydropower at an existing dam"  # the project, not the site
     assert hydro.asset_ids == ["dam:ZZ00001"]
     assert [e.label for e in hydro.estimates] == [
         "Capacity",

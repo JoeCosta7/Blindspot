@@ -122,7 +122,7 @@ def test_score_blends_highest_and_mean_priority_times_asset_factor():
     assert matches[0].score == 70  # 70 * 1.0
     assert matches[1].score == 49  # 70 * 0.7
     assert matches[0].id == "community_solar:big"
-    assert matches[0].title == "Community solar on Site big"
+    assert matches[0].title == "Community solar on reclaimed land"  # the project, not the site
 
 
 def test_land_prefers_screened_sites_then_acreage():

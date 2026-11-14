@@ -402,6 +402,9 @@ class ScoutRequest(BaseModel):
     # names the opportunity. Empty means every flagged need.
     need_ids: list[NeedId] = Field(default_factory=list)
     focus: str | None = None  # the opportunity's title, for the timeline
+    # The opportunity's project type, which decides what kind of host to look
+    # for first (agent.profile_for). Null for an idea of Gemini's own.
+    solution_id: str | None = None
 
 
 class Observation(BaseModel):

@@ -1,4 +1,3 @@
-import { ASSET_STYLES } from "../format";
 import type { Asset, Factor, Need, Opportunity, ScoutRun, SiteCandidate } from "../types";
 import { EstimateRow } from "./EstimateRow";
 import { FundingBadge } from "./FundingBadge";
@@ -9,17 +8,6 @@ export interface ScoutHooks {
   run: ScoutRun | null;
   onStart: () => void;
   onShowCandidate: (candidate: SiteCandidate) => void;
-}
-
-/** Who owns the dam decides whether the county can act on it at all. */
-function DamFacts({ asset }: { asset: Asset }) {
-  const { owner_type, waterway } = asset.attributes;
-  const facts = [
-    typeof waterway === "string" ? `On ${waterway}` : null,
-    typeof owner_type === "string" ? `Owner type: ${owner_type}` : null,
-  ].filter((fact): fact is string => fact !== null);
-  if (facts.length === 0) return null;
-  return <p className="muted">{facts.join(" · ")}</p>;
 }
 
 interface Props {
@@ -41,16 +29,13 @@ interface Props {
 export function OpportunityCard({
   rank,
   opportunity,
-  assets,
   needs,
   factors,
   note,
-  onShowOnMap,
   scout,
 }: Props) {
   const addressed = needs.filter((need) => opportunity.need_ids.includes(need.id));
   const drawsOn = factors.filter((factor) => opportunity.factor_ids.includes(factor.id));
-  const main = assets[0];
   const byGemini = opportunity.generated_by === "gemini";
   const typed = opportunity.solution_id !== null;
 
@@ -58,20 +43,8 @@ export function OpportunityCard({
     <article className="card opportunity opportunity-primary">
       <header className="opportunity-head">
         <span className="rank">{rank}</span>
-        <h3>
-          {main ? (
-            <button
-              type="button"
-              className="opportunity-title"
-              onClick={() => onShowOnMap(main)}
-              title="Show this site on the map"
-            >
-              {opportunity.title}
-            </button>
-          ) : (
-            opportunity.title
-          )}
-        </h3>
+        {/* The opportunity is general; Site Scout finds the building. */}
+        <h3>{opportunity.title}</h3>
         <span
           className="score"
           title="Set by code, not by Gemini: halfway between the highest and the mean priority of the needs addressed, reduced when the site lacks the data an estimate needs"
@@ -112,29 +85,6 @@ export function OpportunityCard({
             </span>
           ))}
         </div>
-      )}
-
-      {assets.length > 0 ? (
-        <ul className="opportunity-sites">
-          {assets.map((asset) => (
-            <li key={asset.id}>
-              <button type="button" className="link-button" onClick={() => onShowOnMap(asset)}>
-                <span
-                  className="legend-dot"
-                  style={{ background: ASSET_STYLES[asset.type].color }}
-                />
-                {asset.name}
-              </button>
-              {asset.type === "non_powered_dam" && <DamFacts asset={asset} />}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">
-          {opportunity.solution_id === "farm_digester"
-            ? "County-wide: the data gives a count of farms, not their locations, so no site is named."
-            : "County-wide: no single site is named."}
-        </p>
       )}
 
       {opportunity.first_steps.length > 0 && (

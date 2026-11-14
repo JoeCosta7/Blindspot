@@ -197,6 +197,8 @@ class Settings(BaseSettings):
     scout_factor_no_scan: float = 0.85
     scout_factor_low_confidence: float = 0.7
     scout_factor_footprint_mismatch: float = 0.6
+    # A privately owned site, against one the county owns (schools, libraries).
+    scout_factor_private_site: float = 0.9
 
     # --- paths ------------------------------------------------------------
     data_dir: Path = BACKEND_DIR / "data"

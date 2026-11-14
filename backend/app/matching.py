@@ -66,8 +66,11 @@ class Match:
 
     @property
     def title(self) -> str:
+        """The project, not a place: Site Scout finds the building later. The
+        host asset still backs the estimates."""
         if self.asset is None:
             return self.solution.title_template
+        return self.solution.name
         return self.solution.title_template.format(asset=self.asset.name)
 
 

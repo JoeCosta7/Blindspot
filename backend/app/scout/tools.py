@@ -108,6 +108,12 @@ class ScoutState:
     energy_community_checked: bool = False
     # The county report's schools, libraries and colleges (Geoapify).
     public_buildings: list[Asset] = field(default_factory=list)
+    # The focus profile (agent.profile_for): what to search first and whether
+    # the county owning the site should count in its favour.
+    source_order: tuple[str, ...] = ("search_properties", "search_scans")
+    property_types: list[str] = field(default_factory=list)
+    prefer_public: bool = False
+    focus_hosts: str = ""
     seen: dict[str, Inspection] = field(default_factory=dict)
     steps: list[ScoutStep] = field(default_factory=list)
     pending: list[ScoutEvent] = field(default_factory=list)
@@ -748,6 +754,11 @@ async def evaluate_site(
             if c
         ]
     factor, reasons = measure.confidence_factor(roof, interior, checks, state.settings)
+    # The county can act on its own buildings directly; a private site needs the
+    # owner as a partner, so it ranks a little lower (our own choice, config).
+    if state.prefer_public and b.found_by != "geoapify":
+        factor *= state.settings.scout_factor_private_site
+        reasons.append("privately owned, so the county would need the owner as a partner")
     flags: list[str] = []
     flood = measure.flood_flag(state.needs, interior)
     if flood:

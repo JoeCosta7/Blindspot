@@ -9,6 +9,7 @@ source when its API is available: VERIFY before writing it.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
@@ -350,7 +351,13 @@ class RealBuildingData:
         for d in roof.detections:
             color = colors.get(d.label, "rgb(0,229,255)")
             drawings.append({"wkt": d.wkt, "outline-width": 2, "outline-color": color})
-        name = building.id.replace(":", "_").replace(",", "_")
+        raw = building.id.replace(":", "_").replace(",", "_")
+        # Geoapify ids are long hashes; the image endpoint serves short names only.
+        name = (
+            raw
+            if len(raw) <= 40
+            else f"{raw[:3]}{hashlib.sha1(building.id.encode()).hexdigest()[:20]}"
+        )
         # A side-angle photo shows the building itself; fall back to top-down.
         # The first direction is fetched now, the others on demand (main.py).
         directions: list[str] = []

@@ -100,6 +100,8 @@ PROMPT_RULES = (
     'If the opportunity is one of the kinds under "project_types", built at a listed '
     "site of a kind that entry names, give that project_type exactly as written. "
     f'Otherwise give "{OTHER_PROJECT_TYPE}".',
+    "Give each opportunity a general title that names the project, never a particular site or "
+    "address; the sites it would use go in site_ids only.",
 )
 
 

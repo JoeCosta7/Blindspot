@@ -221,17 +221,6 @@ function SiteCard({
         </details>
       )}
 
-      {candidate.status !== "rejected" && (
-        <section className="funding-list">
-          <h4>Funding leads</h4>
-          {candidate.funding.length === 0 ? (
-            <p className="muted">No program in our funding table matches this yet.</p>
-          ) : (
-            candidate.funding.map((f) => <FundingBadge key={f.program_id} funding={f} />)
-          )}
-        </section>
-      )}
-
       {drafts && (
         <details className="scout-drafts">
           <summary>Draft owner letter and grant paragraph ({drafts.generated_by})</summary>
@@ -274,6 +263,9 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
   }
   const result = run.result;
   const best = bestSites(run);
+  // The leads depend on the project type and the county, not the building,
+  // so they are the same for every site and are shown once.
+  const leads = [...new Map(best.flatMap((c) => c.funding).map((f) => [f.program_id, f])).values()];
   const failed = (result?.source_status ?? []).filter((s) => !s.ok);
   const drafts = new Map((result?.drafts ?? []).map((d) => [d.building_id, d]));
   return (
@@ -338,6 +330,16 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
           onShowOnMap={onShowOnMap}
         />
       ))}
+      {best.length > 0 && (
+        <section className="funding-list">
+          <h4>Funding leads for these sites</h4>
+          {leads.length === 0 ? (
+            <p className="muted">No program in our funding table matches these projects yet.</p>
+          ) : (
+            leads.map((f) => <FundingBadge key={f.program_id} funding={f} />)
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -346,8 +348,12 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
  * confidence, then by score. Each card carries its status, so a low-confidence
  * site is shown as such rather than hidden. */
 export function bestSites(run: ScoutRun): SiteCandidate[] {
+  return bestCandidates(run.result?.candidates ?? run.candidates);
+}
+
+export function bestCandidates(candidates: SiteCandidate[]): SiteCandidate[] {
   const order = { shortlisted: 0, low_confidence: 1, rejected: 2 };
-  return (run.result?.candidates ?? run.candidates)
+  return candidates
     .filter((c) => c.status !== "rejected")
     .sort((a, b) => order[a.status] - order[b.status] || b.score - a.score)
     .slice(0, 3);
