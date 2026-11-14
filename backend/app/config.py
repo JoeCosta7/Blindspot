@@ -30,6 +30,10 @@ class Settings(BaseSettings):
 
     # --- timeouts (seconds) -----------------------------------------------
     source_timeout_s: float = 15.0
+    # Public buildings for the largest counties take several Geoapify
+    # requests (Cook County, IL: 13 requests, 19 s on a cold cache). Most
+    # counties need one request and finish in about a second.
+    buildings_timeout_s: float = 45.0
     gemini_timeout_s: float = 20.0
 
     # --- need scoring (CLAUDE.md section 8) -------------------------------

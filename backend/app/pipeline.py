@@ -269,7 +269,7 @@ async def analyze_county(
         _run(
             "geoapify",
             lambda: geoapify.fetch_public_buildings(client, settings, county.fips, county.bounds),
-            timeout,
+            settings.buildings_timeout_s,
         ),
         _run(
             "ev_stations",
