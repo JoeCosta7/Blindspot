@@ -75,6 +75,7 @@ AssetType = Literal[
     "ev_station",
     "non_powered_dam",  # dam in ORNL's hydropower potential assessment
     "power_plant",  # plant of 1 MW or more in EIA-860, operating or retired
+    "commercial_building",  # a property found by Site Scout (scout/), shown as a map marker
 ]
 
 # What kind of thing a factor is. "workforce" is the county's local talent.
@@ -338,6 +339,8 @@ class CountyReport(BaseModel):
     people_per_sq_mile: float | None = None
     narrative: Narrative
     source_status: list[SourceStatus]
+    # True for the counties Site Scout has building data for (settings.scout_counties).
+    scout_available: bool = False
 
 
 class NeedMapLayer(BaseModel):
@@ -376,3 +379,127 @@ class HealthResponse(BaseModel):
     counties_loaded: int
     data_files: dict[str, bool]
     keys: dict[str, bool]
+
+
+# --- Site Scout (app/scout/) -----------------------------------------------------
+# A building-level agent for the counties the sponsor's data covers. The
+# county report says what is needed; the scout finds specific commercial
+# buildings to host a fix and checks three data layers against each other.
+
+ScoutLayer = Literal["vexcel", "matterport", "costar"]
+SiteStatus = Literal["shortlisted", "low_confidence", "rejected"]
+ScoutStepKind = Literal["plan", "action", "observation", "decision", "error"]
+ScoutStop = Literal["target_reached", "budget_spent", "no_more_candidates", "error"]
+
+
+class ScoutRequest(BaseModel):
+    fips: str = Field(pattern=r"^\d{5}$")
+
+
+class Observation(BaseModel):
+    """Something a data layer or the vision model reported. Not computed by us,
+    and kept apart from estimates: a count of parked cars is what one image
+    showed on one day, not a figure derived from it."""
+
+    label: str  # "Parked cars", "Roof type", "Existing solar"
+    value: bool | float | str
+    unit: str | None = None
+    layer: ScoutLayer
+    # The image's capture date or the record's date, when the layer gives one.
+    captured: str | None = None
+    # True when the vision model read it off an image rather than a record.
+    by_model: bool = False
+
+
+class LayerCheck(BaseModel):
+    """One layer compared with another, e.g. the roof area measured in the
+    aerial image against the footprint the property record gives."""
+
+    label: str
+    layers: list[ScoutLayer]
+    ok: bool
+    detail: str  # code-written, e.g. "11,130 m² in the image vs 11,148 m² on record"
+
+
+class GeoOverlay(BaseModel):
+    """A vendor polygon in map coordinates: the parcel, the building
+    footprint or a detected object. Drawn on the aerial image by the imagery
+    server and available here for the map."""
+
+    label: str  # "Parcel", "Footprint", "Rooftop HVAC unit", "Solar panel", "Car"
+    coordinates: list[LonLat]
+
+
+class SiteCandidate(BaseModel):
+    building_id: str
+    name: str
+    address: str | None
+    lat: float
+    lon: float
+    # The property record's building type, or the scan's classification.
+    property_type: str | None
+    status: SiteStatus
+    # Project types from data/scout_solutions.json the building could host.
+    solution_ids: list[str]
+    need_ids: list[NeedId]
+    layers_used: list[ScoutLayer]
+    observations: list[Observation]
+    checks: list[LayerCheck]
+    estimates: list[Estimate]
+    funding: list[FundingMatch]
+    # Code-written warnings, e.g. a ground-floor electrical room in a flood-prone county.
+    flags: list[str]
+    # Why the status is what it is, written by code.
+    status_reason: str
+    # The agent's own reasoning about this building, number-checked. Null when
+    # it failed the check or the rule fallback chose the building.
+    agent_note: str | None
+    score: int = Field(ge=0, le=100)
+    # Served by this backend (the image is fetched and cached server-side).
+    image_url: str | None
+    overlays: list[GeoOverlay]
+    # The scan's own AI-written summary of the interior, quoted as is.
+    interior_summary: str | None
+    # The public Matterport tour page, when the scan is published.
+    tour_url: str | None
+
+
+class SiteDrafts(BaseModel):
+    building_id: str
+    outreach_letter: str
+    grant_paragraph: str
+    generated_by: Literal["gemini", "template"]
+
+
+class ScoutStep(BaseModel):
+    index: int
+    kind: ScoutStepKind
+    text: str  # one line for the timeline
+    tool: str | None = None
+    building_id: str | None = None
+    # Where the step happened, so the map can fly there as it plays.
+    lat: float | None = None
+    lon: float | None = None
+
+
+class ScoutResult(BaseModel):
+    fips: str
+    # Shortlisted first, then low confidence, then rejected; best score first within each.
+    candidates: list[SiteCandidate]
+    drafts: list[SiteDrafts]
+    steps: list[ScoutStep]
+    stopped_because: ScoutStop
+    source_status: list[SourceStatus]
+    # Who chose the actions: Gemini, the rule fallback, or a saved run.
+    generated_by: Literal["gemini", "rules", "fixture"]
+    # "fake" is hand-written placeholder data (data/scout_fake/); say so in the UI.
+    provider: Literal["fake", "real"]
+
+
+class ScoutEvent(BaseModel):
+    """One line of the NDJSON stream from POST /api/scout. The last is a result."""
+
+    type: Literal["step", "candidate", "result"]
+    step: ScoutStep | None = None
+    candidate: SiteCandidate | None = None
+    result: ScoutResult | None = None

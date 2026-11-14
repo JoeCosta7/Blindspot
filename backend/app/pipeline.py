@@ -118,6 +118,10 @@ SOURCE_NAMES = {
     "transit": "BTS National Transit Map",
     "gemini": "Gemini opportunities and brief",
     "grants_gov": "Grants.gov live listings",
+    # Site Scout (app/scout/)
+    "vexcel": "Vexcel aerial imagery and property records",
+    "matterport": "Matterport 3D scans",
+    "scout_gemini": "Gemini scout decisions",
 }
 
 BUILDING_TYPES = ("school", "library", "college")
@@ -931,4 +935,5 @@ async def analyze_county(
         people_per_sq_mile=people_per_sq_mile,
         narrative=brief,
         source_status=statuses,
+        scout_available=county.fips in settings.scout_counties,
     )

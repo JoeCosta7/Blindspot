@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.8-flash"
     # Geoapify Places API: schools, libraries and colleges.
     geoapify_api_key: str = ""
+    # Site Scout layers (app/scout/). Vexcel: long-life key in the X-API-KEY
+    # header. Matterport: API token id and secret, HTTP Basic. The Matterport
+    # SDK key is for browser embeds and is not used by the backend.
+    vexcel_api_key: str = ""
+    matterport_api_key: str = ""
+    matterport_api_secret: str = ""
     # Google Earth Engine (surface heat, tree canopy). Empty = source disabled.
     ee_project: str = ""
     # Earth Engine results change only when the imagery does, so cache them long.
@@ -162,6 +168,32 @@ class Settings(BaseSettings):
     # better than the benchmark. Our own cut-off, the same as need_ratio_high.
     highlight_min_ratio: float = 1.25
     max_highlights: int = 3
+
+    # --- Site Scout (app/scout/) ---------------------------------------------
+    # Counties the sponsor's building data covers: Harris County, TX and Los
+    # Angeles County, CA. VERIFY the real coverage before a demo.
+    scout_counties: list[str] = ["48201", "06037"]
+    # Hard limits on one run, so a demo cannot run away.
+    scout_max_actions: int = 25
+    # Roofs inspected (each is a parcel record plus a live detection call).
+    scout_max_roofs: int = 8
+    scout_target_sites: int = 5
+    scout_draft_sites: int = 3
+    scout_search_limit: int = 10
+    # Half the side of the square the imagery search covers, in metres.
+    scout_search_half_m: float = 3000.0
+    # Live detection and imagery calls take several seconds each.
+    scout_detect_timeout_s: float = 60.0
+    # Pause between steps when a saved run is replayed (?fixture=1).
+    scout_fixture_step_delay_s: float = 0.3
+    # Cross-layer check: the scan's floor area may be smaller than the aerial
+    # footprint by this share (walls, unscanned rooms) before the two layers
+    # are said to disagree. Our own cut-off.
+    scout_footprint_tolerance: float = 0.3
+    # Confidence factors on a site's score. Our own choices.
+    scout_factor_no_scan: float = 0.85
+    scout_factor_low_confidence: float = 0.7
+    scout_factor_footprint_mismatch: float = 0.6
 
     # --- paths ------------------------------------------------------------
     data_dir: Path = BACKEND_DIR / "data"

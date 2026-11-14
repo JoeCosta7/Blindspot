@@ -72,7 +72,8 @@ def test_solutions_table_is_consistent_with_the_contract():
 
 
 def test_funding_table_refers_only_to_known_solutions():
-    solution_ids = {s.id for s in SOLUTIONS}
+    scout = matching.load_solutions(DATA / "scout_solutions.json")
+    solution_ids = {s.id for s in SOLUTIONS} | {s.id for s in scout}
     raw = json.loads((DATA / "funding_programs.json").read_text())
     assert len({p["id"] for p in raw}) == len(raw)
     for program in PROGRAMS:

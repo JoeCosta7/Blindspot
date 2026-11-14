@@ -1,0 +1,373 @@
+"""The scout's decision loop.
+
+Each turn Gemini reads the county's needs and the state so far and returns
+one action (a structured-output call on app.gemini). Code validates it, runs
+the tool, and shows the result back. The loop stops at the target number of
+shortlisted sites, when the model says finish, or when the action budget is
+spent. If Gemini fails twice in a row the rule fallback runs the same tools
+in a fixed order, so the run still ends with a result.
+
+Gemini decides which buildings to look at and in what order. Code computes
+every measurement, check, estimate, score and funding match (tools.py).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, Literal
+
+import httpx
+from pydantic import BaseModel
+
+from app import funding, gemini, matching
+from app.config import Settings
+from app.geo import County
+from app.models import Need, ScoutEvent, ScoutResult, ScoutStop, SourceStatus
+from app.narrative import extract_numbers, format_need_value
+from app.scout import drafts, tools
+from app.scout.provider import BuildingData
+from app.scout.tools import ScoutState, add_step
+
+log = logging.getLogger(__name__)
+
+SOURCE = "scout_gemini"
+THOUGHT_MAX_WORDS = 40
+
+
+class AgentAction(BaseModel):
+    """What the model returns each turn."""
+
+    thought: str
+    tool: Literal[
+        "search_scans",
+        "search_imagery",
+        "inspect_roof",
+        "inspect_interior",
+        "evaluate_site",
+        "finish",
+    ]
+    building_id: str | None = None
+    # search_scans: words to look for in building names and room labels.
+    keywords: list[str] = []
+    # search_imagery: what to look for from above, in plain words.
+    text: str | None = None
+    # search_imagery: search around this building instead of the county centre.
+    near_building_id: str | None = None
+    # evaluate_site: the project types this building could host.
+    solution_ids: list[str] = []
+    # evaluate_site: why this site, for the official. Numbers only from the state.
+    note: str | None = None
+
+
+Decider = Callable[[str], Awaitable[AgentAction]]
+
+RULES = (
+    "Code measures and scores every site; you choose what to look at and what it could host.",
+    "Inspect a building's roof (inspect_roof) before you evaluate it. Buildings with a 3D scan "
+    "have their interior read automatically when you evaluate them.",
+    "Prefer buildings that are not homes or apartments: warehouses, stores, offices, churches, "
+    "schools, gyms, community buildings. Names and room labels are the only description.",
+    "Widen or change a search rather than evaluate a weak candidate. Use search_imagery to find "
+    "buildings that have no scan, searching around a promising building.",
+    "Write thought in one plain sentence for a county official, at most 40 words, using only "
+    "numbers that appear in the state below.",
+    "Say finish when the target is reached or nothing more is worth inspecting.",
+)
+
+
+def build_prompt(state: ScoutState) -> str:
+    settings = state.settings
+    needs = [
+        {
+            "need_id": n.id,
+            "label": n.label,
+            "level": n.level,
+            "county": format_need_value(n.value, n.unit),
+            "us": format_need_value(n.national_value, n.unit),
+            "detail": (n.detail or "")[:200] or None,
+        }
+        for n in sorted(state.needs, key=lambda n: -n.priority)
+    ]
+    projects = [
+        {"project_type": s.id, "name": s.name, "answers": s.triggers} for s in state.solutions
+    ]
+    buildings = []
+    for insp in state.seen.values():
+        line: dict[str, Any] = {"building_id": insp.building.id, "name": insp.building.name}
+        line["roof"] = "inspected" if insp.roof_checked else "not inspected"
+        if insp.building.scan_id:
+            line["scan"] = "read" if insp.interior_checked else "available"
+        if insp.candidate:
+            line["result"] = f"{insp.candidate.status}, score {insp.candidate.score}"
+        buildings.append(line)
+    budget = {
+        "actions_left": settings.scout_max_actions - state.actions_used,
+        "roof_inspections_left": settings.scout_max_roofs - state.roofs_used,
+        "shortlisted": state.shortlisted(),
+        "target": settings.scout_target_sites,
+    }
+    rules = "\n".join(f"{i}. {r}" for i, r in enumerate(RULES, start=1))
+    return (
+        f"You are scouting buildings in {state.county.name}, {state.county.state} that could host "
+        "a project meeting the county's sustainability needs. Three data layers are available "
+        "through the tools: a 3D scan library (search_scans, inspect_interior), aerial property "
+        "records and imagery (inspect_roof, search_imagery), and the county report (needs).\n\n"
+        "Tools:\n"
+        "- search_scans(keywords): scanned buildings whose name or room labels contain a keyword.\n"
+        "- search_imagery(text, near_building_id?): buildings found by describing them, e.g. "
+        '"large flat-roofed warehouse with a big parking lot".\n'
+        "- inspect_roof(building_id): footprint, roof shape and material, existing solar, rooftop "
+        "equipment, cars and paved area, from the aerial record and live detection.\n"
+        "- inspect_interior(building_id): floors, rooms and a summary from the 3D scan.\n"
+        "- evaluate_site(building_id, solution_ids, note): code scores the site for those project "
+        "types and adds estimates and funding leads.\n"
+        "- finish.\n\n"
+        f"Rules:\n{rules}\n\n"
+        f"Needs, highest priority first:\n{json.dumps(needs, ensure_ascii=False)}\n\n"
+        f"Project types:\n{json.dumps(projects)}\n\n"
+        f"Buildings seen so far:\n{json.dumps(buildings, ensure_ascii=False)}\n\n"
+        f"Budget: {json.dumps(budget)}\n\n"
+        f"Result of your last action:\n{state.last_result or '(none yet)'}\n\n"
+        "Answer with one action."
+    )
+
+
+async def gemini_decider(settings: Settings) -> Decider:
+    async def decide(prompt: str) -> AgentAction:
+        if not settings.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+        return await asyncio.wait_for(
+            gemini.generate(prompt, AgentAction, settings), settings.gemini_timeout_s
+        )
+
+    return decide
+
+
+# --- validation ------------------------------------------------------------------------
+
+
+def problem(action: AgentAction, state: ScoutState) -> str | None:
+    """Why the action cannot run, or None."""
+    if action.tool in ("inspect_roof", "inspect_interior", "evaluate_site"):
+        if not action.building_id or action.building_id not in state.seen:
+            return f"{action.tool} needs a building_id from the buildings seen so far"
+    if action.tool == "evaluate_site":
+        insp = state.seen[action.building_id or ""]
+        if not insp.roof_checked:
+            return "evaluate_site: inspect the roof first"
+        known = {s.id for s in state.solutions}
+        if action.solution_ids and not set(action.solution_ids) & known:
+            return "evaluate_site: none of those project types exist"
+    if action.tool == "search_imagery" and not (action.text or "").strip():
+        return "search_imagery needs text describing what to look for"
+    return None
+
+
+def _clean_thought(action: AgentAction, prompt: str) -> str | None:
+    """The model's thought, or None when it is too long or states a number
+    that is not in the state it was shown."""
+    thought = " ".join(action.thought.split())
+    if not thought or len(thought.split()) > THOUGHT_MAX_WORDS * 1.3:
+        return None
+    if extract_numbers(thought) - extract_numbers(prompt):
+        return None
+    return thought
+
+
+def _code_text(action: AgentAction, state: ScoutState) -> str:
+    name = state.seen[action.building_id].building.name if action.building_id in state.seen else ""
+    return {
+        "search_scans": "Searching the 3D scan library for "
+        + (", ".join(action.keywords[:5]) or "likely buildings"),
+        "search_imagery": f'Searching the aerial imagery for "{action.text}"',
+        "inspect_roof": f"Inspecting the roof of {name}",
+        "inspect_interior": f"Reading the 3D scan of {name}",
+        "evaluate_site": f"Evaluating {name}",
+        "finish": "Finishing the search",
+    }[action.tool]
+
+
+async def run_tool(action: AgentAction, state: ScoutState) -> str:
+    limit = state.settings.scout_search_limit
+    if action.tool == "search_scans":
+        return await tools.search_scans(state, action.keywords, limit)
+    if action.tool == "search_imagery":
+        return await tools.search_imagery(state, action.text or "", action.near_building_id, limit)
+    if action.tool == "inspect_roof":
+        return await tools.inspect_roof(state, action.building_id or "")
+    if action.tool == "inspect_interior":
+        return await tools.inspect_interior(state, action.building_id or "")
+    if action.tool == "evaluate_site":
+        return await tools.evaluate_site(
+            state, action.building_id or "", action.solution_ids, action.note
+        )
+    return "finished"
+
+
+# --- the rule fallback ------------------------------------------------------------------
+
+
+def rule_actions(state: ScoutState) -> AgentAction:
+    """The next action when the model is unavailable: search once, inspect
+    the roofs in order, evaluate each, finish."""
+    if not state.seen:
+        return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
+    for insp in state.seen.values():
+        if not insp.roof_checked and state.roofs_used < state.settings.scout_max_roofs:
+            return AgentAction(thought="", tool="inspect_roof", building_id=insp.building.id)
+    for insp in state.seen.values():
+        if insp.roof_checked and insp.candidate is None:
+            return AgentAction(thought="", tool="evaluate_site", building_id=insp.building.id)
+    return AgentAction(thought="", tool="finish")
+
+
+# --- the loop ---------------------------------------------------------------------------
+
+
+def _drain(state: ScoutState) -> list[ScoutEvent]:
+    events, state.pending = state.pending, []
+    return events
+
+
+async def run_scout(
+    county: County,
+    needs: list[Need],
+    solar_yield: float | None,
+    provider: BuildingData,
+    settings: Settings,
+    client: httpx.AsyncClient,
+    decider: Decider | None = None,
+    energy_community: dict[str, Any] | None = None,
+    energy_community_checked: bool = False,
+) -> AsyncIterator[ScoutEvent]:
+    """Run the agent for one county, yielding steps, candidates and finally
+    the result. Never raises past the result event."""
+    state = ScoutState(
+        county=county,
+        needs=needs,
+        solar_yield=solar_yield,
+        solutions=matching.load_solutions(settings.data_dir / "scout_solutions.json"),
+        programs=funding.load_programs(settings.data_dir / "funding_programs.json"),
+        provider=provider,
+        settings=settings,
+        client=client,
+        energy_community=energy_community,
+        energy_community_checked=energy_community_checked,
+    )
+    decide = decider or await gemini_decider(settings)
+    generated_by: Literal["gemini", "rules"] = "gemini"
+    failures = 0
+    stopped: ScoutStop = "budget_spent"
+
+    top = [n.label for n in sorted(needs, key=lambda n: -n.priority)[:3]]
+    add_step(
+        state,
+        "plan",
+        f"Scouting {county.name} for buildings that could answer: {', '.join(top) or 'its needs'}.",
+    )
+    for event in _drain(state):
+        yield event
+
+    if not needs:
+        stopped = "error"
+        add_step(
+            state,
+            "error",
+            "No needs were flagged for this county, so there is nothing to scout for.",
+        )
+        for event in _drain(state):
+            yield event
+    while needs and state.actions_used < settings.scout_max_actions:
+        prompt = build_prompt(state)
+        action: AgentAction | None = None
+        if generated_by == "gemini":
+            try:
+                action = await decide(prompt)
+                failures = 0
+            except Exception as exc:  # SDK, network, timeout or parsing
+                failures += 1
+                log.warning("scout decider failed (%d): %r", failures, exc)
+                if failures >= 2:
+                    generated_by = "rules"
+                    state.source_status.append(
+                        SourceStatus(
+                            source=SOURCE,
+                            ok=False,
+                            cached=False,
+                            message=(
+                                f"Gemini call failed ({gemini.describe_error(exc)}); "
+                                "rule fallback used"
+                            ),
+                        )
+                    )
+                    add_step(
+                        state, "error", "Gemini is unavailable; continuing with the fixed rules."
+                    )
+                else:
+                    await asyncio.sleep(2)
+                    continue
+        if action is None:
+            action = rule_actions(state)
+        state.actions_used += 1
+
+        why = problem(action, state)
+        if why:
+            add_step(state, "error", f"Skipped an action: {why}.", action.tool)
+            state.last_result = f"Invalid action: {why}"
+            for event in _drain(state):
+                yield event
+            continue
+
+        thought = _clean_thought(action, prompt) if generated_by == "gemini" else None
+        if action.tool not in ("inspect_roof", "inspect_interior", "evaluate_site"):
+            add_step(state, "action", thought or _code_text(action, state), action.tool)
+        elif thought:
+            add_step(
+                state, "action", thought, action.tool, state.seen[action.building_id or ""].building
+            )
+        for event in _drain(state):
+            yield event
+
+        if action.tool == "finish":
+            stopped = (
+                "target_reached"
+                if state.shortlisted() >= settings.scout_target_sites
+                else "no_more_candidates"
+            )
+            break
+        await run_tool(action, state)
+        for event in _drain(state):
+            yield event
+        if state.shortlisted() >= settings.scout_target_sites:
+            stopped = "target_reached"
+            break
+        if state.empty_searches >= 3:
+            stopped = "no_more_candidates"
+            break
+
+    if generated_by == "gemini" and not any(s.source == SOURCE for s in state.source_status):
+        state.source_status.append(SourceStatus(source=SOURCE, ok=True, cached=False))
+
+    order = {"shortlisted": 0, "low_confidence": 1, "rejected": 2}
+    candidates = sorted(
+        (i.candidate for i in state.seen.values() if i.candidate),
+        key=lambda c: (order[c.status], -c.score),
+    )
+    if not candidates and stopped != "error":
+        stopped = "no_more_candidates" if state.seen else "error"
+    result = ScoutResult(
+        fips=county.fips,
+        candidates=candidates,
+        drafts=[drafts.template_drafts(county, c) for c in candidates if c.status == "shortlisted"][
+            : settings.scout_draft_sites
+        ],
+        steps=state.steps,
+        stopped_because=stopped,
+        source_status=state.source_status,
+        generated_by=generated_by,
+        provider="real" if provider.name == "real" else "fake",
+    )
+    yield ScoutEvent(type="result", result=result)

@@ -1,0 +1,655 @@
+"""The actions the scout agent may take, and the state they work on.
+
+Each tool returns a short code-written text for the model and the timeline,
+and appends steps and candidates to `state.pending` for the stream. None of
+them raises: a failed layer becomes an error step and a source_status entry.
+Code, not the model, writes every number, check, estimate and score here.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any
+
+import httpx
+from shapely import wkt as shapely_wkt
+
+from app import estimates, funding, matching
+from app.config import Settings
+from app.estimates import format_number
+from app.geo import County
+from app.models import (
+    Estimate,
+    FundingMatch,
+    GeoOverlay,
+    LayerCheck,
+    Need,
+    Observation,
+    ScoutEvent,
+    ScoutStep,
+    ScoutStepKind,
+    SiteCandidate,
+    SiteStatus,
+    SourceStatus,
+)
+from app.scout import measure
+from app.scout.provider import Building, BuildingData, InteriorRecord, RoofRecord
+from app.sources import SourceError, pvwatts
+
+log = logging.getLogger(__name__)
+
+TOOLS = (
+    "search_scans",
+    "search_imagery",
+    "inspect_roof",
+    "inspect_interior",
+    "evaluate_site",
+    "finish",
+)
+# Project types that need a scanned interior to be judged at all.
+INTERIOR_SOLUTIONS = {"cooling_center"}
+# Project types that need a flat roof with no solar on it.
+ROOF_SOLUTIONS = {"rooftop_solar_commercial"}
+DEFAULT_KEYWORDS = (
+    "warehouse",
+    "office",
+    "retail",
+    "store",
+    "church",
+    "school",
+    "gym",
+    "fitness",
+    "community",
+    "center",
+    "clubhouse",
+    "library",
+    "hall",
+)
+
+
+@dataclass
+class Inspection:
+    building: Building
+    roof: RoofRecord | None = None
+    roof_checked: bool = False
+    roof_error: str | None = None
+    interior: InteriorRecord | None = None
+    interior_checked: bool = False
+    interior_error: str | None = None
+    image_name: str | None = None
+    candidate: SiteCandidate | None = None
+    # Everything the tools told the model about this building, for number checks.
+    texts: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ScoutState:
+    county: County
+    needs: list[Need]
+    solar_yield: float | None
+    solutions: tuple[matching.Solution, ...]
+    programs: tuple[funding.FundingProgram, ...]
+    provider: BuildingData
+    settings: Settings
+    client: httpx.AsyncClient
+    energy_community: dict[str, Any] | None = None
+    energy_community_checked: bool = False
+    seen: dict[str, Inspection] = field(default_factory=dict)
+    steps: list[ScoutStep] = field(default_factory=list)
+    pending: list[ScoutEvent] = field(default_factory=list)
+    source_status: list[SourceStatus] = field(default_factory=list)
+    actions_used: int = 0
+    roofs_used: int = 0
+    empty_searches: int = 0
+    last_result: str = ""
+
+    def shortlisted(self) -> int:
+        return sum(
+            1 for i in self.seen.values() if i.candidate and i.candidate.status == "shortlisted"
+        )
+
+    def all_text(self) -> str:
+        return " ".join(t for i in self.seen.values() for t in i.texts)
+
+
+def add_step(
+    state: ScoutState,
+    kind: ScoutStepKind,
+    text: str,
+    tool: str | None = None,
+    building: Building | None = None,
+) -> None:
+    step = ScoutStep(
+        index=len(state.steps),
+        kind=kind,
+        text=text,
+        tool=tool,
+        building_id=building.id if building else None,
+        lat=building.lat if building else None,
+        lon=building.lon if building else None,
+    )
+    state.steps.append(step)
+    state.pending.append(ScoutEvent(type="step", step=step))
+
+
+def _status(state: ScoutState, source: str, ok: bool, message: str | None = None) -> None:
+    if not any(s.source == source for s in state.source_status):
+        state.source_status.append(
+            SourceStatus(source=source, ok=ok, cached=False, message=message)
+        )
+
+
+def _record(state: ScoutState, inspection: Inspection, text: str) -> str:
+    inspection.texts.append(text)
+    state.last_result = text
+    return text
+
+
+def _m2(value: float | None) -> str:
+    return f"{format_number(round(value))} m²" if value is not None else "unknown"
+
+
+def _building_line(b: Building) -> str:
+    parts = [b.id, b.name]
+    if b.address:
+        parts.append(b.address)
+    if b.floors is not None:
+        parts.append(f"{b.floors} floor(s)")
+    if b.rooms is not None:
+        parts.append(f"{b.rooms} room(s)")
+    if b.room_labels:
+        parts.append("rooms: " + ", ".join(b.room_labels[:6]))
+    if b.building_type:
+        parts.append(f"type: {b.building_type}")
+    parts.append("has 3D scan" if b.scan_id else "no 3D scan")
+    return " | ".join(parts)
+
+
+# --- searches ---------------------------------------------------------------------
+
+
+async def search_scans(state: ScoutState, keywords: list[str], limit: int) -> str:
+    """Scanned buildings in the county whose name or room labels match."""
+    try:
+        buildings = await state.provider.scanned_buildings(state.county)
+        _status(state, "matterport", True)
+    except SourceError as exc:
+        _status(state, "matterport", False, str(exc))
+        add_step(state, "error", f"The 3D scan index could not be loaded: {exc}", "search_scans")
+        state.last_result = f"search_scans failed: {exc}"
+        return state.last_result
+    words = [w.strip().lower() for w in keywords if w.strip()] or list(DEFAULT_KEYWORDS)
+
+    def matches(b: Building) -> bool:
+        text = " ".join([b.name, *b.room_labels]).lower()
+        return any(w in text for w in words)
+
+    fresh = [b for b in buildings if b.id not in state.seen and matches(b)]
+    fresh.sort(key=lambda b: (-(b.rooms or 0), -(b.floors or 0), b.name))
+    picked = fresh[:limit]
+    for b in picked:
+        state.seen[b.id] = Inspection(building=b)
+    add_step(
+        state,
+        "observation",
+        f"Searched {len(buildings):,} scanned buildings in the county for "
+        f"{', '.join(words[:6])}: {len(picked)} new candidate(s).",
+        "search_scans",
+    )
+    if not picked:
+        state.empty_searches += 1
+        state.last_result = (
+            "No new scanned buildings matched those keywords. Try others or search_imagery."
+        )
+        return state.last_result
+    state.empty_searches = 0
+    lines = [_building_line(b) for b in picked]
+    state.last_result = "Scanned buildings found:\n" + "\n".join(lines)
+    for b in picked:
+        state.seen[b.id].texts.append(_building_line(b))
+    return state.last_result
+
+
+async def search_imagery(state: ScoutState, text: str, near_id: str | None, limit: int) -> str:
+    """Buildings found by searching the aerial imagery around a point."""
+    anchor = state.seen.get(near_id or "")
+    lat, lon = (
+        (anchor.building.lat, anchor.building.lon)
+        if anchor
+        else (state.county.centroid_lat, state.county.centroid_lon)
+    )
+    where = f"around {anchor.building.name}" if anchor else "around the county centre"
+    try:
+        found = await state.provider.buildings_from_above(
+            state.county, lat, lon, state.settings.scout_search_half_m, text, limit
+        )
+        _status(state, "vexcel", True)
+    except SourceError as exc:
+        _status(state, "vexcel", False, str(exc))
+        add_step(state, "error", f"The imagery search failed: {exc}", "search_imagery")
+        state.last_result = f"search_imagery failed: {exc}"
+        return state.last_result
+    picked = [b for b in found if b.id not in state.seen]
+    for b in picked:
+        state.seen[b.id] = Inspection(building=b)
+        state.seen[b.id].texts.append(_building_line(b))
+    add_step(
+        state,
+        "observation",
+        f'Searched the aerial imagery {where} for "{text}": {len(picked)} new building(s).',
+        "search_imagery",
+    )
+    if not picked:
+        state.empty_searches += 1
+        state.last_result = "The imagery search found no new buildings there."
+        return state.last_result
+    state.empty_searches = 0
+    state.last_result = "Buildings seen from above:\n" + "\n".join(
+        _building_line(b) for b in picked
+    )
+    return state.last_result
+
+
+# --- inspections ------------------------------------------------------------------------
+
+
+def _roof_text(roof: RoofRecord) -> str:
+    hvac = measure.detections_on_roof(roof.detections, roof.footprint_wkt, "rooftop hvac unit")
+    panels = measure.detections_on_roof(roof.detections, roof.footprint_wkt, "solar panel")
+    cars = [d for d in roof.detections if d.label == "car"]
+    covered = measure.obstruction_m2(hvac, roof.footprint_wkt)
+    parts = [
+        f"footprint {_m2(roof.footprint_m2)}",
+        f"roof: {roof.roof_shape or 'shape unknown'}, {roof.roof_material or 'material unknown'}",
+    ]
+    if roof.roof_condition is not None:
+        parts.append(f"condition {roof.roof_condition:.0f}/5")
+    parts.append(
+        "solar already on the roof (record)" if roof.solar_present else "no solar on record"
+    )
+    if roof.detection_failed:
+        parts.append("live detection failed")
+    else:
+        parts.append(
+            f"detected on the roof: {len(hvac)} HVAC unit(s) covering {_m2(covered)}, "
+            f"{len(panels)} solar panel area(s)"
+        )
+        parts.append(f"{len(cars)} car(s) detected on the parcel")
+    if roof.ac_units is not None:
+        parts.append(f"{roof.ac_units} AC unit(s) on record")
+    if roof.hardscape_m2 is not None:
+        parts.append(f"paved area {_m2(roof.hardscape_m2)}")
+    if roof.parcel_tree_cover_pct is not None:
+        parts.append(f"parcel tree cover {roof.parcel_tree_cover_pct:.0f}%")
+    if roof.building_type:
+        parts.append(f"building type {roof.building_type}")
+    if roof.captured:
+        parts.append(f"imagery {roof.captured}")
+    if roof.inside_parcel is False:
+        parts.append("WARNING: the point fell outside the parcel returned")
+    return "; ".join(parts)
+
+
+async def inspect_roof(state: ScoutState, building_id: str) -> str:
+    insp = state.seen[building_id]
+    b = insp.building
+    if insp.roof_checked:
+        return _record(state, insp, f"{b.id} roof already inspected: {insp.texts[-1]}")
+    if state.roofs_used >= state.settings.scout_max_roofs:
+        return _record(state, insp, "The roof inspection budget is spent. Evaluate or finish.")
+    state.roofs_used += 1
+    insp.roof_checked = True
+    add_step(
+        state,
+        "action",
+        f"Inspecting the roof and parcel of {b.name} from the air",
+        "inspect_roof",
+        b,
+    )
+    try:
+        insp.roof = await state.provider.roof(b)
+        _status(state, "vexcel", True)
+    except SourceError as exc:
+        insp.roof_error = str(exc)
+        _status(state, "vexcel", False, str(exc))
+        add_step(state, "error", f"The aerial record for {b.name} failed: {exc}", "inspect_roof", b)
+        return _record(state, insp, f"{b.id}: aerial record unavailable ({exc})")
+    if insp.roof is None:
+        add_step(
+            state, "observation", f"No parcel record at {b.name}'s location.", "inspect_roof", b
+        )
+        return _record(state, insp, f"{b.id}: no parcel or building footprint at this point")
+    try:
+        insp.image_name = await state.provider.image(b, insp.roof)
+    except Exception as exc:  # the image is for the card; the inspection stands
+        log.warning("scout image for %s failed: %r", b.id, exc)
+    text = _roof_text(insp.roof)
+    add_step(state, "observation", f"{b.name}: {text}", "inspect_roof", b)
+    return _record(state, insp, f"{b.id}: {text}")
+
+
+def _interior_text(interior: InteriorRecord) -> str:
+    floors = [a for _, a in interior.floors if a]
+    parts = [f"3D scan of {len(interior.floors)} floor(s)"]
+    if floors:
+        parts.append(f"largest scanned floor {_m2(max(floors))}")
+    else:
+        parts.append("no floor area in the scan")
+    labels = [label for label, _ in interior.rooms if label]
+    if labels:
+        parts.append("rooms: " + ", ".join(dict.fromkeys(labels))[:160])
+    if interior.classification:
+        parts.append(f"classified as {interior.classification.replace('_', ' ')}")
+    if interior.summary:
+        parts.append(f'scan summary: "{interior.summary.strip()}"')
+    return "; ".join(parts)
+
+
+async def inspect_interior(state: ScoutState, building_id: str) -> str:
+    insp = state.seen[building_id]
+    b = insp.building
+    if insp.interior_checked:
+        return _record(state, insp, f"{b.id} interior already inspected: {insp.texts[-1]}")
+    insp.interior_checked = True
+    if not b.scan_id:
+        add_step(
+            state,
+            "observation",
+            f"{b.name} has no 3D scan; the interior is unknown.",
+            "inspect_interior",
+            b,
+        )
+        return _record(state, insp, f"{b.id}: no 3D scan, interior unknown")
+    add_step(state, "action", f"Walking through the 3D scan of {b.name}", "inspect_interior", b)
+    try:
+        insp.interior = await state.provider.interior(b)
+        _status(state, "matterport", True)
+    except SourceError as exc:
+        insp.interior_error = str(exc)
+        _status(state, "matterport", False, str(exc))
+        add_step(
+            state, "error", f"The scan of {b.name} could not be read: {exc}", "inspect_interior", b
+        )
+        return _record(state, insp, f"{b.id}: scan unavailable ({exc})")
+    if insp.interior is None:
+        return _record(state, insp, f"{b.id}: the scan returned no data")
+    text = _interior_text(insp.interior)
+    add_step(state, "observation", f"{b.name}: {text}", "inspect_interior", b)
+    return _record(state, insp, f"{b.id}: {text}")
+
+
+# --- evaluation -------------------------------------------------------------------------
+
+
+def need_applies(solution_id: str, need: Need) -> bool:
+    """A hazard need counts only for the hazard the project answers."""
+    if need.id != "hazard_risk":
+        return True
+    detail = need.detail or ""
+
+    def high(hazard: str) -> bool:
+        return any(f"{hazard}: {level}" in detail for level in ("Very High", "Relatively High"))
+
+    if solution_id == "cooling_center":
+        return high("Heat wave")
+    if solution_id == "parking_canopy_solar":
+        return high("Heat wave") or high("Inland flooding") or high("Coastal flooding")
+    return True
+
+
+def _observations(roof: RoofRecord | None, interior: InteriorRecord | None) -> list[Observation]:
+    out: list[Observation] = []
+    if roof is not None:
+        when = roof.captured
+        vx = [
+            ("Building footprint", roof.footprint_m2, "m²", False),
+            ("Roof shape", roof.roof_shape, None, False),
+            ("Roof material", roof.roof_material, None, False),
+            ("Roof condition (1-5)", roof.roof_condition, None, False),
+            ("Solar on roof (record)", roof.solar_present, None, False),
+            ("AC units on roof (record)", roof.ac_units, None, False),
+            ("Paved area on parcel", roof.hardscape_m2, "m²", False),
+            ("Parcel tree cover", roof.parcel_tree_cover_pct, "%", False),
+            ("Building type (record)", roof.building_type, None, False),
+        ]
+        if not roof.detection_failed:
+            hvac = measure.detections_on_roof(
+                roof.detections, roof.footprint_wkt, "rooftop hvac unit"
+            )
+            panels = measure.detections_on_roof(roof.detections, roof.footprint_wkt, "solar panel")
+            cars = [d for d in roof.detections if d.label == "car"]
+            vx += [
+                ("Rooftop HVAC units detected", len(hvac), None, True),
+                ("Solar panel areas detected", len(panels), None, True),
+                ("Cars detected on parcel", len(cars), None, True),
+            ]
+        for label, value, unit, by_model in vx:
+            if value is None:
+                continue
+            out.append(
+                Observation(
+                    label=label,
+                    value=round(value, 1) if isinstance(value, float) else value,
+                    unit=unit,
+                    layer="vexcel",
+                    captured=when,
+                    by_model=by_model,
+                )
+            )
+    if interior is not None:
+        floors = [a for _, a in interior.floors if a]
+        mp = [
+            ("Scanned floors", len(interior.floors), None),
+            ("Largest scanned floor", max(floors) if floors else None, "m²"),
+            ("Scanned rooms", len(interior.rooms), None),
+            ("Scan classification", interior.classification, None),
+        ]
+        for label, value, unit in mp:
+            if value is None:
+                continue
+            out.append(
+                Observation(
+                    label=label,
+                    value=round(value, 1) if isinstance(value, float) else value,
+                    unit=unit,
+                    layer="matterport",
+                    by_model=label == "Scan classification",
+                )
+            )
+    return out
+
+
+def _overlays(roof: RoofRecord | None) -> list[GeoOverlay]:
+    if roof is None:
+        return []
+    names = {"rooftop hvac unit": "Rooftop HVAC unit", "solar panel": "Solar panel", "car": "Car"}
+    items: list[tuple[str, str | None]] = [
+        ("Parcel", roof.parcel_wkt),
+        ("Footprint", roof.footprint_wkt),
+    ]
+    items += [(names.get(d.label, d.label), d.wkt) for d in roof.detections]
+    overlays = []
+    for label, text in items:
+        if not text:
+            continue
+        geom = shapely_wkt.loads(text)
+        polygons = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+        for poly in polygons:
+            if poly.geom_type == "Polygon":
+                overlays.append(
+                    GeoOverlay(label=label, coordinates=[(x, y) for x, y in poly.exterior.coords])
+                )
+    return overlays
+
+
+async def _site_yield(state: ScoutState, b: Building) -> tuple[float | None, bool]:
+    try:
+        value, _ = await pvwatts.fetch_yield(state.client, state.settings, b.lat, b.lon)
+        return value, True
+    except SourceError:
+        return state.solar_yield, False
+    except Exception as exc:  # never fail the evaluation over the yield
+        log.warning("pvwatts for %s failed: %r", b.id, exc)
+        return state.solar_yield, False
+
+
+async def evaluate_site(
+    state: ScoutState, building_id: str, solution_ids: list[str], note: str | None
+) -> str:
+    insp = state.seen[building_id]
+    b = insp.building
+    if not insp.roof_checked:
+        return _record(state, insp, f"Inspect the roof of {b.id} before evaluating it.")
+    if b.scan_id and not insp.interior_checked:
+        await inspect_interior(state, building_id)
+    roof, interior = insp.roof, insp.interior
+    known = {s.id: s for s in state.solutions}
+    wanted = [known[s] for s in dict.fromkeys(solution_ids) if s in known] or list(state.solutions)
+
+    kept: list[matching.Solution] = []
+    need_ids: list[str] = []
+    dropped: list[str] = []
+    for solution in wanted:
+        matched = [
+            n for n in state.needs if n.id in solution.triggers and need_applies(solution.id, n)
+        ]
+        if not matched:
+            dropped.append(f"{solution.id}: answers no flagged need")
+            continue
+        if solution.id in ROOF_SOLUTIONS:
+            if roof is None or roof.footprint_m2 is None:
+                dropped.append(f"{solution.id}: no measured footprint")
+                continue
+            if roof.solar_present or measure.detections_on_roof(
+                roof.detections, roof.footprint_wkt, "solar panel"
+            ):
+                dropped.append(f"{solution.id}: the roof already has solar")
+                continue
+            if roof.roof_shape and "flat" not in roof.roof_shape.lower():
+                dropped.append(f"{solution.id}: the roof is {roof.roof_shape}, not flat")
+                continue
+        if solution.id in INTERIOR_SOLUTIONS and interior is None:
+            dropped.append(f"{solution.id}: no scanned interior to judge")
+            continue
+        if solution.id == "parking_canopy_solar" and (roof is None or not roof.hardscape_m2):
+            dropped.append(f"{solution.id}: no paved area on the parcel record")
+            continue
+        kept.append(solution)
+        need_ids += [n.id for n in matched if n.id not in need_ids]
+
+    checks: list[LayerCheck] = []
+    if roof is not None:
+        tolerance = state.settings.scout_footprint_tolerance
+        checks += [
+            c
+            for c in (
+                measure.footprint_check(roof, interior, tolerance),
+                measure.solar_check(roof),
+                measure.vehicle_check(roof),
+            )
+            if c
+        ]
+    factor, reasons = measure.confidence_factor(roof, interior, checks, state.settings)
+    flags: list[str] = []
+    flood = measure.flood_flag(state.needs, interior)
+    if flood:
+        flags.append(flood)
+    if roof is not None and roof.roof_condition is not None and roof.roof_condition <= 2:
+        flags.append(
+            f"Roof condition is rated {roof.roof_condition:.0f} of 5 in the aerial record; "
+            "re-roofing would come before any rooftop installation."
+        )
+
+    figures: list[Estimate] = []
+    if any(s.id in ROOF_SOLUTIONS for s in kept) and roof is not None and roof.footprint_m2:
+        hvac = measure.detections_on_roof(roof.detections, roof.footprint_wkt, "rooftop hvac unit")
+        site_yield, specific = await _site_yield(state, b)
+        figures = estimates.rooftop_solar(
+            roof.footprint_m2,
+            measure.obstruction_m2(hvac, roof.footprint_wkt),
+            site_yield,
+            specific,
+        )
+
+    leads: dict[str, FundingMatch] = {}
+    for solution in kept:
+        for lead in funding.match_funding(
+            state.programs,
+            solution.id,
+            "commercial_building",
+            energy_community=state.energy_community,
+            energy_community_checked=state.energy_community_checked,
+        ):
+            leads.setdefault(lead.program_id, lead)
+    funding_leads = sorted(
+        leads.values(), key=lambda f: (funding.STATUS_ORDER[f.status], f.deadline or "9999")
+    )
+
+    needs = [n for n in state.needs if n.id in need_ids]
+    score = round(matching.need_score(needs) * factor) if needs else 0
+    status: SiteStatus
+    if not kept:
+        status, reason = "rejected", "; ".join(dropped) or "no project type fits"
+    elif factor < 0.75 or any(not c.ok and c.label.startswith("Scan floor") for c in checks):
+        status, reason = "low_confidence", "; ".join(reasons) or "a cross-layer check failed"
+    else:
+        status, reason = (
+            "shortlisted",
+            "all checks passed" if checks else "no cross-layer check possible",
+        )
+        if reasons:
+            reason += "; " + "; ".join(reasons)
+
+    agent_note = None
+    if note and note.strip():
+        from app.narrative import extract_numbers
+
+        if extract_numbers(note) <= extract_numbers(state.all_text()):
+            agent_note = note.strip()
+
+    candidate = SiteCandidate(
+        building_id=b.id,
+        name=b.name,
+        address=b.address,
+        lat=b.lat,
+        lon=b.lon,
+        property_type=(roof.building_type if roof else None)
+        or (interior.classification if interior else None),
+        status=status,
+        solution_ids=[s.id for s in kept],
+        need_ids=need_ids,  # type: ignore[arg-type]
+        layers_used=(["vexcel"] if roof else []) + (["matterport"] if interior else []),
+        observations=_observations(roof, interior),
+        checks=checks,
+        estimates=figures,
+        funding=funding_leads,
+        flags=flags,
+        status_reason=reason,
+        agent_note=agent_note,
+        score=max(0, min(100, score)),
+        image_url=f"/api/scout/image/{insp.image_name}" if insp.image_name else None,
+        overlays=_overlays(roof),
+        interior_summary=interior.summary if interior else None,
+        tour_url=interior.tour_url if interior else None,
+    )
+    insp.candidate = candidate
+    state.pending.append(ScoutEvent(type="candidate", candidate=candidate))
+    label = {
+        "shortlisted": "Shortlisted",
+        "low_confidence": "Kept with low confidence",
+        "rejected": "Rejected",
+    }[status]
+    add_step(
+        state,
+        "decision",
+        f"{label}: {b.name} (score {candidate.score}). {reason}",
+        "evaluate_site",
+        b,
+    )
+    return _record(
+        state,
+        insp,
+        f"{b.id} evaluated: {status}, score {candidate.score}; projects: "
+        f"{', '.join(s.id for s in kept) or 'none'}; {reason}",
+    )
