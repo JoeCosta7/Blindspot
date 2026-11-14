@@ -244,7 +244,11 @@ function CountyView({
         )}
         {tab === "needs" && <NeedList needs={report.needs} />}
         {tab === "assets" && (
-          <FactorList factors={report.factors} missingAssetTypes={report.missing_asset_types} />
+          <FactorList
+            factors={report.factors}
+            highlights={report.highlights ?? []}
+            missingAssetTypes={report.missing_asset_types}
+          />
         )}
         {tab === "peers" && <PeerList report={report} onAnalyze={onAnalyzeCounty} />}
       </div>

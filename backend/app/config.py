@@ -157,6 +157,12 @@ class Settings(BaseSettings):
     # digest gives the exact count for the rest.
     digest_sites_per_type: int = 3
 
+    # --- highlights (highlights.py) -----------------------------------------
+    # A factor is a highlight only if the county is at least this many times
+    # better than the benchmark. Our own cut-off, the same as need_ratio_high.
+    highlight_min_ratio: float = 1.25
+    max_highlights: int = 3
+
     # --- paths ------------------------------------------------------------
     data_dir: Path = BACKEND_DIR / "data"
     cache_dir: Path = BACKEND_DIR / ".cache"
