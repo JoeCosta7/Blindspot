@@ -182,6 +182,34 @@ function popupContent(asset: Asset): HTMLElement {
   if (typeof project_status === "string") facts.push(`Gas project status: ${project_status}`);
   if (typeof level2_ports === "number") facts.push(`${level2_ports} Level 2 ports`);
   if (typeof dc_fast_ports === "number") facts.push(`${dc_fast_ports} fast-charge ports`);
+  if (asset.type === "power_plant") {
+    const {
+      technology,
+      nameplate_mw,
+      planned_retirement_mw,
+      planned_retirement_year,
+      retired_fossil_mw,
+      last_retirement_year,
+      grid_voltage_kv,
+    } = asset.attributes;
+    if (typeof technology === "string") facts.push(technology);
+    if (typeof nameplate_mw === "number" && nameplate_mw > 0) {
+      facts.push(`${formatNumber(nameplate_mw)} MW operating`);
+    }
+    if (typeof planned_retirement_mw === "number" && typeof planned_retirement_year === "number") {
+      facts.push(
+        `${formatNumber(planned_retirement_mw)} MW of fossil units planned to retire from ${planned_retirement_year}`,
+      );
+    }
+    if (typeof retired_fossil_mw === "number" && typeof last_retirement_year === "number") {
+      facts.push(
+        `${formatNumber(retired_fossil_mw)} MW of fossil units retired, last in ${last_retirement_year}`,
+      );
+    }
+    if (typeof grid_voltage_kv === "number") {
+      facts.push(`${formatNumber(grid_voltage_kv)} kV grid connection`);
+    }
+  }
   for (const fact of facts) {
     const line = document.createElement("div");
     line.textContent = fact;

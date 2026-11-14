@@ -36,6 +36,7 @@ _SIZE_ATTRIBUTE = {
     "landfill": "waste_in_place_tons",
     "dam": "capacity_mw",
     "wind_land": "epa_wind_mw",
+    "plant": "reuse_mw",
 }
 
 
@@ -45,7 +46,8 @@ class Solution(BaseModel):
     title_template: str
     # "county" solutions have no host site: they produce one county-wide
     # opportunity whenever a trigger need is flagged.
-    asset_kind: Literal["land", "building", "landfill", "dam", "wind_land", "county"]
+    # "plant": a power plant with fossil units retiring or retired.
+    asset_kind: Literal["land", "building", "landfill", "dam", "wind_land", "plant", "county"]
     hosts: list[str]
     host_requires: str | None = None
     triggers: list[str]

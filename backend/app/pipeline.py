@@ -54,18 +54,32 @@ from app.models import (
 from app.sources import (
     SourceError,
     afdc,
+    air_quality,
+    attains,
     census,
     dams,
+    drinking_water,
     earthengine,
+    energy_burden,
+    energy_communities,
     farms,
     geoapify,
+    grantsgov,
     lmop,
     nri,
+    openfema,
     openmeteo,
+    places,
+    power_plants,
     pvwatts,
     repowering,
+    rucc,
     state_energy,
     svi,
+    transit,
+    uswtdb,
+    utilities,
+    wildfire,
 )
 
 log = logging.getLogger(__name__)
@@ -88,7 +102,21 @@ SOURCE_NAMES = {
     "svi": "CDC Social Vulnerability Index",
     "climate": "Climate history (Open-Meteo)",
     "peers": "Census ACS (all counties, for peer counties)",
+    "energy_burden": "DOE LEAD energy burden",
+    "energy_communities": "Treasury energy community lists",
+    "power_plants": "EIA-860 power plants",
+    "utilities": "EIA-861 electric utilities",
+    "rucc": "USDA rural-urban codes",
+    "places": "CDC PLACES health estimates",
+    "air_quality": "EPA air quality design values",
+    "wildfire": "USFS wildfire risk to communities",
+    "disasters": "OpenFEMA disaster declarations",
+    "drinking_water": "EPA ECHO drinking water systems",
+    "waters": "EPA ATTAINS assessed waters",
+    "wind_turbines": "US Wind Turbine Database",
+    "transit": "BTS National Transit Map",
     "gemini": "Gemini opportunities and brief",
+    "grants_gov": "Grants.gov live listings",
 }
 
 BUILDING_TYPES = ("school", "library", "college")
@@ -126,6 +154,25 @@ def _local(read: Callable[[], Any]) -> Callable[[], Awaitable[tuple[Any, bool]]]
         return read(), False
 
     return call
+
+
+def combined_status(name: str, parts: list[str], statuses: list[SourceStatus]) -> SourceStatus:
+    """One status for a source that ran as several calls (one per part)."""
+    failures = [
+        f"{part}: {status.message}"
+        for part, status in zip(parts, statuses, strict=True)
+        if not status.ok
+    ]
+    return SourceStatus(
+        source=name,
+        ok=not failures,
+        cached=all(status.cached for status in statuses),
+        message=(
+            f"{len(failures)} of {len(parts)} searches failed ({'; '.join(failures)})"
+            if failures
+            else None
+        ),
+    )
 
 
 # --- rows -> assets -----------------------------------------------------------
@@ -217,6 +264,49 @@ def dam_assets(rows: list[dict[str, Any]]) -> list[Asset]:
         )
         for row in rows
     ]
+
+
+def plant_assets(rows: list[dict[str, Any]]) -> list[Asset]:
+    """EIA-860 plants, those with fossil units retiring or retired first, then
+    the largest."""
+    assets = []
+    for row in rows:
+        retiring = float(row.get("planned_retirement_mw") or 0.0)
+        retired = float(row.get("retired_fossil_mw") or 0.0)
+        assets.append(
+            Asset(
+                id=f"eia860:{row['plant_id']}",
+                type="power_plant",
+                name=_display_name(row.get("name"), "Unnamed power plant"),
+                lat=row["lat"],
+                lon=row["lon"],
+                attributes={
+                    "technology": row.get("primary_technology"),
+                    "nameplate_mw": _rounded(row.get("operable_mw"), 1),
+                    "fossil_mw": _rounded(row.get("fossil_mw"), 1),
+                    "planned_retirement_mw": _rounded(retiring, 1) if retiring else None,
+                    "planned_retirement_year": row.get("planned_retirement_year"),
+                    "retired_fossil_mw": _rounded(retired, 1) if retired else None,
+                    "last_retirement_year": row.get("last_retirement_year"),
+                    # Fossil capacity freed or to be freed: what repowering would reuse.
+                    "reuse_mw": _rounded(retiring + retired, 1) if retiring + retired else None,
+                    "reuse_candidate": bool(row.get("reuse_candidate")),
+                    "grid_voltage_kv": row.get("grid_voltage_kv"),
+                    "utility_name": row.get("utility_name"),
+                    "sector": row.get("sector"),
+                    "city": _display_name(row.get("city"), "") or None,
+                },
+                source=power_plants.SOURCE_LABEL,
+            )
+        )
+    assets.sort(
+        key=lambda a: (
+            not a.attributes["reuse_candidate"],
+            -float(a.attributes.get("reuse_mw") or 0.0),  # type: ignore[arg-type]
+            -float(a.attributes.get("nameplate_mw") or 0.0),  # type: ignore[arg-type]
+        )
+    )
+    return assets
 
 
 def _inside(county: County, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -442,6 +532,62 @@ async def analyze_county(
             timeout,
         ),
         _run("peers", lambda: census.fetch_all_counties(client, settings), timeout),
+        # Sources added 2026-11-14.
+        _run(
+            "energy_burden",
+            _local(lambda: energy_burden.burden_for_county(data_dir, county.fips)),
+            timeout,
+        ),
+        _run(
+            "energy_communities",
+            _local(lambda: energy_communities.status_for_county(data_dir, county.fips)),
+            timeout,
+        ),
+        _run(
+            "power_plants",
+            _local(lambda: power_plants.plants_for_county(data_dir, county.fips)),
+            timeout,
+        ),
+        _run(
+            "utilities",
+            _local(lambda: utilities.utilities_for_county(data_dir, county.fips)),
+            timeout,
+        ),
+        _run("rucc", _local(lambda: rucc.rucc_for_county(data_dir, county.fips)), timeout),
+        _run("places", _local(lambda: places.places_for_county(data_dir, county.fips)), timeout),
+        _run(
+            "air_quality",
+            _local(lambda: air_quality.design_values_for_county(data_dir, county.fips)),
+            timeout,
+        ),
+        _run(
+            "wildfire", _local(lambda: wildfire.wildfire_for_county(data_dir, county.fips)), timeout
+        ),
+        _run(
+            "disasters",
+            lambda: openfema.fetch_declarations(
+                client, settings, county.state_fips, county.county_code
+            ),
+            timeout,
+        ),
+        _run(
+            "drinking_water",
+            lambda: drinking_water.fetch_water_systems(client, settings, county.fips),
+            timeout,
+        ),
+        _run(
+            "waters",
+            lambda: attains.fetch_county_waters(client, settings, county.fips, county.geometry),
+            timeout,
+        ),
+        _run(
+            "wind_turbines", lambda: uswtdb.fetch_turbines(client, settings, county.fips), timeout
+        ),
+        _run(
+            "transit",
+            lambda: transit.fetch_stops(client, settings, county.fips, county.geometry),
+            timeout,
+        ),
     )
     (
         (acs, _),
@@ -460,6 +606,19 @@ async def analyze_county(
         (svi_row, _),
         (climate, _),
         (all_county_values, peers_status),
+        (burden, _),
+        (energy_community, _),
+        (plant_rows, _),
+        (utility_rows, _),
+        (rucc_row, _),
+        (places_row, _),
+        (air_values, _),
+        (wildfire_row, _),
+        (disasters, _),
+        (water_systems, _),
+        (waters, _),
+        (turbines, _),
+        (transit_row, _),
     ) = results
     statuses: list[SourceStatus] = [status for _, status in results]
     ok = {status.source: status.ok for status in statuses}
@@ -478,7 +637,8 @@ async def analyze_county(
     stations = ev_assets(county, station_rows or [])
     dam_sites = dam_assets(dam_rows or [])
     dam_sites.sort(key=lambda a: -(a.attributes.get("capacity_mw") or 0.0))  # type: ignore[operator]
-    all_assets = sites + landfills + buildings + stations + dam_sites
+    plants = plant_assets(plant_rows or [])
+    all_assets = sites + landfills + buildings + stations + dam_sites + plants
 
     # --- needs ----------------------------------------------------------------
     flagged: list[Need] = []
@@ -504,6 +664,11 @@ async def analyze_county(
         needs.farm_waste_need(farm_row, settings),
         needs.urban_heat_need(ee_metrics, settings),
         needs.low_tree_canopy_need(ee_metrics, settings),
+        needs.energy_burden_need(burden, settings),
+        needs.utility_shutoff_need(places_row, settings),
+        needs.drinking_water_need(water_systems, settings),
+        needs.impaired_waters_need(waters, settings),
+        needs.air_quality_need(air_values, settings),
     ):
         if extra:
             flagged.append(extra)
@@ -532,6 +697,7 @@ async def analyze_county(
         + profile.svi_profile(svi_row)
         + profile.climate_profile(climate)
         + profile.land_profile(ee_metrics)
+        + profile.places_profile(places_row)
     )
     county_factors = factors.build_factors(
         acs=acs,
@@ -544,6 +710,20 @@ async def analyze_county(
         assets=all_assets,
         settings=settings,
         profile=county_profile,
+        extra=factors.CountyExtras(
+            burden=burden,
+            utilities=utility_rows,
+            energy_community=energy_community,
+            energy_community_checked=ok["energy_communities"],
+            turbines=turbines,
+            rucc=rucc_row,
+            disasters=disasters,
+            wildfire=wildfire_row,
+            air=air_values,
+            water_systems=water_systems,
+            waters=waters,
+            transit=transit_row,
+        ),
     )
     counts = Counter(a.type for a in all_assets)
     searched: list[tuple[str, tuple[str, ...]]] = [
@@ -552,6 +732,7 @@ async def analyze_county(
         ("geoapify", BUILDING_TYPES),
         ("ev_stations", ("ev_station",)),
         ("dams", ("non_powered_dam",)),
+        ("power_plants", ("power_plant",)),
     ]
     missing = [t for source, types in searched if ok[source] for t in types if counts[t] == 0]
 
@@ -595,7 +776,14 @@ async def analyze_county(
             and len(solar_assets) < settings.max_pvwatts_sites
         ):
             solar_assets.setdefault(host.id, host)
-    site_results = await asyncio.gather(
+    # Grants.gov searches for the typed opportunities run alongside, so they add
+    # no wait. Leads are found by hand-written queries, never by Gemini.
+    grant_queries = grantsgov.load_queries(data_dir / "grants_queries.json")
+    keywords = grantsgov.keywords_for(
+        grant_queries,
+        [(p.solution.id, p.host.type if p.host else None) for p in proposals if p.solution],
+    )
+    gathered = await asyncio.gather(
         *(
             _run(
                 "pvwatts_site",
@@ -603,8 +791,21 @@ async def analyze_county(
                 timeout,
             )
             for a in solar_assets.values()
-        )
+        ),
+        *(
+            _run("grants_gov", lambda k=k: grantsgov.search(client, settings, k), timeout)
+            for k in keywords
+        ),
     )
+    site_results = gathered[: len(solar_assets)]
+    grant_results = gathered[len(solar_assets) :]
+    grant_searches = {
+        keyword: value
+        for keyword, (value, _) in zip(keywords, grant_results, strict=True)
+        if value is not None
+    }
+    if keywords:
+        statuses.append(combined_status("grants_gov", keywords, [s for _, s in grant_results]))
     site_yields = {
         asset_id: value
         for asset_id, (value, _) in zip(solar_assets, site_results, strict=True)
@@ -627,6 +828,27 @@ async def analyze_county(
                 site_yield if site_yield is not None else centroid_yield,
                 site_yield is not None,
             )
+        # The curated table's matches and the live Grants.gov listings, in one
+        # list ordered like the table: actionable first, then by deadline.
+        leads = (
+            funding.match_funding(
+                programs,
+                solution.id,
+                host.type if host else None,
+                energy_community=energy_community,
+                energy_community_checked=ok["energy_communities"],
+            )
+            + grantsgov.leads_for(
+                grant_queries,
+                grant_searches,
+                solution.id,
+                host.type if host else None,
+                settings.max_grant_leads,
+            )
+            if solution
+            else []
+        )
+        leads.sort(key=lambda f: (funding.STATUS_ORDER[f.status], f.deadline or "9999"))
         built.append(
             Opportunity(
                 id=proposal.id,
@@ -640,11 +862,7 @@ async def analyze_county(
                 factor_ids=list(proposal.factor_ids),
                 score=proposal.score,
                 estimates=figures,
-                funding=(
-                    funding.match_funding(programs, solution.id, host.type if host else None)
-                    if solution
-                    else []
-                ),
+                funding=leads,
                 generated_by=proposal.generated_by,
             )
         )
@@ -679,6 +897,7 @@ async def analyze_county(
             (buildings, settings.max_buildings_per_county),
             (stations, settings.max_ev_markers_per_county),
             (dam_sites, len(dam_sites)),
+            (plants, settings.max_power_plants_per_county),
         ],
         used,
     )

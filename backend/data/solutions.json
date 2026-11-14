@@ -5,7 +5,7 @@
     "title_template": "Community solar on {asset}",
     "asset_kind": "land",
     "hosts": ["brownfield", "landfill", "mine_land", "contaminated_site"],
-    "triggers": ["low_income", "renters", "mobile_homes", "high_electricity_cost", "carbon_intensive_grid"]
+    "triggers": ["low_income", "renters", "mobile_homes", "high_electricity_cost", "carbon_intensive_grid", "high_energy_burden"]
   },
   {
     "id": "resilience_hub",
@@ -21,7 +21,7 @@
     "title_template": "Weatherization and heat-pump sign-up clinic at {asset}",
     "asset_kind": "building",
     "hosts": ["library", "school"],
-    "triggers": ["old_housing", "delivered_fuel_heat", "mobile_homes", "high_electricity_cost"]
+    "triggers": ["old_housing", "delivered_fuel_heat", "mobile_homes", "high_electricity_cost", "high_energy_burden", "utility_shutoff_risk"]
   },
   {
     "id": "public_ev_charging",
@@ -88,5 +88,30 @@
     "asset_kind": "landfill",
     "hosts": ["lmop_landfill", "landfill"],
     "triggers": ["landfill_gas_uncaptured"]
+  },
+  {
+    "id": "repower_fossil_plant",
+    "name": "Solar and storage at a retiring or retired fossil plant",
+    "title_template": "Solar and battery storage at {asset}",
+    "asset_kind": "plant",
+    "hosts": ["power_plant"],
+    "host_requires": "reuse_candidate",
+    "triggers": ["carbon_intensive_grid", "high_electricity_cost", "high_energy_burden", "poor_air_quality"]
+  },
+  {
+    "id": "drinking_water_compliance",
+    "name": "Help for water systems with health-based violations",
+    "title_template": "Compliance and upgrade help for the county's small water systems",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": ["unsafe_drinking_water"]
+  },
+  {
+    "id": "watershed_restoration",
+    "name": "Watershed restoration on impaired streams",
+    "title_template": "Restore the county's impaired streams and lakes",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": ["impaired_waters"]
   }
 ]

@@ -408,3 +408,61 @@ def test_earth_engine_result_is_cached_by_county(settings, monkeypatch):
     (first, first_cached), (second, second_cached) = asyncio.run(run())
     assert first == second and (first_cached, second_cached) == (False, True)
     assert calls == ["99001"]
+
+
+# --- Grants.gov -------------------------------------------------------------------
+
+
+def test_grants_hit_parsing_reads_the_live_field_names():
+    from app.sources import grantsgov
+
+    parsed = grantsgov.parse_hit(
+        {
+            "id": "1",
+            "number": "EPA-26-07",
+            "title": "Brownfield Cleanup Grants &ndash; FY27",
+            "agencyCode": "EPA",
+            "agency": "Environmental Protection Agency",
+            "openDate": "10/29/2026",
+            "closeDate": "",
+            "oppStatus": "posted",
+            "cfdaList": ["66.818"],
+        }
+    )
+    assert parsed["title"] == "Brownfield Cleanup Grants – FY27"
+    assert (parsed["open_date"], parsed["close_date"]) == ("2026-10-29", None)
+    assert parsed["agency"] == "Environmental Protection Agency"
+
+
+def test_grants_leads_are_filtered_and_become_funding_matches():
+    from app.sources import grantsgov
+
+    query = grantsgov.GrantQuery(
+        keyword="landfill",
+        solution_ids=["landfill_gas_energy"],
+        agency_prefixes=["USDA"],
+        title_terms=["solid waste"],
+    )
+
+    def hit(opp_id, title, agency="USDA-RUS", status="posted", close="2027-01-01"):
+        return {"id": opp_id, "number": opp_id, "title": title, "agency_code": agency,
+                "agency": "", "status": status, "open_date": None, "close_date": close, "aln": []}
+
+    results = {
+        "landfill": {
+            "fetched_on": "2026-11-14",
+            "hits": [
+                hit("a", "Solid Waste Grant", status="forecasted", close=None),
+                hit("b", "Solid Waste research", agency="NSF"),  # agency not listed
+                hit("c", "Recycling education"),  # no title term
+                hit("d", "Solid Waste closure", close="2026-11-01"),  # already closed
+                hit("e", "Solid Waste Management Grant"),
+            ],
+        }
+    }
+    leads = grantsgov.leads_for([query], results, "landfill_gas_energy", None, 5, "2026-11-14")
+    assert [(f.program_id, f.status) for f in leads] == [
+        ("grantsgov:e", "open"),
+        ("grantsgov:a", "uncertain"),
+    ]
+    assert grantsgov.leads_for([query], results, "small_hydro", None, 5) == []

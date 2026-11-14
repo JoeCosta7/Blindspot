@@ -47,6 +47,10 @@ def format_need_value(value: float | None, unit: str) -> str | None:
         return f"${value:,.0f} a month"
     if unit == "lb_co2_per_mwh":
         return f"{value:,.0f} pounds of CO2 per MWh"
+    if unit == "ug_m3":
+        return f"{value:.1f} ug/m3"
+    if unit == "ppm":
+        return f"{value:.3f} ppm"
     return None
 
 

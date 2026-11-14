@@ -26,9 +26,14 @@ export function FundingBadge({ funding }: { funding: FundingMatch }) {
         {funding.agency}
         {funding.deadline && ` · Deadline ${formatDate(funding.deadline)}`}
         {" · "}
-        {funding.verified_on ? `Checked ${formatDate(funding.verified_on)}` : "Never checked"}
+        {funding.program_id.startsWith("grantsgov:")
+          ? `From Grants.gov ${funding.verified_on ? formatDate(funding.verified_on) : ""}`
+          : funding.verified_on
+            ? `Checked ${formatDate(funding.verified_on)}`
+            : "Never checked"}
       </div>
       <p className="funding-terms">{funding.key_terms}</p>
+      {funding.note && <p className="funding-note">{funding.note}</p>}
       {!status.available && (
         <p className="funding-warning">
           {funding.status === "unverified"

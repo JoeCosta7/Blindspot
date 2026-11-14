@@ -14,7 +14,7 @@ import pandas as pd
 from app.sources import SourceError
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=32)
 def _load(path: Path) -> dict[str, pd.DataFrame]:
     if not path.exists():
         raise SourceError(f"{path.name} is missing; run scripts/prep_data.py")

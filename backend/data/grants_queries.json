@@ -1,0 +1,82 @@
+[
+  {
+    "keyword": "brownfield",
+    "solution_ids": ["community_solar", "wind_on_reclaimed_land"],
+    "agency_prefixes": ["EPA"],
+    "title_terms": ["brownfield"],
+    "asset_types": ["brownfield"],
+    "note": "Tested 2026-11-14: EPA FY27 Brownfield Assessment, Cleanup and RLF grants."
+  },
+  {
+    "keyword": "mitigation",
+    "solution_ids": ["resilience_hub"],
+    "agency_prefixes": ["DHS"],
+    "title_terms": ["mitigation", "resilien"],
+    "exclude_terms": ["noise"],
+    "note": "Tested 2026-11-14: FEMA Flood Mitigation Assistance (listed under DHS-DHS)."
+  },
+  {
+    "keyword": "weatherization",
+    "solution_ids": ["weatherization_clinic"],
+    "agency_prefixes": ["DOE", "HHS-ACF"],
+    "title_terms": ["weatherization", "energy assistance"],
+    "note": "Tested 2026-11-14: no listing."
+  },
+  {
+    "keyword": "charging",
+    "solution_ids": ["public_ev_charging"],
+    "agency_prefixes": ["DOT", "DOE"],
+    "title_terms": ["charging", "fueling", "electric vehicle"],
+    "note": "Tested 2026-11-14: no listing."
+  },
+  {
+    "keyword": "landfill",
+    "solution_ids": ["landfill_gas_energy", "landfill_composting"],
+    "agency_prefixes": ["EPA", "USDA", "DOE"],
+    "title_terms": ["landfill", "solid waste", "methane", "biogas"],
+    "note": "Tested 2026-11-14: USDA Solid Waste Management Grant Program."
+  },
+  {
+    "keyword": "recycling",
+    "solution_ids": ["landfill_composting"],
+    "agency_prefixes": ["EPA", "USDA"],
+    "title_terms": ["recycling", "compost", "solid waste", "food waste"],
+    "note": "Tested 2026-11-14: USDA Solid Waste Management Grant Program."
+  },
+  {
+    "keyword": "hydropower",
+    "solution_ids": ["small_hydro"],
+    "agency_prefixes": ["DOE"],
+    "title_terms": ["hydropower", "hydroelectric"],
+    "note": "Tested 2026-11-14: no listing."
+  },
+  {
+    "keyword": "wind energy",
+    "solution_ids": ["wind_on_reclaimed_land"],
+    "agency_prefixes": ["DOE"],
+    "title_terms": ["wind"],
+    "note": "Tested 2026-11-14: no listing."
+  },
+  {
+    "keyword": "urban forest",
+    "solution_ids": ["shade_trees_depaving"],
+    "agency_prefixes": ["USDA-FS"],
+    "title_terms": ["urban", "community forest"],
+    "exclude_terms": ["great lakes"],
+    "note": "Great Lakes programs are excluded: they cover only those states."
+  },
+  {
+    "keyword": "rural energy",
+    "solution_ids": ["farm_digester"],
+    "agency_prefixes": ["USDA"],
+    "title_terms": ["renewable energy", "energy efficiency", "digester", "biogas"],
+    "note": "Tested 2026-11-14: USDA-RBCS Renewable Energy Systems and Energy Efficiency Improvements Program (forecasted)."
+  },
+  {
+    "keyword": "schools",
+    "solution_ids": ["school_heat_pumps"],
+    "agency_prefixes": ["DOE"],
+    "title_terms": ["school"],
+    "note": "Tested 2026-11-14: no listing."
+  }
+]

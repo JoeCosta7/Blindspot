@@ -69,6 +69,7 @@ ASSET_LABELS = {
     "college": "Colleges",
     "ev_station": "Public EV charging stations",
     "non_powered_dam": "Dams without hydropower",
+    "power_plant": "Power plants (1 MW or more)",
 }
 # Counted but never listed: nobody builds a project at an existing charger.
 COUNT_ONLY_TYPES = {"ev_station"}
@@ -179,6 +180,20 @@ def _site_facts(asset: Asset) -> str | None:
             facts.append(f"on {a['waterway']}")
         if a.get("owner_type"):
             facts.append(f"owner type: {a['owner_type']}")
+    elif asset.type == "power_plant":
+        if a.get("technology"):
+            facts.append(str(a["technology"]))
+        facts.append(_amount(a.get("nameplate_mw"), "MW operating"))
+        retiring = _amount(a.get("planned_retirement_mw"), "MW of fossil units")
+        if retiring and a.get("planned_retirement_year"):
+            facts.append(f"{retiring} planned to retire from {a['planned_retirement_year']}")
+        retired = _amount(a.get("retired_fossil_mw"), "MW of fossil units")
+        if retired and a.get("last_retirement_year"):
+            facts.append(f"{retired} retired, most recently in {a['last_retirement_year']}")
+        voltage = _amount(a.get("grid_voltage_kv"), "kV grid connection")
+        facts.append(voltage)
+        if a.get("utility_name"):
+            facts.append(f"operator: {a['utility_name']}")
     else:
         facts.append(_amount(a.get("acres"), "acres"))
         solar = _amount(a.get("epa_pv_mw"), "MW")

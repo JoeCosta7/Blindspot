@@ -49,6 +49,10 @@ export function formatNeedValue(value: number | null, unit: NeedUnit): string | 
       return `${formatWhole(value)} lb CO2 per MWh`;
     case "celsius":
       return `${value.toFixed(1)} °C`;
+    case "ug_m3":
+      return `${value.toFixed(1)} µg/m³`;
+    case "ppm":
+      return `${value.toFixed(3)} ppm`;
     case "rating":
       return null;
   }
@@ -72,6 +76,8 @@ export const THEME_LABELS: Record<NeedTheme, string> = {
   transportation: "Transportation",
   waste: "Waste",
   resilience: "Resilience",
+  water: "Water",
+  health: "Health",
 };
 
 interface AssetStyle {
@@ -103,6 +109,11 @@ export const ASSET_STYLES: Record<AssetType, AssetStyle> = {
     label: "Dam without hydropower",
     plural: "Dams without hydropower (ORNL)",
     color: "#0f766e",
+  },
+  power_plant: {
+    label: "Power plant",
+    plural: "Power plants, 1 MW or more (EIA-860)",
+    color: "#ea580c",
   },
 };
 
@@ -143,6 +154,19 @@ export const SOURCE_NAMES: Record<string, string> = {
   climate: "Climate history (Open-Meteo)",
   peers: "Census ACS (all counties, for peer counties)",
   gemini: "Gemini opportunities and brief",
+  energy_burden: "DOE LEAD energy burden",
+  energy_communities: "Treasury energy community lists",
+  power_plants: "EIA-860 power plants",
+  utilities: "EIA-861 electric utilities",
+  rucc: "USDA rural-urban codes",
+  places: "CDC PLACES health estimates",
+  air_quality: "EPA air quality design values",
+  wildfire: "USFS wildfire risk to communities",
+  disasters: "OpenFEMA disaster declarations",
+  drinking_water: "EPA ECHO drinking water systems",
+  waters: "EPA ATTAINS assessed waters",
+  wind_turbines: "US Wind Turbine Database",
+  transit: "BTS National Transit Map",
 };
 
 /** Headings for the factor categories, in the order the backend sends them. */

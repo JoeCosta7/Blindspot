@@ -23,9 +23,21 @@ export type NeedId =
   | "carbon_intensive_grid"
   | "unmanaged_farm_waste"
   | "urban_heat"
-  | "low_tree_canopy";
+  | "low_tree_canopy"
+  | "high_energy_burden"
+  | "utility_shutoff_risk"
+  | "unsafe_drinking_water"
+  | "impaired_waters"
+  | "poor_air_quality";
 
-export type NeedTheme = "equity" | "energy" | "transportation" | "waste" | "resilience";
+export type NeedTheme =
+  | "equity"
+  | "energy"
+  | "transportation"
+  | "waste"
+  | "resilience"
+  | "water"
+  | "health";
 export type NeedLevel = "elevated" | "high";
 export type NeedUnit =
   | "share"
@@ -35,7 +47,9 @@ export type NeedUnit =
   | "rating"
   | "usd_per_month"
   | "lb_co2_per_mwh"
-  | "celsius";
+  | "celsius"
+  | "ug_m3"
+  | "ppm";
 
 export type AssetType =
   | "brownfield"
@@ -47,7 +61,8 @@ export type AssetType =
   | "library"
   | "college"
   | "ev_station"
-  | "non_powered_dam";
+  | "non_powered_dam"
+  | "power_plant";
 
 export type FundingStatus =
   | "open"
@@ -134,7 +149,10 @@ export interface FundingMatch {
   key_terms: string;
   verified_on: string | null;
   source_url: string | null;
+  /** Why the program applies here, when that depends on the county or site. */
+  note: string | null;
 }
+
 
 /** A way to meet one or more needs with what the county has. Written by Gemini
  * from the needs, factors and sites, or matched by rule when Gemini is
@@ -156,6 +174,8 @@ export interface Opportunity {
   factor_ids: string[];
   score: number;
   estimates: Estimate[];
+  /** The curated table's matches plus live Grants.gov listings
+   * (program_id "grantsgov:<id>"). */
   funding: FundingMatch[];
   generated_by: "gemini" | "rules";
 }

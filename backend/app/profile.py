@@ -13,7 +13,7 @@ from typing import Any
 
 from app.config import Settings
 from app.models import ProfileCategory, ProfileFact, ProfileUnit
-from app.sources import earthengine, openmeteo, svi
+from app.sources import earthengine, openmeteo, places, svi
 from app.sources.census import AcsMetrics
 
 
@@ -287,6 +287,76 @@ def svi_profile(row: dict[str, Any] | None) -> list[ProfileFact]:
                 unit=unit,
                 source=svi.SOURCE_LABEL,
                 note=note,
+            )
+        )
+    return facts
+
+
+_PLACES_NOTE = "Share of adults; a CDC model-based estimate from the 2023 BRFSS survey. {what}"
+
+# (row key, id, label, note)
+PLACES_PROFILE: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "asthma",
+        "adult_asthma",
+        "Adults with asthma",
+        _PLACES_NOTE.format(what="Asthma worsens with smoke, ozone and fine-particle pollution."),
+    ),
+    (
+        "copd",
+        "adult_copd",
+        "Adults with COPD",
+        _PLACES_NOTE.format(what="Chronic obstructive pulmonary disease."),
+    ),
+    (
+        "utility_shutoff_threat",
+        "utility_shutoff_threat",
+        "Adults threatened with a utility shut-off in the past year",
+        _PLACES_NOTE.format(what="Electric, gas, oil or water service."),
+    ),
+    (
+        "food_insecurity",
+        "food_insecurity",
+        "Adults who were food insecure in the past year",
+        _PLACES_NOTE.format(what=""),
+    ),
+    (
+        "housing_insecurity",
+        "housing_insecurity",
+        "Adults who were housing insecure in the past year",
+        _PLACES_NOTE.format(what="Could not pay rent or mortgage on time."),
+    ),
+    (
+        "lack_transportation",
+        "lack_transportation",
+        "Adults without reliable transportation in the past year",
+        _PLACES_NOTE.format(what="For medical care, work or daily living."),
+    ),
+)
+
+
+def places_profile(places_row: dict[str, Any] | None) -> list[ProfileFact]:
+    """CDC PLACES health and social-needs estimates, beside the US figure (the
+    adult-weighted average of all counties)."""
+    if not places_row:
+        return []
+    county, national = places_row["county"], places_row.get("national") or {}
+    facts: list[ProfileFact] = []
+    for key, fact_id, label, note in PLACES_PROFILE:
+        value = county.get(key)
+        if value is None:
+            continue
+        baseline = national.get(key)
+        facts.append(
+            ProfileFact(
+                id=fact_id,
+                category="community",
+                label=label,
+                value=float(value),
+                national_value=float(baseline) if baseline is not None else None,
+                unit="share",
+                source=places.SOURCE_LABEL,
+                note=f"{note.strip()} {places.NATIONAL_NOTE}",
             )
         )
     return facts

@@ -19,7 +19,7 @@
     "agency": "IRS",
     "type": "tax_credit",
     "eligible_applicants": ["local_government", "school", "nonprofit"],
-    "eligible_solutions": ["community_solar", "resilience_hub", "wind_on_reclaimed_land"],
+    "eligible_solutions": ["community_solar", "resilience_hub", "wind_on_reclaimed_land", "repower_fossil_plant"],
     "eligible_asset_types": null,
     "status": "open_with_deadlines",
     "deadline": "2027-12-31",
@@ -47,13 +47,14 @@
     "agency": "IRS",
     "type": "tax_credit_adder",
     "eligible_applicants": ["local_government", "school", "nonprofit"],
-    "eligible_solutions": ["community_solar", "wind_on_reclaimed_land"],
+    "eligible_solutions": ["community_solar", "wind_on_reclaimed_land", "repower_fossil_plant"],
     "eligible_asset_types": null,
+    "requires_energy_community": true,
     "status": "open_with_deadlines",
     "deadline": "2027-12-31",
-    "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
+    "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. A project qualifies by its location: a statistical area or coal-closure census tract on the IRS lists, or a brownfield site. The note says what the Treasury data show for this county; the project's own tract still needs checking.",
     "source_url": "https://www.eesi.org/briefings/view/121225tax",
-    "verified_on": "2026-11-13"
+    "verified_on": "2026-11-14"
   },
   {
     "id": "usda_reap",

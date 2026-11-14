@@ -234,6 +234,8 @@ def has_estimate_inputs(asset_kind: str, attributes: dict[str, Any]) -> bool:
         return bool(attributes.get("epa_wind_mw"))
     if asset_kind == "county":
         return False  # no site, so nothing to size
+    if asset_kind == "plant":
+        return False  # no estimate for repowering a plant yet
     if asset_kind == "land":
         acres = attributes.get("acres")
         return acres is not None and acres > 0

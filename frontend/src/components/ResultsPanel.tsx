@@ -29,6 +29,10 @@ const LOADING_SOURCES = [
   "NLR: EV charging stations",
   "NLR PVWatts: solar yield",
   "Open-Meteo: ten years of weather",
+  "DOE LEAD energy burden and CDC PLACES health estimates",
+  "EIA-860 power plants, EIA-861 utilities, Treasury energy communities",
+  "EPA drinking water (ECHO), assessed waters (ATTAINS) and air quality",
+  "FEMA disaster history, USFS wildfire risk, wind turbines, transit stops",
   "Gemini: opportunities and brief, written from the needs and assets",
 ];
 

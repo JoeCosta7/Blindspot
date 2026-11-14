@@ -349,11 +349,17 @@ export function App() {
               Program database (September 2024) · NLR PVWatts and Alternative Fuels Station
               Locator · EIA residential electricity sales data (2024) · EPA eGRID2023 · ORNL
               HydroSource non-powered dam assessment (2025) · USDA Census of Agriculture 2022 ·
-              EPA AgSTAR digester database · ESA WorldCover 2021 · NASA SRTM · Public buildings: Geoapify (data © OpenStreetMap contributors) ·{" "}
+              EPA AgSTAR digester database · ESA WorldCover 2021 · NASA SRTM · DOE LEAD Tool
+              (2022) · Treasury energy community data (IRS Notice 2026-39) · EIA-860 and EIA-861
+              (2025) · USDA ERS Rural-Urban Continuum Codes 2023 · CDC PLACES 2025 · EPA air
+              quality design values 2023–2025 · USFS Wildfire Risk to Communities · OpenFEMA
+              disaster declarations · EPA ECHO drinking water data · EPA ATTAINS · US Wind Turbine
+              Database (USGS) · BTS National Transit Map · Public buildings: Geoapify (data © OpenStreetMap contributors) ·{" "}
               <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
                 Weather data by Open-Meteo.com
               </a>{" "}
-              (CC BY 4.0) · County boundaries: Census 2025.
+              (CC BY 4.0) · County boundaries: Census 2025 · Live federal listings: Grants.gov
+              (this product uses the Grants.gov API but is not endorsed or certified by HHS).
             </p>
             <p>
               This product uses the Census Bureau Data API but is not endorsed or certified by the

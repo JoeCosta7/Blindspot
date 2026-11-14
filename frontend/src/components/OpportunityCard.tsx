@@ -177,7 +177,7 @@ export function OpportunityCard({
         <section className="funding-list">
           <h4>Funding leads</h4>
           {opportunity.funding.length === 0 ? (
-            <p className="muted">No program in the curated funding table matches this yet.</p>
+            <p className="muted">No program in our funding table or on Grants.gov matches this yet.</p>
           ) : (
             opportunity.funding.map((funding) => (
               <FundingBadge key={funding.program_id} funding={funding} />
