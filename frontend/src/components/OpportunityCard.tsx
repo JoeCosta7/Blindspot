@@ -1,13 +1,46 @@
-import type { Asset, Factor, Need, Opportunity, ScoutRun, SiteCandidate } from "../types";
+import { useState } from "react";
+import { ASSET_STYLES } from "../format";
+import type {
+  Asset,
+  Factor,
+  FundingMatch,
+  Need,
+  Opportunity,
+  ProjectDocument,
+  ScoutRun,
+  SiteActionPlan,
+  SiteCandidate,
+} from "../types";
 import { EstimateRow } from "./EstimateRow";
 import { FundingBadge } from "./FundingBadge";
 import { ScoutPanel } from "./ScoutPanel";
+
+const DOCUMENT_KIND_LABEL: Record<ProjectDocument["kind"], string> = {
+  grant_application: "Grant application",
+  program_guide: "Program guide",
+  tax_form: "Tax form",
+  property_agreement: "Property form",
+  environmental_review: "Environmental review",
+  interconnection: "Interconnection",
+  other: "Document",
+};
 
 /** Site Scout for this opportunity: present only in the counties with building data. */
 export interface ScoutHooks {
   run: ScoutRun | null;
   onStart: () => void;
   onShowCandidate: (candidate: SiteCandidate) => void;
+}
+
+/** Who owns the dam decides whether the county can act on it at all. */
+function DamFacts({ asset }: { asset: Asset }) {
+  const { owner_type, waterway } = asset.attributes;
+  const facts = [
+    typeof waterway === "string" ? `On ${waterway}` : null,
+    typeof owner_type === "string" ? `Owner type: ${owner_type}` : null,
+  ].filter((fact): fact is string => fact !== null);
+  if (facts.length === 0) return null;
+  return <p className="muted">{facts.join(" · ")}</p>;
 }
 
 function DocumentCard({ doc }: { doc: ProjectDocument }) {
@@ -169,15 +202,18 @@ interface Props {
 export function OpportunityCard({
   rank,
   opportunity,
+  assets,
   needs,
   factors,
   note,
+  onShowOnMap,
   scout,
 }: Props) {
   const addressed = needs.filter((need) => opportunity.need_ids.includes(need.id));
   // Absent in reports saved before the field existed.
   const fits = new Map((opportunity.need_fits ?? []).map((fit) => [fit.need_id, fit.text]));
   const drawsOn = factors.filter((factor) => opportunity.factor_ids.includes(factor.id));
+  const main = assets[0];
   const byGemini = opportunity.generated_by === "gemini";
   const typed = opportunity.solution_id !== null;
   const plan = opportunity.plan.length > 0 ? opportunity.plan : opportunity.first_steps;
@@ -219,8 +255,20 @@ export function OpportunityCard({
     >
       <header className="opportunity-head">
         <span className="rank">{rank}</span>
-        {/* The opportunity is general; Site Scout finds the building. */}
-        <h3>{opportunity.title}</h3>
+        <h3>
+          <button
+            type="button"
+            className="opportunity-toggle"
+            onClick={toggleExpanded}
+            aria-expanded={expanded}
+            aria-controls={detailId}
+          >
+            <span className="opportunity-toggle-label">{opportunity.title}</span>
+            <span className="opportunity-chevron" aria-hidden="true">
+              {expanded ? "▾" : "▸"}
+            </span>
+          </button>
+        </h3>
         <span
           className="score"
           title="Set by code, not by Gemini: halfway between the highest and the mean priority of the needs addressed, reduced when the site lacks the data an estimate needs"
@@ -257,31 +305,24 @@ export function OpportunityCard({
         </div>
       )}
 
-      {drawsOn.length > 0 && (
-        <div className="chips">
-          <span className="chips-label">Draws on</span>
-          {drawsOn.map((factor) => (
-            <span
-              key={factor.id}
-              className="chip chip-factor"
-              title={[factor.value, factor.comparison].filter(Boolean).join(" · ")}
-            >
-              {factor.label}
-            </span>
-          ))}
-        </div>
+      {!expanded && (
+        <p className="muted opportunity-preview">
+          {collapsedMeta(assets, opportunity.funding.length, opportunity.estimates.length)}
+          {" · "}
+          <button type="button" className="linkish" onClick={toggleExpanded}>
+            Show plan and funding
+          </button>
+        </p>
       )}
 
-      {opportunity.first_steps.length > 0 && (
-        <section className="first-steps">
-          <h4>First steps</h4>
-          <ol>
-            {opportunity.first_steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-        </section>
-      )}
+      {expanded && (
+        <div id={detailId} className="opportunity-detail">
+          {opportunity.rationale && (
+            <p className="note">
+              <strong>Why here:</strong> {opportunity.rationale}
+            </p>
+          )}
+          {note && <p className="note">{note}</p>}
 
           {drawsOn.length > 0 && (
             <div className="chips">

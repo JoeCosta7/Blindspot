@@ -941,6 +941,11 @@ async def analyze_county(
     # project type to size or to look up in the funding table.
     programs = funding.load_programs(data_dir / "funding_programs.json")
     project_docs = documents.load_documents(data_dir / "project_documents.json")
+    scout_solutions = (
+        matching.load_solutions(data_dir / "scout_solutions.json")
+        if county.fips in settings.scout_counties
+        else ()
+    )
     built: list[Opportunity] = []
     for proposal in proposals:
         solution, host = proposal.solution, proposal.host
