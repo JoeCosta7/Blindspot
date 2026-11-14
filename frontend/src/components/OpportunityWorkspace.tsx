@@ -33,6 +33,8 @@ export function OpportunityWorkspace({
   const [ws, setWs] = useState<WorkspaceState>(() => loadWorkspace(report.fips, opportunity.id));
   useEffect(() => saveWorkspace(report.fips, opportunity.id, ws), [report.fips, opportunity.id, ws]);
   const update = (change: Partial<WorkspaceState>) => setWs((s) => ({ ...s, ...change }));
+  // Report sites stay hidden until asked for, like Site Scout's.
+  const [revealed, setRevealed] = useState(false);
 
   const needs = report.needs.filter((n) => opportunity.need_ids.includes(n.id));
   const candidates = run ? bestSites(run) : [];
@@ -42,6 +44,7 @@ export function OpportunityWorkspace({
     .filter((a): a is Asset => a !== undefined)
     .slice(0, 3);
   const countyWide = opportunity.asset_ids.length === 0 && !canScout;
+  const showReportSites = revealed && candidates.length === 0;
   const chosenCandidate = candidates.find((c) => c.building_id === ws.siteId) ?? null;
   const chosenAsset = reportSites.find((a) => a.id === ws.siteId) ?? null;
   const chosenName =
@@ -88,6 +91,14 @@ export function OpportunityWorkspace({
 
       {ws.stage === "site" && (
         <div className="workspace-body">
+          {!canScout && reportSites.length > 0 && !revealed && (
+            <div className="card workspace-callout">
+              <p>Show the places the county report found for this project.</p>
+              <button type="button" className="button" onClick={() => setRevealed(true)}>
+                Find sites
+              </button>
+            </div>
+          )}
           {canScout && !run && (
             <div className="card workspace-callout">
               <p>
@@ -129,7 +140,7 @@ export function OpportunityWorkspace({
             </div>
           )}
 
-          {candidates.length === 0 && reportSites.length > 0 && (
+          {showReportSites && reportSites.length > 0 && (
             <div className="site-columns">
               {reportSites.map((a, i) => {
                 const plan = opportunity.site_plans.find((p) => p.site_id === a.id);

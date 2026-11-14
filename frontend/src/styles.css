@@ -2033,3 +2033,8 @@ button {
     font: 11pt/1.45 Georgia, serif;
   }
 }
+
+/* In the workspace the photo covers the area below the map strip. */
+.photo-viewer.in-workspace {
+  top: 236px;
+}

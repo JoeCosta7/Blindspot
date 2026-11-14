@@ -5,11 +5,13 @@ import type { ImageOption, SiteCandidate } from "../types";
 interface Props {
   candidate: SiteCandidate;
   onClose: () => void;
+  /** Extra class, e.g. to sit over the workspace. */
+  className?: string;
 }
 
 /** The Vexcel photos of a scouted site, large, over the map. Arrow keys or
  * the buttons cycle the side-angle directions; Escape closes. */
-export function PhotoViewer({ candidate, onClose }: Props) {
+export function PhotoViewer({ candidate, onClose, className }: Props) {
   // The eager photo first, then the other directions, fetched when shown.
   const options: ImageOption[] =
     candidate.image_options.length > 0
@@ -40,7 +42,7 @@ export function PhotoViewer({ candidate, onClose }: Props) {
 
   const capacity = candidate.estimates.find((e) => e.label === "Capacity");
   return (
-    <div className="photo-viewer" role="dialog" aria-label={`Aerial photo of ${candidate.name}`}>
+    <div className={className ? `photo-viewer ${className}` : "photo-viewer"} role="dialog" aria-label={`Aerial photo of ${candidate.name}`}>
       <header className="photo-viewer-head">
         <div>
           <h3>{candidate.name}</h3>

@@ -453,7 +453,7 @@ export function App() {
             if (candidate) showCandidate(candidate);
           }}
           overlay={
-            viewed ? (
+            viewed && !pursued ? (
               <PhotoViewer
                 key={viewed.building_id}
                 candidate={viewed}
@@ -475,6 +475,14 @@ export function App() {
             onBack={() => setWorkspace(null)}
           />
         )}
+        {pursued && viewed && (
+          <PhotoViewer
+            key={viewed.building_id}
+            candidate={viewed}
+            className="in-workspace"
+            onClose={() => setViewed(null)}
+          />
+        )}
         </div>
 
         <aside className="panel" aria-label="Results">
@@ -494,11 +502,6 @@ export function App() {
               response={response}
               activeIndex={activeIndex}
               onSelectCounty={switchCounty}
-              // A new object each time, so clicking the same site twice flies again.
-              onShowOnMap={(asset) => {
-                setViewed(null);
-                setFocusAsset({ ...asset });
-              }}
               onAnalyzeCounty={selectCounty}
               scout={{
                 scoutRuns,
