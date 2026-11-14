@@ -32,6 +32,7 @@ DATA_FILES = (
     "repowering.parquet",
     "lmop.parquet",
     "nri_counties.parquet",
+    "svi_counties.parquet",
     "state_energy.json",
     "dams.parquet",
     "farms.parquet",

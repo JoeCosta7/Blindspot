@@ -6,7 +6,7 @@
 Raw downloads go to data/raw/ (git-ignored) and are reused on the next run.
 Outputs: data/counties.geojson, repowering.parquet, lmop.parquet,
 nri_counties.parquet, and the stretch files state_energy.json, dams.parquet
-and farms.parquet. The `farms` step downloads about 310 MB.
+farms.parquet and svi_counties.parquet. The `farms` step downloads about 310 MB.
 
 Every column mapping below was written after opening the real file on
 2026-11-13 or 2026-11-14. Each step prints the columns it found and stops if an
@@ -827,7 +827,41 @@ def prep_farms(counties: gpd.GeoDataFrame) -> None:
 
 # --- entry point ------------------------------------------------------------
 
-STEPS = ("counties", "repowering", "lmop", "nri", "energy", "dams", "farms")
+SVI_URL = "https://svi.cdc.gov/Documents/Data/2022/csv/states_counties/SVI_2022_US_county.csv"
+# Original column -> prepared column. Checked against the downloaded file and
+# https://www.atsdr.cdc.gov/place-health/php/svi/svi-data-documentation-download.html
+# on 2026-11-14. RPL_* are percentile ranks among all US counties (0-1, higher
+# is more vulnerable); EP_* are percentages. -999 means no data.
+SVI_FIELDS = {
+    "FIPS": "county_fips",
+    "RPL_THEMES": "svi_overall",
+    "RPL_THEME1": "svi_socioeconomic",
+    "RPL_THEME2": "svi_household",
+    "RPL_THEME3": "svi_minority_language",
+    "RPL_THEME4": "svi_housing_transport",
+    "EP_AGE65": "age65_pct",
+    "EP_DISABL": "disability_pct",
+}
+
+
+def prep_svi() -> None:
+    print("[svi]")
+    src = download(SVI_URL, RAW_DIR / "SVI_2022_US_county.csv")
+    df = pd.read_csv(src, dtype={"FIPS": str}, encoding="utf-8-sig")
+    print(f"  columns: {list(df.columns)}")
+    require_columns(df, list(SVI_FIELDS), "SVI")
+    out = df[list(SVI_FIELDS)].rename(columns=SVI_FIELDS)
+    out["county_fips"] = out["county_fips"].str.zfill(5)
+    values = [c for c in out.columns if c != "county_fips"]
+    out[values] = out[values].astype(float).mask(out[values] < 0)  # -999 -> null
+    out = out.drop_duplicates("county_fips").sort_values("county_fips")
+    dest = DATA_DIR / "svi_counties.parquet"
+    out.to_parquet(dest, index=False)
+    print(f"  {len(out)} counties, {out['svi_overall'].isna().sum()} without an overall rank")
+    print(f"  wrote {dest}")
+
+
+STEPS = ("counties", "repowering", "lmop", "nri", "energy", "dams", "farms", "svi")
 
 
 def main(argv: list[str]) -> None:
@@ -852,6 +886,8 @@ def main(argv: list[str]) -> None:
         prep_dams(counties)
     if "farms" in steps:
         prep_farms(counties)
+    if "svi" in steps:
+        prep_svi()
     print("done")
 
 

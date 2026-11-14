@@ -353,3 +353,29 @@ def test_error_timeout_and_empty_answer_return_none(monkeypatch, settings):
         found, status = suggest(sample_digest(), keyed)
         assert found == [] and status.ok is False
         assert expected in status.message
+
+
+def test_digest_includes_profile_and_its_numbers_are_allowed():
+    from app.models import ProfileFact
+
+    fact = ProfileFact(
+        id="trades_workers",
+        category="workforce",
+        label="Workers in construction, maintenance and natural resource jobs",
+        value=0.183,
+        national_value=0.087,
+        unit="share",
+        source="ACS 2020-2024",
+    )
+    digest = suggestions.build_digest(
+        "Test County", "ZZ", 20_000, CountyContext(), Resources(), [], [], [], [], 2, [fact]
+    )
+    assert digest["profile"] == [
+        {
+            "label": "Workers in construction, maintenance and natural resource jobs",
+            "category": "workforce",
+            "county_value": "18.3%",
+            "national_value": "8.7%",
+        }
+    ]
+    assert {18.3, 8.7} <= suggestions.allowed_numbers(digest)

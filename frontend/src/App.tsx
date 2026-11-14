@@ -325,12 +325,15 @@ export function App() {
             <strong>Data sources</strong>
             <p>
               U.S. Census Bureau, American Community Survey 2020–2024 · FEMA National Risk Index
-              v1.20 · EPA RE-Powering screening dataset (2022) · EPA Landfill Methane Outreach
+              v1.20 · CDC/ATSDR Social Vulnerability Index 2022 · EPA RE-Powering screening dataset (2022) · EPA Landfill Methane Outreach
               Program database (September 2024) · NLR PVWatts and Alternative Fuels Station
               Locator · EIA residential electricity sales data (2024) · EPA eGRID2023 · ORNL
               HydroSource non-powered dam assessment (2025) · USDA Census of Agriculture 2022 ·
-              EPA AgSTAR digester database · © OpenStreetMap contributors · County boundaries:
-              Census 2025.
+              EPA AgSTAR digester database · ESA WorldCover 2021 · NASA SRTM · © OpenStreetMap contributors ·{" "}
+              <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+                Weather data by Open-Meteo.com
+              </a>{" "}
+              (CC BY 4.0) · County boundaries: Census 2025.
             </p>
             <p>
               This product uses the Census Bureau Data API but is not endorsed or certified by the

@@ -137,6 +137,8 @@ export const SOURCE_NAMES: Record<string, string> = {
   state_energy: "State electricity bills and grid carbon (EIA, EPA eGRID)",
   dams: "ORNL non-powered dams",
   farms: "USDA farm census and EPA digester database",
+  svi: "CDC Social Vulnerability Index",
+  climate: "Climate history (Open-Meteo)",
   gemini: "Gemini narrative",
   gemini_solutions: "Gemini suggested solutions",
 };
