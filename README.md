@@ -55,13 +55,11 @@ Not yet run against the real service:
   not been driven. Selection so far has gone through the search box.
 - **Gemini**: no key. The call, number validation, caching and fallback are
   tested with a fake model.
-- **Overpass**: every call so far has timed out or been refused as busy, so no
-  report has had real public buildings in it.
 
 `backend/data/fixtures/54055.json` (Mercer County, WV) is a real report with
-Census data, saved on 2026-11-14 while Overpass was busy: it has no public
-buildings, so no resilience hub, clinic or charging opportunity. Regenerate
-it when Overpass answers.
+Census data, saved on 2026-11-14 before public buildings came from Geoapify:
+it has none, so no resilience hub, clinic or charging opportunity. Regenerate
+it with `python scripts/warm_cache.py 54055`.
 
 ## Stretch sources
 
@@ -105,8 +103,8 @@ Not added:
   surface heat): it needs a Google Cloud project and credentials.
 - **Streams, impaired waters, crop and forest biomass**: no source was found
   that gives a county figure without a large download or an invented formula.
-- **OSM transmission lines**: Overpass is not answering; the RE-Powering
-  distance column is used instead.
+- **Transmission lines**: the RE-Powering distance-to-transmission column is
+  used instead.
 
 ## What verification found
 
@@ -123,7 +121,7 @@ Items the original project plan marked VERIFY, checked on 2026-11-13:
 | LMOP columns | "Current Project Status" has a `Candidate` value with a written definition; that drives `landfill_gas_uncaptured`. About 300 landfills have no coordinates. |
 | NRI download | `hazards.fema.gov/nri` now redirects elsewhere and the zip on fema.gov blocks scripts. `prep_data.py` reads FEMA's ArcGIS feature service instead (same v1.20 data). v1.20 has "inland flooding", not "riverine". |
 | NLR station API | `fuel_type`, `state`, `status`, `access` confirmed. `DEMO_KEY` allows about 10 calls an hour. |
-| Overpass | Needs a `User-Agent` header (406 without). The public server was at capacity during testing. |
+| Geoapify | `categories`, `filter=rect:`, `limit` and `apiKey` confirmed with live calls; at most 500 places per request. |
 | `google-genai` config | `response_mime_type` and `response_schema` exist in SDK 3.3.0. |
 
 Still unverified: the 60% usable-land assumption, and FEMA and state funding
@@ -171,8 +169,9 @@ programs. EIA's Table 5A gives 863 kWh a month for 2024 (10,359 a year);
 
 ## Known limits
 
-- Overpass is the weakest dependency: three of the five solutions need its
-  buildings. Warm the cache for demo counties ahead of time.
+- Geoapify is the dependency most solutions lean on: the building-hosted
+  solutions need its schools, libraries and colleges. Warm the cache for demo
+  counties ahead of time.
 - The station API returns a whole state per call. The largest states may
   exceed the 15 s timeout on a cold cache.
 - Counties with thousands of sites show the 150 largest on the map; the counts

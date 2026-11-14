@@ -75,7 +75,7 @@ interface Props {
 }
 
 function popupContent(asset: Asset): HTMLElement {
-  // Built with textContent: names come from OpenStreetMap and EPA files.
+  // Built with textContent: names come from Geoapify and EPA files.
   const root = document.createElement("div");
   root.className = "asset-popup";
   const name = document.createElement("strong");

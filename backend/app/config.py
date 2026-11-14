@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     nlr_api_key: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
-    # Geoapify Places API: OpenStreetMap schools, libraries and colleges.
+    # Geoapify Places API: schools, libraries and colleges.
     geoapify_api_key: str = ""
     # Google Earth Engine (surface heat, tree canopy). Empty = source disabled.
     ee_project: str = ""

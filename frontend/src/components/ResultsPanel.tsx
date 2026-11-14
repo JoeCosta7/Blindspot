@@ -24,7 +24,7 @@ const LOADING_SOURCES = [
   "EIA and EPA eGRID: state electricity bills and grid carbon",
   "ORNL: dams without hydropower",
   "USDA farm census and EPA digester database",
-  "OpenStreetMap: schools, libraries, colleges",
+  "Geoapify: schools, libraries, colleges",
   "NLR: EV charging stations",
   "NLR PVWatts: solar yield",
   "Open-Meteo: ten years of weather",

@@ -73,7 +73,7 @@ FastAPI
    |    |- Census ACS API        -> needs inputs (county + national)
    |    |- NLR PVWatts API       -> solar yield at centroid and top sites
    |    |- NLR station API       -> EV chargers
-   |    |- Overpass (OSM)        -> schools, libraries, colleges
+   |    |- Geoapify Places       -> schools, libraries, colleges
    |    |- RE-Powering file      -> brownfields, landfills, mine lands
    |    |- LMOP file             -> landfills and gas projects
    |    |- NRI file              -> natural hazard risk
@@ -109,7 +109,7 @@ backend/
     funding.py       load and match funding_programs.json
     narrative.py     Gemini call, validation, fallback
     sources/
-      census.py  pvwatts.py  afdc.py  overpass.py
+      census.py  pvwatts.py  afdc.py  geoapify.py
       repowering.py  lmop.py  nri.py
   data/
     counties.geojson        prepared
@@ -182,13 +182,13 @@ Get all four keys before the clock starts.
 | Solar resource | Yes | PVWatts v8 |
 | Brownfields, closed landfills, mine lands | Yes | EPA RE-Powering dataset |
 | Landfill gas | Yes | EPA LMOP database |
-| Public buildings (school, college, library) | Yes | OpenStreetMap via Overpass |
+| Public buildings (school, college, library) | Yes | Geoapify Places API |
 | EV charging stations | Yes | NLR station API |
 | Wind potential | Partial | Only if the RE-Powering file has per-site wind screening columns. **VERIFY** by opening the file. |
 | Streams and non-powered dams | Stretch | **VERIFY** source |
 | Farm biomass, farmland | Stretch | **VERIFY** source |
 | Forest residue, open land, paved lots, riverfront | Stretch | Earth Engine |
-| Transmission lines | Stretch | HIFLD Open was shut down in 2025; use an archive copy or OSM `power=line` |
+| Transmission lines | Stretch | HIFLD Open was shut down in 2025; use an archive copy |
 
 ### Needs
 
@@ -283,18 +283,20 @@ GET https://developer.nlr.gov/api/alt-fuel-stations/v1.json
 
 **VERIFY** parameter names and rate limits in the docs before coding.
 
-### 6.4 OpenStreetMap via Overpass (on demand)
+### 6.4 Geoapify Places (on demand)
 
 ```
-POST https://overpass-api.de/api/interpreter
-[out:json][timeout:25];
-nwr["amenity"~"^(school|library|college|university)$"]({s},{w},{n},{e});
-out center tags;
+GET https://api.geoapify.com/v2/places
+    ?categories=education.library,education.college,education.university,education.school
+    &filter=rect:{west},{south},{east},{north}&limit=500&apiKey=...
+-> features[].properties: name, categories, lat, lon, city, place_id
 ```
 
 Query the county bounding box, then filter by point-in-polygon. Cache 7 days.
-Overpass is a shared free service: one request per county, never in a loop.
-Show "© OpenStreetMap contributors" in the UI.
+A request returns at most 500 places, so a full box is split into quarters
+(see `sources/geoapify.py`). Key: `GEOAPIFY_API_KEY`. Geoapify's data comes
+from OpenStreetMap, whose license requires the credit "© OpenStreetMap
+contributors" wherever it is shown; keep it in the footer.
 
 ### 6.5 EPA RE-Powering dataset (startup file)
 
@@ -417,7 +419,7 @@ Coordinates are `[lon, lat]`. Response:
         "generated_by": "gemini"
       },
       "source_status": [
-        { "source": "overpass", "ok": true, "cached": false, "message": null }
+        { "source": "geoapify", "ok": true, "cached": false, "message": null }
       ]
     }
   ],
@@ -640,7 +642,7 @@ Assumes three or four people; merge tracks if fewer.
 | 0–1 | Keys, `prep_data.py`, download files | Freeze `models.py` and one fixture | Vite app, map renders |
 | 1–6 | `geo.py`, `census.py`, static file sources | `needs.py` with tests | County layer, click, panel on fixture |
 | **6** | **Checkpoint 1: `/api/analyze` returns needs and assets for one county** | | |
-| 6–12 | `overpass.py`, `afdc.py`, `pvwatts.py`, cache | `matching.py`, `estimates.py`, `funding.py` | Live data, markers, opportunity cards |
+| 6–12 | `geoapify.py`, `afdc.py`, `pvwatts.py`, cache | `matching.py`, `estimates.py`, `funding.py` | Live data, markers, opportunity cards |
 | **12** | **Checkpoint 2: full flow for one county, template narrative** | | |
 | 12–18 | Box resolution, error paths | `narrative.py` with Gemini and validation | Box select, search, loading and error states |
 | 18–22 | `warm_cache.py`, fixtures for 3 demo counties | Fill funding table for demo states | Polish, legend, footer |
@@ -663,7 +665,7 @@ Earth Engine layers.
 
 | Risk | Fallback |
 |---|---|
-| Overpass slow or rate-limited | Return the report without public buildings; use the cache for demo counties |
+| Geoapify slow, rate-limited or out of quota | Return the report without public buildings; use the cache for demo counties |
 | Census API unavailable | Fixtures for demo counties; surface the failure in `source_status` |
 | Gemini error, timeout or invented number | Template narrative |
 | Mapbox token or billing problem | MapLibre GL JS is API-compatible for everything used here |

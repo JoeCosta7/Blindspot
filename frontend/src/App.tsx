@@ -334,7 +334,7 @@ export function App() {
               Program database (September 2024) · NLR PVWatts and Alternative Fuels Station
               Locator · EIA residential electricity sales data (2024) · EPA eGRID2023 · ORNL
               HydroSource non-powered dam assessment (2025) · USDA Census of Agriculture 2022 ·
-              EPA AgSTAR digester database · ESA WorldCover 2021 · NASA SRTM · © OpenStreetMap contributors ·{" "}
+              EPA AgSTAR digester database · ESA WorldCover 2021 · NASA SRTM · Public buildings: Geoapify (data © OpenStreetMap contributors) ·{" "}
               <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
                 Weather data by Open-Meteo.com
               </a>{" "}

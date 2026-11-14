@@ -84,7 +84,7 @@ def sources(monkeypatch):
         returning(
             [
                 {
-                    "osm_id": "node/1",
+                    "place_id": "p1",
                     "type": "library",
                     "name": "Main Library",
                     "lat": 0.5,
@@ -92,7 +92,7 @@ def sources(monkeypatch):
                     "city": None,
                 },
                 {
-                    "osm_id": "way/2",
+                    "place_id": "p2",
                     "type": "school",
                     "name": "Central School",
                     "lat": 0.6,
@@ -100,7 +100,7 @@ def sources(monkeypatch):
                     "city": None,
                 },
                 {
-                    "osm_id": "way/3",
+                    "place_id": "p3",
                     "type": "school",
                     "name": "Bbox Only School",
                     "lat": 1.5,
@@ -307,7 +307,11 @@ def test_failed_sources_do_not_fail_the_request(sources, settings, monkeypatch):
     assert report.resources.solar_kwh_per_kw_year is None
     # A failed source is "unknown", not "not found".
     assert "school" not in report.missing_asset_types
-    assert [o.solution_id for o in report.opportunities] == ["landfill_gas_energy"]
+    # Only the landfill solutions remain: every building and land source failed.
+    assert {o.solution_id for o in report.opportunities} == {
+        "landfill_gas_energy",
+        "landfill_composting",
+    }
     assert any("could not be loaded" in c for c in report.narrative.caveats)
 
 

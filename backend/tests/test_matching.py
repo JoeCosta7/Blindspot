@@ -24,6 +24,11 @@ STRETCH_SOLUTIONS = {
     "farm_digester",
     "shade_trees_depaving",
 }
+# Added 2026-11-14: they use only sites the app already loads.
+EXISTING_SITE_SOLUTIONS = {
+    "school_heat_pumps",
+    "landfill_composting",
+}
 
 
 def run(needs, assets, **kwargs):
@@ -46,7 +51,11 @@ def test_solutions_table_is_consistent_with_the_contract():
         "college",
         "non_powered_dam",
     }
-    assert {s.id for s in SOLUTIONS} == {*MVP_SOLUTIONS, *STRETCH_SOLUTIONS}
+    assert {s.id for s in SOLUTIONS} == {
+        *MVP_SOLUTIONS,
+        *STRETCH_SOLUTIONS,
+        *EXISTING_SITE_SOLUTIONS,
+    }
     for solution in SOLUTIONS:
         assert set(solution.triggers) <= need_ids, solution.id
         assert set(solution.hosts) <= asset_types, solution.id
@@ -136,8 +145,11 @@ def test_landfill_gas_needs_a_candidate_landfill():
     operating = make_asset("lmop:1", "lmop_landfill", is_candidate=False, waste_in_place_tons=5e6)
     candidate = make_asset("lmop:2", "lmop_landfill", is_candidate=True, waste_in_place_tons=2e6)
 
-    assert run(needs, [operating]) == []
-    matches = run(needs, [operating, candidate])
+    def gas(assets):
+        return [m for m in run(needs, assets) if m.solution.id == "landfill_gas_energy"]
+
+    assert gas([operating]) == []
+    matches = gas([operating, candidate])
     assert [m.asset.id for m in matches] == ["lmop:2"]
     assert matches[0].score == 75
 
@@ -186,7 +198,10 @@ def test_second_sites_do_not_crowd_out_a_lower_scoring_solution():
         make_asset("lib2", "library", lon=0.6),
         make_asset("lmop:1", "lmop_landfill", is_candidate=True, waste_in_place_tons=2e6),
     ]
-    matches = run(needs, assets)
+    # Composting shares the landfill trigger; leave it out so the test keeps
+    # checking how second sites compete for the last place.
+    without_compost = tuple(s for s in SOLUTIONS if s.id != "landfill_composting")
+    matches = matching.match_opportunities(needs, assets, without_compost, CENTRE)
 
     # Nine candidates for six places: all five triggered solutions appear,
     # plus the best second site, and the list is still ordered by score.
@@ -339,3 +354,22 @@ def test_funding_is_sorted_by_status():
 def test_solutions_without_a_curated_program_get_none():
     assert funding.match_funding(PROGRAMS, "public_ev_charging", "library") == []
     assert funding.match_funding(PROGRAMS, "landfill_gas_energy", "lmop_landfill") == []
+
+
+def test_new_solutions_use_existing_sites():
+    needs = [make_need("delivered_fuel_heat", 80), make_need("landfill_gas_uncaptured", 75)]
+    assets = [
+        make_asset("lib1", "library"),
+        make_asset("school1", "school"),
+        make_asset("small_lf", "lmop_landfill", waste_in_place_tons=100_000.0),
+        make_asset("big_lf", "lmop_landfill", waste_in_place_tons=2_000_000.0),
+    ]
+    by_solution = {}
+    for m in run(needs, assets, max_opportunities=20):
+        by_solution.setdefault(m.solution.id, m)  # each solution's first-choice site
+
+    # Heat pumps go to a school, not the library the sign-up clinic prefers.
+    assert by_solution["school_heat_pumps"].asset.id == "school1"
+    # Composting needs no gas-project candidate; the largest landfill comes first.
+    assert by_solution["landfill_composting"].asset.id == "big_lf"
+    assert "landfill_gas_energy" not in by_solution  # neither landfill is a candidate
