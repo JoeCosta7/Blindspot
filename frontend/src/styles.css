@@ -1098,6 +1098,49 @@ button {
   color: var(--muted);
 }
 
+/* --- peer counties ---------------------------------------------------------------- */
+
+.peer-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.peer {
+  display: grid;
+  gap: 8px;
+}
+
+.peer h3 {
+  font-size: 1rem;
+}
+
+.peer .stats {
+  margin-top: 0;
+}
+
+.peer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.peer-self {
+  background: var(--accent-soft);
+}
+
+.chip-shared {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip-other {
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
 /* --- sites ---------------------------------------------------------------------- */
 
 .asset-list {

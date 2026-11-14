@@ -191,6 +191,25 @@ export interface CountyContext {
   state_grid_co2_lb_per_mwh: number | null;
 }
 
+export interface PeerNeed {
+  id: NeedId;
+  label: string;
+  /** Whether the county the report is about has this need flagged too. */
+  shared: boolean;
+}
+
+/** A county of similar size, income and density. */
+export interface PeerCounty {
+  fips: string;
+  name: string;
+  state: string;
+  population: number;
+  median_household_income: number;
+  people_per_sq_mile: number;
+  /** The peer's flagged Census needs, scored like the report's own. */
+  needs: PeerNeed[];
+}
+
 export interface CountyReport {
   fips: string;
   name: string;
@@ -209,6 +228,11 @@ export interface CountyReport {
   /** Written by Gemini from the needs, factors and assets. The `gemini` entry
    * in `source_status` says why when they are rule matches instead. */
   opportunities: Opportunity[];
+  /** The most similar counties, closest first. Empty when the all-county
+   * Census figures did not load (the `peers` entry in `source_status`). */
+  peers: PeerCounty[];
+  /** This county's own density, to read beside the peers'. */
+  people_per_sq_mile: number | null;
   narrative: Narrative;
   source_status: SourceStatus[];
 }

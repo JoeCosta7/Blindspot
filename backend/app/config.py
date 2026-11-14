@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     max_ev_markers_per_county: int = 300
     max_buildings_per_county: int = 300
 
+    # --- peer counties (peers.py) ------------------------------------------
+    peer_count: int = 5
+
     # --- Gemini-written opportunities (opportunities.py) ------------------
     # Sites of each type listed in the digest sent to Gemini, best first. The
     # digest gives the exact count for the rest.

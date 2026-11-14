@@ -322,6 +322,7 @@ export function App() {
               onSelectCounty={switchCounty}
               // A new object each time, so clicking the same site twice flies again.
               onShowOnMap={(asset) => setFocusAsset({ ...asset })}
+              onAnalyzeCounty={selectCounty}
             />
           )}
           {!loading && !error && !response && <Intro countiesError={countiesError} />}

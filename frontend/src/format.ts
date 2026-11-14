@@ -141,6 +141,7 @@ export const SOURCE_NAMES: Record<string, string> = {
   earthengine: "Urban heat and tree canopy (Google Earth Engine)",
   svi: "CDC Social Vulnerability Index",
   climate: "Climate history (Open-Meteo)",
+  peers: "Census ACS (all counties, for peer counties)",
   gemini: "Gemini opportunities and brief",
 };
 

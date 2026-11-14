@@ -262,6 +262,28 @@ class CountyContext(BaseModel):
     state_grid_co2_lb_per_mwh: float | None = None
 
 
+class PeerNeed(BaseModel):
+    id: NeedId
+    label: str
+    # Whether the county the report is about has this need flagged too.
+    shared: bool
+
+
+class PeerCounty(BaseModel):
+    """A county of similar size, income and density (peers.py). Listed so an
+    official can see how a place like theirs compares; clicking one analyzes it."""
+
+    fips: str
+    name: str
+    state: str
+    population: int
+    median_household_income: float
+    people_per_sq_mile: float
+    # The peer's flagged Census needs, scored the same way as the report's own.
+    # Only Census needs: the others are not measured for every county up front.
+    needs: list[PeerNeed]
+
+
 class CountyReport(BaseModel):
     fips: str
     name: str
@@ -280,6 +302,11 @@ class CountyReport(BaseModel):
     # Written by Gemini from the needs, factors and assets above. The `gemini`
     # entry in `source_status` says why when they are rule matches instead.
     opportunities: list[Opportunity]
+    # The most similar counties, closest first. Empty when the all-county
+    # Census figures did not load (the `peers` entry in `source_status`).
+    peers: list[PeerCounty] = Field(default_factory=list)
+    # This county's own density, to read beside the peers'.
+    people_per_sq_mile: float | None = None
     narrative: Narrative
     source_status: list[SourceStatus]
 

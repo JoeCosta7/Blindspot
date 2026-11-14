@@ -181,7 +181,9 @@ def _complement(share: float | None) -> float | None:
     return None if share is None else 1.0 - share
 
 
-async def _fetch(client: httpx.AsyncClient, settings: Settings, geo: dict[str, str]) -> Values:
+async def _request(
+    client: httpx.AsyncClient, settings: Settings, geo: dict[str, str]
+) -> list[list[str | None]]:
     if not settings.census_api_key:
         raise SourceError("CENSUS_API_KEY is not set (the Census API rejects keyless calls)")
     params = {"get": "NAME," + ",".join(VARIABLES), **geo, "key": settings.census_api_key}
@@ -200,9 +202,44 @@ async def _fetch(client: httpx.AsyncClient, settings: Settings, geo: dict[str, s
     if resp.status_code != 200:
         raise SourceError(f"Census returned HTTP {resp.status_code}")
     try:
-        return parse_response(resp.json())
+        return resp.json()
     except ValueError as exc:
         raise SourceError("Census returned a response that is not JSON") from exc
+
+
+async def _fetch(client: httpx.AsyncClient, settings: Settings, geo: dict[str, str]) -> Values:
+    return parse_response(await _request(client, settings, geo))
+
+
+def parse_all_counties(body: list[list[str | None]]) -> dict[str, Values]:
+    """Every county's values by 5-digit FIPS, from a `for=county:*` response,
+    whose rows end with the state and county codes."""
+    if len(body) < 2:
+        raise SourceError("Census returned no county rows")
+    header = body[0]
+    try:
+        state_at, county_at = header.index("state"), header.index("county")
+    except ValueError as exc:
+        raise SourceError("Census county rows carry no state and county codes") from exc
+    return {f"{row[state_at]}{row[county_at]}": parse_response([header, row]) for row in body[1:]}
+
+
+async def fetch_all_counties(
+    client: httpx.AsyncClient, settings: Settings
+) -> tuple[dict[str, Values], bool]:
+    """The same variables for every US county in one call (about 1 MB; checked
+    2026-11-14: 3,222 rows in 2.5 s). Used to find peer counties."""
+
+    async def fetch() -> dict[str, Values]:
+        return parse_all_counties(await _request(client, settings, {"for": "county:*"}))
+
+    return await cached_fetch(
+        settings.cache_dir,
+        "census_all_counties",
+        {"year": settings.acs_year, "vars": VARIABLES_KEY},
+        30 * DAY,
+        fetch,
+    )
 
 
 async def fetch_county(

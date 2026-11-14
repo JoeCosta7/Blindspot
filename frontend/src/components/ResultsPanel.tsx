@@ -10,13 +10,14 @@ import type { AnalyzeResponse, Asset, CountyReport } from "../types";
 import { FactorList } from "./FactorList";
 import { NeedList } from "./NeedList";
 import { OpportunityCard } from "./OpportunityCard";
+import { PeerList } from "./PeerList";
 
 // The three parts of a report: what is wrong, what the county has, and the
 // opportunities Gemini builds from the two.
-type Tab = "opportunities" | "needs" | "assets";
+type Tab = "opportunities" | "needs" | "assets" | "peers";
 
 const LOADING_SOURCES = [
-  "Census ACS: county and national figures",
+  "Census ACS: county and national figures, and every county for peers",
   "FEMA National Risk Index",
   "CDC Social Vulnerability Index",
   "EPA RE-Powering sites",
@@ -184,15 +185,18 @@ function OpportunityList({
 function CountyView({
   report,
   onShowOnMap,
+  onAnalyzeCounty,
 }: {
   report: CountyReport;
   onShowOnMap: (asset: Asset) => void;
+  onAnalyzeCounty: (fips: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("opportunities");
   const tabs: [Tab, string][] = [
     ["opportunities", `Opportunities (${report.opportunities.length})`],
     ["needs", `Needs (${report.needs.length})`],
     ["assets", `Assets (${report.factors.length})`],
+    ["peers", `Peers (${report.peers.length})`],
   ];
 
   return (
@@ -238,6 +242,7 @@ function CountyView({
         {tab === "assets" && (
           <FactorList factors={report.factors} missingAssetTypes={report.missing_asset_types} />
         )}
+        {tab === "peers" && <PeerList report={report} onAnalyze={onAnalyzeCounty} />}
       </div>
 
       {report.narrative.caveats.length > 0 && (
@@ -259,9 +264,17 @@ interface Props {
   activeIndex: number;
   onSelectCounty: (index: number) => void;
   onShowOnMap: (asset: Asset) => void;
+  /** Run a fresh report for another county (a peer). */
+  onAnalyzeCounty: (fips: string) => void;
 }
 
-export function ResultsPanel({ response, activeIndex, onSelectCounty, onShowOnMap }: Props) {
+export function ResultsPanel({
+  response,
+  activeIndex,
+  onSelectCounty,
+  onShowOnMap,
+  onAnalyzeCounty,
+}: Props) {
   const report = response.counties[activeIndex];
   return (
     <div className="panel-body">
@@ -287,7 +300,14 @@ export function ResultsPanel({ response, activeIndex, onSelectCounty, onShowOnMa
         </div>
       )}
       {/* key: each county gets its own tab state */}
-      {report && <CountyView key={report.fips} report={report} onShowOnMap={onShowOnMap} />}
+      {report && (
+        <CountyView
+          key={report.fips}
+          report={report}
+          onShowOnMap={onShowOnMap}
+          onAnalyzeCounty={onAnalyzeCounty}
+        />
+      )}
     </div>
   );
 }

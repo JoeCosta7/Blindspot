@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from app import factors, narrative, opportunities, pipeline
+from app import factors, narrative, opportunities, peers, pipeline
 from app.sources import (
     SourceError,
     afdc,
@@ -51,6 +51,7 @@ def sources(monkeypatch):
     )
     monkeypatch.setattr(census, "fetch_county", returning(county))
     monkeypatch.setattr(census, "fetch_national", returning(make_metrics(population=330_000_000)))
+    monkeypatch.setattr(census, "fetch_all_counties", returning({}))
     monkeypatch.setattr(pvwatts, "fetch_yield", returning(1200.0))
     monkeypatch.setattr(afdc, "fetch_national_count", returning(82_500))
     monkeypatch.setattr(
@@ -742,3 +743,49 @@ def test_climate_failure_keeps_the_report(sources, settings, monkeypatch):
     assert status["climate"].ok is False
     assert not {"heating_degree_days", "wind_speed_100m"} & {f.id for f in report.factors}
     assert report.needs  # everything else still there
+
+
+def test_peer_counties_are_listed_with_their_needs(sources, settings, monkeypatch):
+    def values(population, income, pre1980):
+        return {
+            "B01003_001E": population,
+            "B19013_001E": income,
+            "B25034_001E": 100.0,
+            "B25034_007E": pre1980,
+            **{f"B25034_{n:03d}E": 0.0 for n in range(8, 12)},
+        }
+
+    monkeypatch.setattr(
+        census,
+        "fetch_all_counties",
+        returning(
+            {
+                "99001": values(20_000.0, 55_000.0, 70.0),
+                "99002": values(21_000.0, 54_000.0, 72.0),  # the twin
+                "99003": values(900_000.0, 110_000.0, 20.0),
+            }
+        ),
+    )
+    directory = {
+        "99001": peers.CountyInfo("County 99001", "ZZ", 400.0),
+        "99002": peers.CountyInfo("Twin County", "YY", 410.0),
+        "99003": peers.CountyInfo("Big County", "XX", 300.0),
+    }
+    monkeypatch.setattr(peers, "load_directory", lambda path: directory)
+
+    report = analyze(settings.model_copy(update={"peer_count": 1}))
+
+    assert report.people_per_sq_mile == 50.0
+    [peer] = report.peers
+    assert (peer.fips, peer.name, peer.state) == ("99002", "Twin County", "YY")
+    assert (peer.population, peer.median_household_income) == (21_000, 54_000.0)
+    # Scored against the same national figures as the county's own needs.
+    assert {(n.id, n.shared) for n in peer.needs} == {("low_income", True), ("old_housing", True)}
+
+
+def test_peers_failure_keeps_the_report(sources, settings, monkeypatch):
+    monkeypatch.setattr(census, "fetch_all_counties", raising(SourceError("Census is down")))
+    report = analyze(settings)
+    status = {s.source: s for s in report.source_status}
+    assert status["peers"].ok is False
+    assert report.peers == [] and report.needs

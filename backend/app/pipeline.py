@@ -27,7 +27,17 @@ from typing import Any, Literal
 
 import httpx
 
-from app import estimates, factors, funding, matching, narrative, needs, opportunities, profile
+from app import (
+    estimates,
+    factors,
+    funding,
+    matching,
+    narrative,
+    needs,
+    opportunities,
+    peers,
+    profile,
+)
 from app.config import Settings
 from app.geo import County
 from app.models import (
@@ -37,6 +47,7 @@ from app.models import (
     Estimate,
     Need,
     Opportunity,
+    PeerCounty,
     Resources,
     SourceStatus,
 )
@@ -76,6 +87,7 @@ SOURCE_NAMES = {
     "earthengine": "Urban heat and tree canopy (Google Earth Engine)",
     "svi": "CDC Social Vulnerability Index",
     "climate": "Climate history (Open-Meteo)",
+    "peers": "Census ACS (all counties, for peer counties)",
     "gemini": "Gemini opportunities and brief",
 }
 
@@ -429,6 +441,7 @@ async def analyze_county(
             ),
             timeout,
         ),
+        _run("peers", lambda: census.fetch_all_counties(client, settings), timeout),
     )
     (
         (acs, _),
@@ -446,6 +459,7 @@ async def analyze_county(
         (ee_metrics, _),
         (svi_row, _),
         (climate, _),
+        (all_county_values, peers_status),
     ) = results
     statuses: list[SourceStatus] = [status for _, status in results]
     ok = {status.source: status.ok for status in statuses}
@@ -494,6 +508,20 @@ async def analyze_county(
         if extra:
             flagged.append(extra)
     flagged = needs.prioritize(flagged, settings)
+
+    # --- peer counties: places of similar size, income and density ---------------
+    peer_counties: list[PeerCounty] = []
+    people_per_sq_mile: float | None = None
+    if all_county_values is not None:
+        try:
+            directory = peers.load_directory(data_dir / "counties.geojson")
+            peer_counties = peers.find_peers(
+                county.fips, all_county_values, directory, acs_national, flagged, settings
+            )
+            own_density = peers.density(acs.population if acs else None, directory.get(county.fips))
+            people_per_sq_mile = round(own_density, 1) if own_density else None
+        except SourceError as exc:
+            peers_status.ok, peers_status.message = False, str(exc)
 
     # --- assets and factors: what the county has to work with --------------------
     # The profile (trades and industries, social vulnerability, weather history,
@@ -668,6 +696,8 @@ async def analyze_county(
         resources=resources,
         factors=county_factors,
         opportunities=built,
+        peers=peer_counties,
+        people_per_sq_mile=people_per_sq_mile,
         narrative=brief,
         source_status=statuses,
     )
