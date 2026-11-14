@@ -44,22 +44,29 @@ export function NeedList({ needs }: { needs: Need[] }) {
     );
   }
   return (
-    <ul className="need-list">
-      {needs.map((need) => (
-        <li key={need.id} className="card need">
-          <header className="need-head">
-            <h3>{need.label}</h3>
-            <span className={`chip chip-${need.level}`}>
-              {need.level === "high" ? "High" : "Elevated"}
-            </span>
-          </header>
-          <Comparison need={need} />
-          {need.detail && <p className="need-detail">{need.detail}</p>}
-          <footer className="need-foot">
-            {THEME_LABELS[need.theme]} · Severity {need.severity} of 100 · {need.source}
-          </footer>
-        </li>
-      ))}
-    </ul>
+    <>
+      <p className="muted">
+        Ordered by priority: how far the county is from the US figure (severity), weighted by how
+        much that kind of need counts for sustainability.
+      </p>
+      <ul className="need-list">
+        {needs.map((need) => (
+          <li key={need.id} className="card need">
+            <header className="need-head">
+              <h3>{need.label}</h3>
+              <span className={`chip chip-${need.level}`}>
+                {need.level === "high" ? "High" : "Elevated"}
+              </span>
+            </header>
+            <Comparison need={need} />
+            {need.detail && <p className="need-detail">{need.detail}</p>}
+            <footer className="need-foot">
+              {THEME_LABELS[need.theme]} · Priority {need.priority} · Severity {need.severity} of
+              100 · {need.source}
+            </footer>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

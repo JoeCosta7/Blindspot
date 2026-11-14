@@ -52,6 +52,35 @@ class Settings(BaseSettings):
     severity_very_high: int = 100
     severity_high: int = 75
     severity_elevated: int = 40
+
+    # --- sustainability priority (ranking) --------------------------------
+    # priority = severity * a weight. Needs and opportunities are ranked by
+    # priority, not severity. Severity says how far the county is from the US
+    # figure; the weight says how much that gap counts for the sustainability
+    # track. Without it the EV charging gap, which sits at severity 100 in most
+    # counties, led almost every report.
+    # These weights are our own choice, not published figures. Three tiers:
+    #   1.0  pollution and what clean power displaces: the waste theme (landfill
+    #        gas, farm waste) and the carbon-intensive grid; plus natural hazard
+    #        risk, the only need that carries water (flood, drought).
+    #   0.7  household energy, heat and tree cover, and equity.
+    #   0.5  transportation.
+    # 0.7 is below 0.75 on purpose: a need with no US figure to compare against
+    # stops at severity_high (75), and this lets a top-tier one of those outrank
+    # a middle-tier need that reached severity 100.
+    # A theme left out counts in full.
+    need_priority_weights: dict[str, float] = {
+        "waste": 1.0,
+        "energy": 0.7,
+        "resilience": 0.7,
+        "equity": 0.7,
+        "transportation": 0.5,
+    }
+    # Weights by need id. One of these replaces the weight of the need's theme.
+    need_priority_overrides: dict[str, float] = {
+        "carbon_intensive_grid": 1.0,
+        "hazard_risk": 1.0,
+    }
     # Public EV stations per 10,000 residents used as the national benchmark.
     # Left unset, the pipeline computes it per request from two cached calls:
     # the NLR national station count and the ACS national population.

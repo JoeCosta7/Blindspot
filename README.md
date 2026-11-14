@@ -142,6 +142,18 @@ programs. EIA's Table 5A gives 863 kWh a month for 2024 (10,359 a year);
 - **EV benchmark.** Computed per request from two cached calls (national
   station count and ACS national population) instead of a hard-coded constant.
   Set `EV_BENCHMARK_PER_10K` to pin it.
+- **Ranking by priority, not severity.** Each need carries a `priority`:
+  its severity times a weight (`need_priority_weights` by theme and
+  `need_priority_overrides` by need, both in `config.py`). Needs are ordered by
+  it. An opportunity's score is halfway between the highest and the mean
+  priority of the needs it addresses (the plan used the mean severity alone,
+  which marked a solution down for also answering lesser needs).
+  Three tiers: landfill gas, farm waste, the carbon-intensive grid and natural
+  hazard risk count in full; household energy, heat and tree cover, and equity
+  count 0.7; transportation counts 0.5. The weights are our own choice for the
+  sustainability track, made because the EV charging gap sits at severity 100
+  in most counties and led almost every report. There is no water-quality
+  source: water enters only through flood and drought in the hazard rating.
 - **AI-suggested solutions.** `suggestions.py` has Gemini propose up to four
   further solutions per county, shown in their own "Suggestions" tab. This departs
   from rule 2 of the plan: Gemini chooses these solutions. It is sent a digest,
