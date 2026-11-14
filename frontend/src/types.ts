@@ -62,7 +62,9 @@ export type AssetType =
   | "college"
   | "ev_station"
   | "non_powered_dam"
-  | "power_plant";
+  | "power_plant"
+  /** A building found by Site Scout; drawn as a marker. */
+  | "commercial_building";
 
 export type FundingStatus =
   | "open"
@@ -269,6 +271,101 @@ export interface CountyReport {
   people_per_sq_mile: number | null;
   narrative: Narrative;
   source_status: SourceStatus[];
+  /** True for the counties Site Scout has building data for. */
+  scout_available: boolean;
+}
+
+// --- Site Scout --------------------------------------------------------------
+
+export type ScoutLayer = "vexcel" | "matterport" | "costar";
+export type SiteStatus = "shortlisted" | "low_confidence" | "rejected";
+export type ScoutStepKind = "plan" | "action" | "observation" | "decision" | "error";
+export type ScoutStop = "target_reached" | "budget_spent" | "no_more_candidates" | "error";
+
+/** Something a data layer or a model reported; not computed by us. */
+export interface Observation {
+  label: string;
+  value: boolean | number | string;
+  unit: string | null;
+  layer: ScoutLayer;
+  captured: string | null;
+  by_model: boolean;
+}
+
+/** One layer compared with another. */
+export interface LayerCheck {
+  label: string;
+  layers: ScoutLayer[];
+  ok: boolean;
+  detail: string;
+}
+
+export interface GeoOverlay {
+  label: string;
+  coordinates: LonLat[];
+}
+
+export interface SiteCandidate {
+  building_id: string;
+  name: string;
+  address: string | null;
+  lat: number;
+  lon: number;
+  property_type: string | null;
+  status: SiteStatus;
+  solution_ids: string[];
+  need_ids: NeedId[];
+  layers_used: ScoutLayer[];
+  observations: Observation[];
+  checks: LayerCheck[];
+  estimates: Estimate[];
+  funding: FundingMatch[];
+  flags: string[];
+  status_reason: string;
+  agent_note: string | null;
+  score: number;
+  image_url: string | null;
+  /** A side-angle photo where the urban layer has one, else top-down. */
+  image_view: "oblique" | "ortho" | null;
+  overlays: GeoOverlay[];
+  interior_summary: string | null;
+  tour_url: string | null;
+}
+
+export interface SiteDrafts {
+  building_id: string;
+  outreach_letter: string;
+  grant_paragraph: string;
+  generated_by: "gemini" | "template";
+}
+
+export interface ScoutStep {
+  index: number;
+  kind: ScoutStepKind;
+  text: string;
+  tool: string | null;
+  building_id: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+export interface ScoutResult {
+  fips: string;
+  candidates: SiteCandidate[];
+  drafts: SiteDrafts[];
+  steps: ScoutStep[];
+  stopped_because: ScoutStop;
+  source_status: SourceStatus[];
+  generated_by: "gemini" | "rules" | "fixture";
+  provider: "fake" | "real";
+}
+
+/** One line of the NDJSON stream from POST /api/scout. */
+export interface ScoutEvent {
+  type: "step" | "candidate" | "result";
+  step: ScoutStep | null;
+  candidate: SiteCandidate | null;
+  result: ScoutResult | null;
 }
 
 /** One Census need for every county, for coloring the map. */
@@ -325,3 +422,15 @@ export type CountyCollection = GeoJSON.FeatureCollection<
 
 /** [west, south, east, north] */
 export type Bounds = [number, number, number, number];
+
+/** A Site Scout run as the browser follows it, scoped to one opportunity. */
+export interface ScoutRun {
+  fips: string;
+  opportunityId: string;
+  title: string;
+  running: boolean;
+  steps: ScoutStep[];
+  candidates: SiteCandidate[];
+  result: ScoutResult | null;
+  error: string | null;
+}

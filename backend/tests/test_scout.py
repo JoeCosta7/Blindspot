@@ -106,10 +106,28 @@ BUILDINGS = [
         rooms=None,
     ),
 ]
+# A CoStar record whose gross area over its storeys is far larger than the footprint.
+COSTAR_D = Building(
+    "cs:9",
+    "Depot D",
+    29.7745,
+    -95.3865,
+    "costar",
+    "9 Rail Rd",
+    scan_id=None,
+    costar_id=9,
+    property_type="Industrial",
+    property_subtype="Industrial_Warehouse",
+    gross_sqft=400_000.0,
+    stories=1,
+    year_built=1992,
+    parking_spaces=120,
+)
 ROOFS = {
     "mp:A": roof(),
     "mp:B": roof(solar_present=True, detections=(Detection("solar panel", PANEL, 0.9),)),
     "mp:C": roof(),
+    "cs:9": roof(),
 }
 INTERIORS = {
     "A": InteriorRecord(
@@ -141,6 +159,9 @@ class FakeProvider:
     async def buildings_from_above(self, county, lat, lon, half_m, text, limit):
         return []
 
+    async def properties(self, county: County) -> list[Building]:
+        return [COSTAR_D]
+
     async def roof(self, building: Building) -> RoofRecord | None:
         if self.fail_roof:
             raise SourceError("Vexcel is down")
@@ -149,8 +170,8 @@ class FakeProvider:
     async def interior(self, building: Building) -> InteriorRecord | None:
         return INTERIORS.get(building.scan_id or "")
 
-    async def image(self, building: Building, roof: RoofRecord) -> str | None:
-        return f"img_{building.id[-1]}"
+    async def image(self, building: Building, roof: RoofRecord):
+        return f"img_{building.id[-1]}", "oblique"
 
 
 def scripted(actions: list[AgentAction]):
@@ -285,7 +306,7 @@ def test_model_failure_falls_back_to_rules(settings):
     events = asyncio.run(collect(settings, broken))
     result = events[-1].result
     assert result.generated_by == "rules"
-    assert {c.building_id for c in result.candidates} == {"mp:A", "mp:B", "mp:C"}
+    assert {c.building_id for c in result.candidates} == {"cs:9", "mp:A", "mp:B", "mp:C"}
     assert any(s.source == "scout_gemini" and not s.ok for s in result.source_status)
 
 
@@ -342,3 +363,38 @@ def test_scout_endpoint_streams_ndjson(grid_index, settings, monkeypatch, tmp_pa
 
 async def _ready(decider):
     return decider
+
+
+def test_property_records_are_a_layer_and_cross_checked(settings):
+    actions = [
+        AgentAction(
+            thought="", tool="search_properties", property_types=["warehouse"], max_stories=1
+        ),
+        AgentAction(thought="", tool="inspect_roof", building_id="cs:9"),
+        AgentAction(thought="", tool="evaluate_site", building_id="cs:9"),
+    ]
+    events = asyncio.run(collect(settings, scripted(actions)))
+    result = events[-1].result
+    d = result.candidates[0]
+    assert d.building_id == "cs:9" and d.layers_used == ["costar", "vexcel"]
+    assert {o.label for o in d.observations if o.layer == "costar"} >= {
+        "Gross building area",
+        "Year built",
+    }
+    record = next(c for c in d.checks if c.label == "Record floor area vs footprint")
+    assert record.ok is False  # 400,000 sq ft on one storey vs a ~10,000 m² footprint
+    assert d.status == "low_confidence"
+    assert any(s.source == "costar" and s.ok for s in result.source_status)
+
+
+def test_costar_kit_loads_when_present(settings):
+    from app.sources import costar
+
+    if not costar.available(settings.costar_kit_dir):
+        pytest.skip("CoStar kit not installed")
+    records = costar.load_properties(settings.costar_kit_dir)
+    assert len(records) > 3000
+    r = next(x for x in records if x["property_type"] == "Industrial")
+    assert r["lat"] and r["lon"] and r["gross_sqft"] and r["name"]
+    harris = make_county("48201", -95.9, 29.5, -94.9, 30.2)
+    assert len(costar.properties_in_county(settings.costar_kit_dir, harris)) > 1000

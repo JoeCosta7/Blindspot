@@ -239,22 +239,24 @@ async def scout(
         )
         report = await analyze_county(county, client, settings)
         try:
-            energy_community = energy_communities.status_for_county(
-                settings.data_dir, county.fips
-            )
+            energy_community = energy_communities.status_for_county(settings.data_dir, county.fips)
             checked = True
         except Exception:  # the parquet file is optional here
             energy_community, checked = None, False
         provider = scout_provider.get_provider(client, settings)
+        needs = report.needs
+        if body.need_ids:
+            needs = [n for n in needs if n.id in body.need_ids] or needs
         async for event in scout_agent.run_scout(
             county,
-            report.needs,
+            needs,
             report.resources.solar_kwh_per_kw_year,
             provider,
             settings,
             client,
             energy_community=energy_community,
             energy_community_checked=checked,
+            focus=body.focus,
         ):
             if event.step is not None:
                 event = event.model_copy(
@@ -271,7 +273,8 @@ async def scout_image(name: str, request: Request) -> FileResponse:
     settings: Settings = request.app.state.settings
     if not _IMAGE_NAME.match(name):
         raise HTTPException(404, "No such image")
-    path = vexcel.image_path(settings, name)
-    if not path.exists():
+    path = vexcel.find_image(settings, name)
+    if path is None:
         raise HTTPException(404, "No such image")
-    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "max-age=86400"})
+    media = "image/jpeg" if path.suffix == ".jpg" else "image/png"
+    return FileResponse(path, media_type=media, headers={"Cache-Control": "max-age=86400"})

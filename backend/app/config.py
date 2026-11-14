@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     census_api_key: str = ""
     nlr_api_key: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-3.5-flash"
     # Geoapify Places API: schools, libraries and colleges.
     geoapify_api_key: str = ""
     # Site Scout layers (app/scout/). Vexcel: long-life key in the X-API-KEY
@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     vexcel_api_key: str = ""
     matterport_api_key: str = ""
     matterport_api_secret: str = ""
+    # The CoStar hackathon data kit (static files, no key). Missing = no CoStar layer.
+    costar_kit_dir: Path = BACKEND_DIR.parent / "costar-hackathon-kit"
     # Google Earth Engine (surface heat, tree canopy). Empty = source disabled.
     ee_project: str = ""
     # Earth Engine results change only when the imagery does, so cache them long.
@@ -46,7 +48,7 @@ class Settings(BaseSettings):
     # requests (Cook County, IL: 13 requests, 19 s on a cold cache). Most
     # counties need one request and finish in about a second.
     buildings_timeout_s: float = 45.0
-    gemini_timeout_s: float = 20.0
+    gemini_timeout_s: float = 60.0
 
     # --- need scoring (CLAUDE.md section 8) -------------------------------
     need_ratio_elevated: float = 1.10

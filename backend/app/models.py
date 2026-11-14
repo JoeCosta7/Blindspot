@@ -394,6 +394,10 @@ ScoutStop = Literal["target_reached", "budget_spent", "no_more_candidates", "err
 
 class ScoutRequest(BaseModel):
     fips: str = Field(pattern=r"^\d{5}$")
+    # Scope the run to one opportunity: only these needs count, and the plan
+    # names the opportunity. Empty means every flagged need.
+    need_ids: list[NeedId] = Field(default_factory=list)
+    focus: str | None = None  # the opportunity's title, for the timeline
 
 
 class Observation(BaseModel):
@@ -457,6 +461,8 @@ class SiteCandidate(BaseModel):
     score: int = Field(ge=0, le=100)
     # Served by this backend (the image is fetched and cached server-side).
     image_url: str | None
+    # A side-angle photo where the urban layer has one, else the top-down view.
+    image_view: Literal["oblique", "ortho"] | None = None
     overlays: list[GeoOverlay]
     # The scan's own AI-written summary of the interior, quoted as is.
     interior_summary: str | None

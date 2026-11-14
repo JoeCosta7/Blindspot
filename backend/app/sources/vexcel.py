@@ -255,8 +255,116 @@ async def detect(
 # --- imagery -------------------------------------------------------------------
 
 
-def image_path(settings: Settings, name: str) -> Path:
-    return settings.cache_dir / "scout_images" / f"{name}.png"
+def image_path(settings: Settings, name: str, ext: str = "png") -> Path:
+    return settings.cache_dir / "scout_images" / f"{name}.{ext}"
+
+
+def find_image(settings: Settings, name: str) -> Path | None:
+    """The cached image with this name, whichever format it was saved in."""
+    for ext in ("jpg", "png"):
+        path = image_path(settings, name, ext)
+        if path.exists():
+            return path
+    return None
+
+
+# Oblique views exist only in the "urban" layer; the four directions are
+# named oblique-north/south/east/west (Vexcel tutorial, 2026-11-14).
+OBLIQUE_DIRECTIONS = ("oblique-south", "oblique-north", "oblique-east", "oblique-west")
+
+
+async def oblique_directions(
+    client: httpx.AsyncClient, settings: Settings, area_wkt: str
+) -> list[str]:
+    """Which oblique directions the newest urban collection has here; empty
+    where there are none (the service answers 404)."""
+    key = {"wkt": _digest(area_wkt)}
+
+    async def fetch() -> list[str]:
+        resp = await _send(
+            client,
+            settings,
+            "GET",
+            "oriented/collections",
+            params={
+                "wkt": area_wkt,
+                "srid": 4326,
+                "layer": "urban",
+                "product-type": "oblique",
+                "include": "product-type,collection,last-capture-date",
+            },
+            timeout=settings.source_timeout_s,
+        )
+        if resp.status_code == 404:
+            return []
+        if resp.status_code != 200:
+            raise SourceError(f"Vexcel oriented/collections returned HTTP {resp.status_code}")
+        features = resp.json().get("features") or []
+        newest = max((f["properties"].get("last-capture-date") or 0 for f in features), default=0)
+        available = {
+            f["properties"].get("product-type")
+            for f in features
+            if (f["properties"].get("last-capture-date") or 0) == newest
+        }
+        return [d for d in OBLIQUE_DIRECTIONS if d in available]
+
+    value, _ = await cached_fetch(settings.cache_dir, "vexcel_obliques", key, 30 * DAY, fetch)
+    return value
+
+
+def _bare(color: str) -> str:
+    """oriented/extract wants "r,g,b" rather than "rgb(r,g,b)"."""
+    return color.replace("rgb(", "").replace(")", "")
+
+
+async def oblique_jpg(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    area_wkt: str,
+    direction: str,
+    drawings: list[dict[str, Any]],
+    name: str,
+) -> Path:
+    """A side-angle photo of the area with the outlines drawn, saved as
+    <name>.jpg. The oriented endpoint needs bare colours and an explicit
+    transparent fill for outlines to render (tutorial quirk)."""
+    path = image_path(settings, name, "jpg")
+    if path.exists():
+        return path
+    oriented_drawings = [
+        {
+            **d,
+            "outline-color": _bare(d.get("outline-color", "rgb(255,204,0)")),
+            "fill-color": _bare(d.get("outline-color", "rgb(255,204,0)")),
+            "transparency": 0,
+        }
+        for d in drawings
+    ]
+    resp = await _send(
+        client,
+        settings,
+        "POST",
+        "oriented/extract",
+        body={
+            "wkt": area_wkt,
+            "srid": 4326,
+            "layer": "urban",
+            "product-type": direction,
+            "rotation": "natural",
+            "buffer-meter": 10,
+            "crop": "bbox",
+            "image-format": "jpeg/png",
+            "drawing": oriented_drawings,
+        },
+        timeout=settings.scout_detect_timeout_s,
+    )
+    if resp.status_code != 200 or not resp.content[:3] == b"\xff\xd8\xff":
+        raise SourceError(f"Vexcel oriented/extract returned HTTP {resp.status_code}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(resp.content)
+    tmp.replace(path)
+    return path
 
 
 async def ortho_png(

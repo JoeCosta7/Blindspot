@@ -42,6 +42,7 @@ class AgentAction(BaseModel):
 
     thought: str
     tool: Literal[
+        "search_properties",
         "search_scans",
         "search_imagery",
         "inspect_roof",
@@ -50,6 +51,10 @@ class AgentAction(BaseModel):
         "finish",
     ]
     building_id: str | None = None
+    # search_properties: type words such as Industrial, Warehouse, Retail, Office, Flex.
+    property_types: list[str] = []
+    min_sqft: int | None = None
+    max_stories: int | None = None
     # search_scans: words to look for in building names and room labels.
     keywords: list[str] = []
     # search_imagery: what to look for from above, in plain words.
@@ -68,8 +73,10 @@ RULES = (
     "Code measures and scores every site; you choose what to look at and what it could host.",
     "Inspect a building's roof (inspect_roof) before you evaluate it. Buildings with a 3D scan "
     "have their interior read automatically when you evaluate them.",
-    "Prefer buildings that are not homes or apartments: warehouses, stores, offices, churches, "
-    "schools, gyms, community buildings. Names and room labels are the only description.",
+    "Start with search_properties: the property records carry type, size, storeys, year built "
+    "and parking. Prefer buildings that are not homes or apartments: warehouses, stores, "
+    "offices, flex and community buildings. Fall back to search_scans, where names and room "
+    "labels are the only description.",
     "Widen or change a search rather than evaluate a weak candidate. Use search_imagery to find "
     "buildings that have no scan, searching around a promising building.",
     "Write thought in one plain sentence for a county official, at most 40 words, using only "
@@ -113,9 +120,12 @@ def build_prompt(state: ScoutState) -> str:
     return (
         f"You are scouting buildings in {state.county.name}, {state.county.state} that could host "
         "a project meeting the county's sustainability needs. Three data layers are available "
-        "through the tools: a 3D scan library (search_scans, inspect_interior), aerial property "
-        "records and imagery (inspect_roof, search_imagery), and the county report (needs).\n\n"
+        "through the tools: commercial property records (search_properties), a 3D scan library "
+        "(search_scans, inspect_interior), and aerial property records and imagery "
+        "(inspect_roof, search_imagery), plus the county report (needs).\n\n"
         "Tools:\n"
+        "- search_properties(property_types, min_sqft?, max_stories?): property records by type "
+        "word (Industrial, Warehouse, Retail, Office, Flex, Multifamily), size and storeys.\n"
         "- search_scans(keywords): scanned buildings whose name or room labels contain a keyword.\n"
         "- search_imagery(text, near_building_id?): buildings found by describing them, e.g. "
         '"large flat-roofed warehouse with a big parking lot".\n'
@@ -180,6 +190,8 @@ def _clean_thought(action: AgentAction, prompt: str) -> str | None:
 def _code_text(action: AgentAction, state: ScoutState) -> str:
     name = state.seen[action.building_id].building.name if action.building_id in state.seen else ""
     return {
+        "search_properties": "Searching the property records for "
+        + (", ".join(action.property_types[:5]) or "commercial buildings"),
         "search_scans": "Searching the 3D scan library for "
         + (", ".join(action.keywords[:5]) or "likely buildings"),
         "search_imagery": f'Searching the aerial imagery for "{action.text}"',
@@ -192,6 +204,10 @@ def _code_text(action: AgentAction, state: ScoutState) -> str:
 
 async def run_tool(action: AgentAction, state: ScoutState) -> str:
     limit = state.settings.scout_search_limit
+    if action.tool == "search_properties":
+        return await tools.search_properties(
+            state, action.property_types, action.min_sqft, action.max_stories, limit
+        )
     if action.tool == "search_scans":
         return await tools.search_scans(state, action.keywords, limit)
     if action.tool == "search_imagery":
@@ -211,10 +227,21 @@ async def run_tool(action: AgentAction, state: ScoutState) -> str:
 
 
 def rule_actions(state: ScoutState) -> AgentAction:
-    """The next action when the model is unavailable: search once, inspect
-    the roofs in order, evaluate each, finish."""
-    if not state.seen:
+    """The next action when the model is unavailable: search the property
+    records, then the scans if that found nothing, inspect the roofs in
+    order, evaluate each, finish."""
+    searched = {s.tool for s in state.steps}
+    if "search_properties" not in searched:
+        return AgentAction(
+            thought="",
+            tool="search_properties",
+            property_types=["Industrial", "Retail", "Office", "Flex"],
+            max_stories=2,
+        )
+    if "search_scans" not in searched:
         return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
+    if not state.seen:
+        return AgentAction(thought="", tool="finish")
     for insp in state.seen.values():
         if not insp.roof_checked and state.roofs_used < state.settings.scout_max_roofs:
             return AgentAction(thought="", tool="inspect_roof", building_id=insp.building.id)
@@ -242,6 +269,7 @@ async def run_scout(
     decider: Decider | None = None,
     energy_community: dict[str, Any] | None = None,
     energy_community_checked: bool = False,
+    focus: str | None = None,
 ) -> AsyncIterator[ScoutEvent]:
     """Run the agent for one county, yielding steps, candidates and finally
     the result. Never raises past the result event."""
@@ -266,7 +294,12 @@ async def run_scout(
     add_step(
         state,
         "plan",
-        f"Scouting {county.name} for buildings that could answer: {', '.join(top) or 'its needs'}.",
+        (
+            f"Scouting {county.name} for buildings to host: {focus}. "
+            if focus
+            else f"Scouting {county.name}. "
+        )
+        + f"Needs in scope: {', '.join(top) or 'none'}.",
     )
     for event in _drain(state):
         yield event

@@ -17,3 +17,7 @@ backend/data/raw/
 node_modules/
 frontend/dist/
 *.tsbuildinfo
+
+costar-hackathon-kit/
+# CoStar hackathon data kit (404 MB, licensed data)
+costar-hackathon-kit/

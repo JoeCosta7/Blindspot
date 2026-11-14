@@ -119,6 +119,7 @@ SOURCE_NAMES = {
     "gemini": "Gemini opportunities and brief",
     "grants_gov": "Grants.gov live listings",
     # Site Scout (app/scout/)
+    "costar": "CoStar commercial property records",
     "vexcel": "Vexcel aerial imagery and property records",
     "matterport": "Matterport 3D scans",
     "scout_gemini": "Gemini scout decisions",

@@ -6,15 +6,32 @@ import {
   formatWhole,
   sourceName,
 } from "../format";
-import type { AnalyzeResponse, Asset, CountyReport } from "../types";
+import type {
+  AnalyzeResponse,
+  Asset,
+  CountyReport,
+  Opportunity,
+  ScoutRun,
+  SiteCandidate,
+} from "../types";
 import { FactorList } from "./FactorList";
 import { NeedList } from "./NeedList";
 import { OpportunityCard } from "./OpportunityCard";
 import { PeerList } from "./PeerList";
 
 // The three parts of a report: what is wrong, what the county has, and the
-// opportunities Gemini builds from the two.
+// opportunities Gemini builds from the two. Site Scout lives on each
+// opportunity card, in the counties with building data.
 type Tab = "opportunities" | "needs" | "assets" | "peers";
+
+/** Scout runs are keyed by county and opportunity. */
+export const scoutKey = (fips: string, opportunityId: string) => `${fips}:${opportunityId}`;
+
+export interface ScoutProps {
+  scoutRuns: Record<string, ScoutRun>;
+  onScout: (fips: string, opportunity: Opportunity) => void;
+  onShowCandidate: (candidate: SiteCandidate) => void;
+}
 
 const LOADING_SOURCES = [
   "Census ACS: county and national figures, and every county for peers",
@@ -134,9 +151,11 @@ function SourceNotice({ report }: { report: CountyReport }) {
 function OpportunityList({
   report,
   onShowOnMap,
+  scout,
 }: {
   report: CountyReport;
   onShowOnMap: (asset: Asset) => void;
+  scout: ScoutProps;
 }) {
   const assetsById = new Map(report.assets.map((asset) => [asset.id, asset]));
   const byGemini = report.opportunities.some((o) => o.generated_by === "gemini");
@@ -180,6 +199,15 @@ function OpportunityList({
           factors={report.factors}
           note={undefined}
           onShowOnMap={onShowOnMap}
+          scout={
+            report.scout_available
+              ? {
+                  run: scout.scoutRuns[scoutKey(report.fips, opportunity.id)] ?? null,
+                  onStart: () => scout.onScout(report.fips, opportunity),
+                  onShowCandidate: scout.onShowCandidate,
+                }
+              : undefined
+          }
         />
       ))}
     </>
@@ -188,10 +216,12 @@ function OpportunityList({
 
 function CountyView({
   report,
+  scout,
   onShowOnMap,
   onAnalyzeCounty,
 }: {
   report: CountyReport;
+  scout: ScoutProps;
   onShowOnMap: (asset: Asset) => void;
   onAnalyzeCounty: (fips: string) => void;
 }) {
@@ -240,7 +270,7 @@ function CountyView({
 
       <div role="tabpanel">
         {tab === "opportunities" && (
-          <OpportunityList report={report} onShowOnMap={onShowOnMap} />
+          <OpportunityList report={report} onShowOnMap={onShowOnMap} scout={scout} />
         )}
         {tab === "needs" && <NeedList needs={report.needs} />}
         {tab === "assets" && (
@@ -274,6 +304,8 @@ interface Props {
   onShowOnMap: (asset: Asset) => void;
   /** Run a fresh report for another county (a peer). */
   onAnalyzeCounty: (fips: string) => void;
+  /** Site Scout runs, one per opportunity, and the hooks to start and show them. */
+  scout: ScoutProps;
 }
 
 export function ResultsPanel({
@@ -282,6 +314,7 @@ export function ResultsPanel({
   onSelectCounty,
   onShowOnMap,
   onAnalyzeCounty,
+  scout,
 }: Props) {
   const report = response.counties[activeIndex];
   return (
@@ -312,6 +345,7 @@ export function ResultsPanel({
         <CountyView
           key={report.fips}
           report={report}
+          scout={scout}
           onShowOnMap={onShowOnMap}
           onAnalyzeCounty={onAnalyzeCounty}
         />

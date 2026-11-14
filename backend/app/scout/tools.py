@@ -40,6 +40,7 @@ from app.sources import SourceError, pvwatts
 log = logging.getLogger(__name__)
 
 TOOLS = (
+    "search_properties",
     "search_scans",
     "search_imagery",
     "inspect_roof",
@@ -78,6 +79,7 @@ class Inspection:
     interior_checked: bool = False
     interior_error: str | None = None
     image_name: str | None = None
+    image_view: str | None = None
     candidate: SiteCandidate | None = None
     # Everything the tools told the model about this building, for number checks.
     texts: list[str] = field(default_factory=list)
@@ -154,6 +156,17 @@ def _building_line(b: Building) -> str:
     parts = [b.id, b.name]
     if b.address:
         parts.append(b.address)
+    if b.property_type:
+        kind = b.property_subtype or b.property_type
+        parts.append(f"record type: {kind.replace('_', ' ')}")
+    if b.gross_sqft:
+        parts.append(f"{format_number(round(b.gross_sqft))} sq ft gross")
+    if b.year_built:
+        parts.append(f"built {b.year_built}")
+    if b.parking_spaces is not None:
+        parts.append(f"{b.parking_spaces} parking spaces")
+    if b.building_class:
+        parts.append(f"class {b.building_class}")
     if b.floors is not None:
         parts.append(f"{b.floors} floor(s)")
     if b.rooms is not None:
@@ -167,6 +180,73 @@ def _building_line(b: Building) -> str:
 
 
 # --- searches ---------------------------------------------------------------------
+
+
+async def search_properties(
+    state: ScoutState,
+    property_types: list[str],
+    min_sqft: int | None,
+    max_stories: int | None,
+    limit: int,
+) -> str:
+    """Commercial property records in the county (the CoStar layer) matching
+    a type word (Industrial, Warehouse, Retail, Office, Flex...), a minimum
+    gross area and a maximum number of storeys. Largest first."""
+    try:
+        buildings = await state.provider.properties(state.county)
+    except Exception as exc:  # a broken kit file must not take the run down
+        _status(state, "costar", False, str(exc)[:160])
+        add_step(
+            state, "error", f"The property records could not be read: {exc}", "search_properties"
+        )
+        state.last_result = f"search_properties failed: {exc}"
+        return state.last_result
+    if not buildings:
+        _status(state, "costar", False, "No CoStar property records for this county")
+        add_step(
+            state, "observation", "No property records cover this county.", "search_properties"
+        )
+        state.last_result = (
+            "No property records are available here; use search_scans or search_imagery."
+        )
+        state.empty_searches += 1
+        return state.last_result
+    _status(state, "costar", True)
+    words = [w.strip().lower() for w in property_types if w.strip()]
+
+    def matches(b: Building) -> bool:
+        kind = f"{b.property_type or ''} {b.property_subtype or ''}".lower()
+        if words and not any(w in kind for w in words):
+            return False
+        if min_sqft and (b.gross_sqft or 0) < min_sqft:
+            return False
+        return not (max_stories and (b.stories or 1) > max_stories)
+
+    fresh = [b for b in buildings if b.id not in state.seen and matches(b)]
+    fresh.sort(key=lambda b: (-(b.gross_sqft or 0), b.name))
+    picked = fresh[:limit]
+    for b in picked:
+        state.seen[b.id] = Inspection(building=b)
+        state.seen[b.id].texts.append(_building_line(b))
+    filters = ", ".join(words) if words else "any type"
+    add_step(
+        state,
+        "observation",
+        f"Searched {len(buildings):,} property records in the county for {filters}"
+        f"{f', at least {min_sqft:,} sq ft' if min_sqft else ''}"
+        f"{f', up to {max_stories} storeys' if max_stories else ''}: "
+        f"{len(picked)} new candidate(s).",
+        "search_properties",
+    )
+    if not picked:
+        state.empty_searches += 1
+        state.last_result = (
+            "No new property records matched. Loosen the filters or try another tool."
+        )
+        return state.last_result
+    state.empty_searches = 0
+    state.last_result = "Property records found:\n" + "\n".join(_building_line(b) for b in picked)
+    return state.last_result
 
 
 async def search_scans(state: ScoutState, keywords: list[str], limit: int) -> str:
@@ -321,7 +401,9 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
         )
         return _record(state, insp, f"{b.id}: no parcel or building footprint at this point")
     try:
-        insp.image_name = await state.provider.image(b, insp.roof)
+        picture = await state.provider.image(b, insp.roof)
+        if picture:
+            insp.image_name, insp.image_view = picture
     except Exception as exc:  # the image is for the card; the inspection stands
         log.warning("scout image for %s failed: %r", b.id, exc)
     text = _roof_text(insp.roof)
@@ -398,8 +480,30 @@ def need_applies(solution_id: str, need: Need) -> bool:
     return True
 
 
-def _observations(roof: RoofRecord | None, interior: InteriorRecord | None) -> list[Observation]:
+def _observations(
+    roof: RoofRecord | None, interior: InteriorRecord | None, building: Building
+) -> list[Observation]:
     out: list[Observation] = []
+    if building.costar_id is not None:
+        cs: list[tuple[str, Any, str | None]] = [
+            ("Property type (record)", building.property_subtype or building.property_type, None),
+            ("Gross building area", building.gross_sqft, "sq ft"),
+            ("Storeys", building.stories, None),
+            ("Year built", building.year_built, None),
+            ("Parking spaces (record)", building.parking_spaces, None),
+            ("Building class", building.building_class, None),
+        ]
+        for label, value, unit in cs:
+            if value is None:
+                continue
+            out.append(
+                Observation(
+                    label=label,
+                    value=round(value) if isinstance(value, float) else value,
+                    unit=unit,
+                    layer="costar",
+                )
+            )
     if roof is not None:
         when = roof.captured
         vx = [
@@ -545,6 +649,7 @@ async def evaluate_site(
             c
             for c in (
                 measure.footprint_check(roof, interior, tolerance),
+                measure.record_check(roof, b, tolerance),
                 measure.solar_check(roof),
                 measure.vehicle_check(roof),
             )
@@ -619,8 +724,10 @@ async def evaluate_site(
         status=status,
         solution_ids=[s.id for s in kept],
         need_ids=need_ids,  # type: ignore[arg-type]
-        layers_used=(["vexcel"] if roof else []) + (["matterport"] if interior else []),
-        observations=_observations(roof, interior),
+        layers_used=(["costar"] if b.costar_id is not None else [])
+        + (["vexcel"] if roof else [])
+        + (["matterport"] if interior else []),
+        observations=_observations(roof, interior, b),
         checks=checks,
         estimates=figures,
         funding=funding_leads,
@@ -629,6 +736,7 @@ async def evaluate_site(
         agent_note=agent_note,
         score=max(0, min(100, score)),
         image_url=f"/api/scout/image/{insp.image_name}" if insp.image_name else None,
+        image_view=insp.image_view,  # type: ignore[arg-type]
         overlays=_overlays(roof),
         interior_summary=interior.summary if interior else None,
         tour_url=interior.tour_url if interior else None,

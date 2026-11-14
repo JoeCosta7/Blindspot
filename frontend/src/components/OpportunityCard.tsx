@@ -1,30 +1,14 @@
-import { ASSET_STYLES, formatNumber } from "../format";
-import type { Asset, Estimate, Factor, Need, Opportunity } from "../types";
+import { ASSET_STYLES } from "../format";
+import type { Asset, Factor, Need, Opportunity, ScoutRun, SiteCandidate } from "../types";
+import { EstimateRow } from "./EstimateRow";
 import { FundingBadge } from "./FundingBadge";
+import { ScoutPanel } from "./ScoutPanel";
 
-function EstimateRow({ estimate }: { estimate: Estimate }) {
-  return (
-    <li className="estimate">
-      <div className="estimate-line">
-        <span className="estimate-label">{estimate.label}</span>
-        <span className="estimate-value">
-          {formatNumber(estimate.value)} {estimate.unit}
-        </span>
-        {/* The tag is on every estimate; assumptions show on hover and on click. */}
-        <span className="tag tag-estimate" title={estimate.assumptions.join("\n")}>
-          Estimate
-        </span>
-      </div>
-      <details className="assumptions">
-        <summary>Assumptions</summary>
-        <ul>
-          {estimate.assumptions.map((assumption) => (
-            <li key={assumption}>{assumption}</li>
-          ))}
-        </ul>
-      </details>
-    </li>
-  );
+/** Site Scout for this opportunity: present only in the counties with building data. */
+export interface ScoutHooks {
+  run: ScoutRun | null;
+  onStart: () => void;
+  onShowCandidate: (candidate: SiteCandidate) => void;
 }
 
 /** Who owns the dam decides whether the county can act on it at all. */
@@ -48,6 +32,7 @@ interface Props {
   /** A template note. Gemini opportunities carry their own text instead. */
   note: string | undefined;
   onShowOnMap: (asset: Asset) => void;
+  scout?: ScoutHooks;
 }
 
 /** One opportunity: what Gemini wrote (the plan, why here, first steps), the
@@ -61,6 +46,7 @@ export function OpportunityCard({
   factors,
   note,
   onShowOnMap,
+  scout,
 }: Props) {
   const addressed = needs.filter((need) => opportunity.need_ids.includes(need.id));
   const drawsOn = factors.filter((factor) => opportunity.factor_ids.includes(factor.id));
@@ -189,6 +175,19 @@ export function OpportunityCard({
           No size estimate or funding lead: this is {byGemini ? "Gemini's own idea, " : ""}not one
           of the project types we have formulas and a funding table for.
         </p>
+      )}
+
+      {scout && (
+        <section className="scout-section">
+          <h4>Site Scout</h4>
+          <ScoutPanel
+            run={scout.run}
+            needs={addressed}
+            title={opportunity.title}
+            onStart={scout.onStart}
+            onShowOnMap={scout.onShowCandidate}
+          />
+        </section>
       )}
     </article>
   );

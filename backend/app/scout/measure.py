@@ -14,9 +14,10 @@ from shapely.geometry.base import BaseGeometry
 from app.config import Settings
 from app.estimates import format_number
 from app.models import LayerCheck, Need
-from app.scout.provider import Detection, InteriorRecord, RoofRecord
+from app.scout.provider import Building, Detection, InteriorRecord, RoofRecord
 
 _GEOD = Geod(ellps="WGS84")
+SQ_M_PER_SQ_FT = 0.09290304  # exact definition of the international foot
 
 
 def geodesic_area_m2(geometry: BaseGeometry) -> float:
@@ -101,6 +102,27 @@ def footprint_check(
     )
 
 
+def record_check(roof: RoofRecord, building: Building, tolerance: float) -> LayerCheck | None:
+    """The property record's gross building area, spread over its storeys,
+    against the footprint measured from the air. A rough check: a building's
+    floors are seldom all the same size."""
+    if roof.footprint_m2 is None or not building.gross_sqft or not building.stories:
+        return None
+    per_floor_m2 = building.gross_sqft * SQ_M_PER_SQ_FT / building.stories
+    gap = abs(per_floor_m2 - roof.footprint_m2) / roof.footprint_m2
+    ok = gap <= tolerance
+    return LayerCheck(
+        label="Record floor area vs footprint",
+        layers=["costar", "vexcel"],
+        ok=ok,
+        detail=(
+            f"Property record: {_fmt_m2(per_floor_m2)} per storey over {building.stories} "
+            f"storey(s) vs footprint {_fmt_m2(roof.footprint_m2)} from the air ({gap:.0%} apart)"
+            + ("" if ok else "; the record and the imagery may describe different buildings")
+        ),
+    )
+
+
 def solar_check(roof: RoofRecord) -> LayerCheck | None:
     """The record's precomputed 'solar on roof' flag against the live detection."""
     if roof.solar_present is None or roof.detection_failed:
@@ -130,8 +152,7 @@ def vehicle_check(roof: RoofRecord) -> LayerCheck | None:
         layers=["vexcel"],
         ok=ok,
         detail=(
-            f"Precomputed record counts {recorded} vehicle(s); "
-            f"live detection found {cars} car(s)"
+            f"Precomputed record counts {recorded} vehicle(s); live detection found {cars} car(s)"
         ),
     )
 
@@ -181,7 +202,7 @@ def confidence_factor(
     if interior is None:
         factor *= settings.scout_factor_no_scan
         reasons.append("no 3D scan of the interior")
-    if any(not c.ok and c.label.startswith("Scan floor area") for c in checks):
+    if any(not c.ok and c.label.endswith("vs footprint") for c in checks):
         factor *= settings.scout_factor_footprint_mismatch
-        reasons.append("the scan's floor area does not match the footprint")
+        reasons.append("a floor area from another layer does not match the footprint")
     return factor, reasons

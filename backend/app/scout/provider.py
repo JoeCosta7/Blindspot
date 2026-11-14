@@ -9,6 +9,7 @@ source when its API is available: VERIFY before writing it.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -18,15 +19,18 @@ from shapely.geometry import Point
 
 from app.config import Settings
 from app.geo import County
-from app.sources import matterport, vexcel
+from app.sources import costar, matterport, vexcel
 
-FoundBy = Literal["matterport", "vexcel"]
+log = logging.getLogger(__name__)
+
+FoundBy = Literal["costar", "matterport", "vexcel"]
 
 
 @dataclass(frozen=True)
 class Building:
-    """A candidate building. From a 3D scan (id "mp:<model id>") or from a
-    parcel found in the imagery (id "vx:<lat>,<lon>")."""
+    """A candidate building. From a CoStar property record (id "cs:<id>"),
+    a 3D scan (id "mp:<model id>") or a parcel found in the imagery
+    (id "vx:<lat>,<lon>")."""
 
     id: str
     name: str
@@ -40,6 +44,16 @@ class Building:
     room_labels: tuple[str, ...] = ()
     # From the imagery search only: the parcel record's building type.
     building_type: str | None = None
+    # From the CoStar record only.
+    costar_id: int | None = None
+    property_type: str | None = None  # e.g. Industrial, GeneralRetail, Office
+    property_subtype: str | None = None  # e.g. Industrial_Warehouse
+    building_class: str | None = None  # A, B, C
+    gross_sqft: float | None = None
+    stories: int | None = None
+    year_built: int | None = None
+    parking_spaces: int | None = None
+    photo_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +138,11 @@ class BuildingData(Protocol):
         """Buildings found by searching the imagery around a point for `text`."""
         ...
 
+    async def properties(self, county: County) -> list[Building]:
+        """Every commercial property record in the county (the CoStar
+        layer). Empty when the kit is not installed."""
+        ...
+
     async def roof(self, building: Building) -> RoofRecord | None:
         """Parcel, structure and detected objects, or None with no parcel."""
         ...
@@ -132,9 +151,12 @@ class BuildingData(Protocol):
         """The scan's floors, rooms and summary, or None without a scan."""
         ...
 
-    async def image(self, building: Building, roof: RoofRecord) -> str | None:
-        """Save a top-down image with the outlines drawn; return a name the
-        image endpoint serves, or None."""
+    async def image(
+        self, building: Building, roof: RoofRecord
+    ) -> tuple[str, Literal["oblique", "ortho"]] | None:
+        """Save a photo of the building with the outlines drawn: a side-angle
+        view where one exists, else top-down. Returns (name the image endpoint
+        serves, view), or None."""
         ...
 
 
@@ -145,6 +167,34 @@ class RealBuildingData:
         self.client = client
         self.settings = settings
         self._scans: dict[str, ScanIndex] = {}
+
+    async def properties(self, county: County) -> list[Building]:
+        kit = self.settings.costar_kit_dir
+        if not costar.available(kit):
+            return []
+        return [
+            Building(
+                id=f"cs:{r['id']}",
+                name=r["name"],
+                lat=r["lat"],
+                lon=r["lon"],
+                found_by="costar",
+                address=r["address"],
+                scan_id=r["matterport_ids"][0] if r["matterport_ids"] else None,
+                floors=r["stories"],
+                costar_id=r["id"],
+                property_type=r["property_type"],
+                property_subtype=r["property_subtype"],
+                building_class=r["building_class"],
+                gross_sqft=r["gross_sqft"],
+                stories=r["stories"],
+                year_built=r["year_built"],
+                parking_spaces=r["parking_spaces"],
+                photo_url=r["photo_url"],
+            )
+            for r in costar.properties_in_county(kit, county)
+            if r["construction_status"] in (None, "Existing", "UnderRenovation", "Redeveloped")
+        ]
 
     async def scanned_buildings(self, county: County) -> list[Building]:
         if county.fips in self._scans:
@@ -213,18 +263,26 @@ class RealBuildingData:
         if feature is None:
             return None
         f = vexcel.parcel_facts(feature)
-        area = f["parcel_wkt"] or f["footprint_wkt"]
         detections: tuple[Detection, ...] = ()
         failed: str | None = None
-        if area:
+        # Rooftop equipment is small, and the detector downsamples large areas,
+        # so it runs on the footprint; cars are found on the whole parcel.
+        jobs = []
+        if f["footprint_wkt"]:
+            jobs.append((f["footprint_wkt"], ["rooftop hvac unit", "solar panel"]))
+        if f["parcel_wkt"]:
+            jobs.append((f["parcel_wkt"], ["car"]))
+        found: list[Detection] = []
+        for job_area, labels in jobs:
             try:
-                result = await vexcel.detect(self.client, self.settings, area, DETECT_LABELS)
-                detections = tuple(
+                result = await vexcel.detect(self.client, self.settings, job_area, labels)
+                found += [
                     Detection(label=d["label"], wkt=d["wkt"], confidence=d.get("confidence"))
                     for d in result["detections"]
-                )
+                ]
             except Exception as exc:  # detection is an extra; the record still counts
                 failed = str(exc)[:120]
+        detections = tuple(found)
         return RoofRecord(
             parcel_wkt=f["parcel_wkt"],
             footprint_wkt=f["footprint_wkt"],
@@ -265,7 +323,9 @@ class RealBuildingData:
             image_url=d["image_url"],
         )
 
-    async def image(self, building: Building, roof: RoofRecord) -> str | None:
+    async def image(
+        self, building: Building, roof: RoofRecord
+    ) -> tuple[str, Literal["oblique", "ortho"]] | None:
         area = roof.parcel_wkt or roof.footprint_wkt
         if not area:
             return None
@@ -283,8 +343,18 @@ class RealBuildingData:
             color = colors.get(d.label, "rgb(0,229,255)")
             drawings.append({"wkt": d.wkt, "outline-width": 2, "outline-color": color})
         name = building.id.replace(":", "_").replace(",", "_")
+        # A side-angle photo shows the building itself; fall back to top-down.
+        try:
+            directions = await vexcel.oblique_directions(self.client, self.settings, area)
+            if directions:
+                await vexcel.oblique_jpg(
+                    self.client, self.settings, area, directions[0], drawings, name
+                )
+                return name, "oblique"
+        except Exception as exc:  # the oblique is a nicety; the ortho still works
+            log.warning("oblique image for %s failed: %r", building.id, exc)
         await vexcel.ortho_png(self.client, self.settings, area, drawings, name)
-        return name
+        return name, "ortho"
 
 
 def get_provider(client: httpx.AsyncClient, settings: Settings) -> BuildingData:
