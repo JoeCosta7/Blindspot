@@ -40,7 +40,7 @@ async def main(argv: list[str]) -> int:
     failures = 0
 
     async with httpx.AsyncClient() as client:
-        for fips in fips_list:  # one at a time: be gentle with Overpass
+        for fips in fips_list:  # one at a time: be gentle with the free APIs
             county = index.get(fips)
             if county is None:
                 print(f"{fips}: no such county")

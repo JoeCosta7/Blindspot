@@ -11,9 +11,9 @@ from app.sources import (
     census,
     dams,
     farms,
+    geoapify,
     lmop,
     nri,
-    overpass,
     pvwatts,
     repowering,
     state_energy,
@@ -76,7 +76,7 @@ def sources(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        overpass,
+        geoapify,
         "fetch_public_buildings",
         returning(
             [
@@ -257,7 +257,7 @@ def test_full_report(sources, settings):
 
 def test_failed_sources_do_not_fail_the_request(sources, settings, monkeypatch):
     monkeypatch.setattr(census, "fetch_county", raising(SourceError("CENSUS_API_KEY is not set")))
-    monkeypatch.setattr(overpass, "fetch_public_buildings", raising(RuntimeError("boom")))
+    monkeypatch.setattr(geoapify, "fetch_public_buildings", raising(RuntimeError("boom")))
 
     async def slow(*args, **kwargs):
         await asyncio.sleep(1)
@@ -269,7 +269,7 @@ def test_failed_sources_do_not_fail_the_request(sources, settings, monkeypatch):
     status = {s.source: s for s in report.source_status}
 
     assert status["census"].ok is False and "CENSUS_API_KEY" in status["census"].message
-    assert status["overpass"].message == "Unexpected error: RuntimeError"
+    assert status["geoapify"].message == "Unexpected error: RuntimeError"
     assert "Timed out" in status["pvwatts"].message
     assert status["repowering"].ok and status["lmop"].ok and status["nri"].ok
 

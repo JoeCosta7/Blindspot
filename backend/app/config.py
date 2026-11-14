@@ -18,10 +18,8 @@ class Settings(BaseSettings):
     nlr_api_key: str = ""
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
-
-    # Public Overpass instance. It was at capacity (HTTP 502) during testing on
-    # 2026-11-13; point this at another instance if that persists.
-    overpass_url: str = "https://overpass-api.de/api/interpreter"
+    # Geoapify Places API: OpenStreetMap schools, libraries and colleges.
+    geoapify_api_key: str = ""
 
     # --- request shape ----------------------------------------------------
     acs_year: int = 2024

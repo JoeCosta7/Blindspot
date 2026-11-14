@@ -20,6 +20,7 @@ def settings(tmp_path: Path) -> Settings:
         census_api_key="",
         nlr_api_key="",
         gemini_api_key="",
+        geoapify_api_key="",
         cache_dir=tmp_path / "cache",
         data_dir=BACKEND_DIR / "data",
     )

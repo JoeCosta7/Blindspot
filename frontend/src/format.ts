@@ -127,7 +127,8 @@ export const SOURCE_NAMES: Record<string, string> = {
   nri: "FEMA National Risk Index",
   repowering: "EPA RE-Powering sites",
   lmop: "EPA landfill database",
-  overpass: "OpenStreetMap public buildings",
+  geoapify: "OpenStreetMap public buildings",
+  overpass: "OpenStreetMap public buildings", // reports saved before Geoapify
   ev_stations: "EV charging stations",
   ev_national_count: "National EV station count",
   pvwatts: "PVWatts solar yield",

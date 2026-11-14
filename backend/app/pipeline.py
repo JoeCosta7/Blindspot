@@ -36,9 +36,9 @@ from app.sources import (
     census,
     dams,
     farms,
+    geoapify,
     lmop,
     nri,
-    overpass,
     pvwatts,
     repowering,
     state_energy,
@@ -53,7 +53,7 @@ SOURCE_NAMES = {
     "nri": "FEMA National Risk Index",
     "repowering": "EPA RE-Powering sites",
     "lmop": "EPA landfill database",
-    "overpass": "OpenStreetMap public buildings",
+    "geoapify": "OpenStreetMap public buildings",
     "ev_stations": "EV charging stations",
     "ev_national_count": "National EV station count",
     "pvwatts": "PVWatts solar yield",
@@ -65,9 +65,6 @@ SOURCE_NAMES = {
 
 BUILDING_TYPES = ("school", "library", "college")
 SOLAR_SOLUTIONS = ("community_solar", "resilience_hub")
-
-# Overpass is a shared free service: one request at a time from this process.
-_overpass_slot = asyncio.Semaphore(1)
 
 
 async def _run(
@@ -208,7 +205,7 @@ def building_assets(county: County, rows: list[dict[str, Any]]) -> list[Asset]:
             lat=row["lat"],
             lon=row["lon"],
             attributes={"city": row.get("city")},
-            source=overpass.SOURCE_LABEL,
+            source=geoapify.SOURCE_LABEL,
         )
         for row in _inside(county, rows)
     ]
@@ -270,10 +267,9 @@ async def analyze_county(
         ),
         _run("lmop", _local(lambda: lmop.landfills_for_county(data_dir, county.fips)), timeout),
         _run(
-            "overpass",
-            lambda: overpass.fetch_public_buildings(client, settings, county.fips, county.bounds),
+            "geoapify",
+            lambda: geoapify.fetch_public_buildings(client, settings, county.fips, county.bounds),
             timeout,
-            slot=_overpass_slot,
         ),
         _run(
             "ev_stations",
@@ -437,7 +433,7 @@ async def analyze_county(
     searched: list[tuple[str, tuple[str, ...]]] = [
         ("repowering", repowering.SITE_TYPES),
         ("lmop", ("lmop_landfill",)),
-        ("overpass", BUILDING_TYPES),
+        ("geoapify", BUILDING_TYPES),
         ("ev_stations", ("ev_station",)),
         ("dams", ("non_powered_dam",)),
     ]
