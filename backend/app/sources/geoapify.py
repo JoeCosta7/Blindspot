@@ -1,18 +1,13 @@
-"""OpenStreetMap public buildings via the Geoapify Places API: schools,
-libraries and colleges in a bounding box. The pipeline filters the result by
-county polygon.
-
-Replaced the public Overpass server, which was at capacity (HTTP 502, or
-30-40 s per query) on 2026-11-13 and 11-14. Geoapify serves the same OSM
-data in about 1.5 s per request.
+"""Public buildings from the Geoapify Places API: schools, libraries and
+colleges in a bounding box. The pipeline filters the result by county polygon.
+About 1.5 s per request.
 
 Confirmed with live calls on 2026-11-14:
 - `categories`, `filter=rect:west,south,east,north`, `limit`, `apiKey`.
 - A request returns at most 500 places and `offset` does not page past that
   (offset 500 came back empty for Cook County schools). So a box that comes
   back full is split into four and each quarter is requested again.
-- Each feature's `datasource.raw` carries the OSM `osm_type` (n/w/r) and
-  `osm_id`, so asset ids match the ones Overpass produced.
+- Each feature carries a Geoapify `place_id`, used as the asset id.
 """
 
 from __future__ import annotations
@@ -27,7 +22,7 @@ from app.config import Settings
 from app.sources import SourceError
 
 URL = "https://api.geoapify.com/v2/places"
-SOURCE_LABEL = "OpenStreetMap (via Geoapify)"
+SOURCE_LABEL = "Geoapify Places"
 
 # Geoapify category -> our asset type. Checked in this order, so a place
 # tagged as both a library and a college counts as a library.
@@ -41,7 +36,6 @@ PAGE_LIMIT = 500  # the API's maximum per request
 # A full box is split into quarters at most this many times. Depth 5 gives
 # boxes about 1/32 of the county's width, enough for the largest US counties.
 MAX_SPLIT_DEPTH = 5
-_OSM_TYPES = {"n": "node", "w": "way", "r": "relation"}
 
 # Requests in flight at once, shared by every county in a report, so a big
 # county's split boxes do not burst past the free tier's rate limit.
@@ -61,15 +55,12 @@ def parse_features(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = (props.get("name") or "").strip()
         if not asset_type or not name or props.get("lat") is None or props.get("lon") is None:
             continue
-        raw = (props.get("datasource") or {}).get("raw") or {}
-        osm_type = _OSM_TYPES.get(raw.get("osm_type"))
-        if osm_type and raw.get("osm_id") is not None:
-            place_id = f"{osm_type}/{raw['osm_id']}"
-        else:
-            place_id = f"geoapify/{props.get('place_id')}"
+        place_id = props.get("place_id")
+        if not place_id:
+            continue  # no stable id to dedupe or link by
         buildings.append(
             {
-                "osm_id": place_id,
+                "place_id": str(place_id),
                 "type": asset_type,
                 "name": name,
                 "lat": float(props["lat"]),
@@ -145,10 +136,15 @@ async def fetch_public_buildings(
         # A place on the edge between two split boxes can come back twice.
         unique = {}
         for building in parse_features(features):
-            unique.setdefault(building["osm_id"], building)
+            unique.setdefault(building["place_id"], building)
         return list(unique.values())
 
     value, cached = await cached_fetch(
-        settings.cache_dir, "geoapify_buildings", {"fips": fips}, 7 * DAY, fetch
+        # v2: rows are keyed by `place_id`. Older cache entries used another key.
+        settings.cache_dir,
+        "geoapify_buildings_v2",
+        {"fips": fips},
+        7 * DAY,
+        fetch,
     )
     return value, cached

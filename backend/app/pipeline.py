@@ -56,7 +56,7 @@ SOURCE_NAMES = {
     "nri": "FEMA National Risk Index",
     "repowering": "EPA RE-Powering sites",
     "lmop": "EPA landfill database",
-    "geoapify": "OpenStreetMap public buildings",
+    "geoapify": "Geoapify public buildings",
     "ev_stations": "EV charging stations",
     "ev_national_count": "National EV station count",
     "pvwatts": "PVWatts solar yield",
@@ -206,7 +206,7 @@ def _inside(county: County, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def building_assets(county: County, rows: list[dict[str, Any]]) -> list[Asset]:
     return [
         Asset(
-            id=f"osm:{row['osm_id']}",
+            id=f"geoapify:{row['place_id']}",
             type=row["type"],
             name=row["name"],
             lat=row["lat"],

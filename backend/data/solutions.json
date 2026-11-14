@@ -72,5 +72,21 @@
     "asset_kind": "county",
     "hosts": [],
     "triggers": ["unmanaged_farm_waste"]
+  },
+  {
+    "id": "school_heat_pumps",
+    "name": "Ground-source heat pumps for school heating",
+    "title_template": "Ground-source heat pumps at {asset}",
+    "asset_kind": "building",
+    "hosts": ["school", "college"],
+    "triggers": ["delivered_fuel_heat"]
+  },
+  {
+    "id": "landfill_composting",
+    "name": "Food-scrap composting at a landfill",
+    "title_template": "Food-scrap composting site at {asset}",
+    "asset_kind": "landfill",
+    "hosts": ["lmop_landfill", "landfill"],
+    "triggers": ["landfill_gas_uncaptured"]
   }
 ]

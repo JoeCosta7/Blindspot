@@ -233,8 +233,7 @@ def test_stations_are_trimmed(settings):
 # --- geoapify -------------------------------------------------------------------
 
 
-def feature(name, categories, lat=42.1, lon=-75.9, osm=("w", 1), place_id="p1"):
-    raw = {"osm_type": osm[0], "osm_id": osm[1]} if osm else {}
+def feature(name, categories, lat=42.1, lon=-75.9, place_id="p1"):
     return {
         "type": "Feature",
         "properties": {
@@ -244,26 +243,24 @@ def feature(name, categories, lat=42.1, lon=-75.9, osm=("w", 1), place_id="p1"):
             "lon": lon,
             "city": "Town",
             "place_id": place_id,
-            "datasource": {"sourcename": "openstreetmap", "raw": raw},
         },
     }
 
 
 def test_geoapify_parsing():
     features = [
-        feature("Main Library", ["education.library", "building.college"], osm=("n", 1)),
-        feature("State U", ["education.university"], osm=("w", 2)),
-        feature("Old School", ["education.school"], osm=("r", 3)),
-        feature("", ["education.school"], osm=("n", 4)),  # unnamed
-        feature("Cafe", ["catering.cafe"], osm=("n", 5)),  # not a building type
-        feature("No OSM id", ["education.school"], osm=None, place_id="abc"),
+        feature("Main Library", ["education.library", "building.college"], place_id="p1"),
+        feature("State U", ["education.university"], place_id="p2"),
+        feature("Old School", ["education.school"], place_id="p3"),
+        feature("", ["education.school"], place_id="p4"),  # unnamed
+        feature("Cafe", ["catering.cafe"], place_id="p5"),  # not a building type
+        feature("No id", ["education.school"], place_id=None),  # cannot be linked
     ]
     parsed = geoapify.parse_features(features)
-    assert [(b["osm_id"], b["type"], b["name"]) for b in parsed] == [
-        ("node/1", "library", "Main Library"),
-        ("way/2", "college", "State U"),
-        ("relation/3", "school", "Old School"),
-        ("geoapify/abc", "school", "No OSM id"),
+    assert [(b["place_id"], b["type"], b["name"]) for b in parsed] == [
+        ("p1", "library", "Main Library"),
+        ("p2", "college", "State U"),
+        ("p3", "school", "Old School"),
     ]
     assert parsed[0]["city"] == "Town"
 
@@ -321,18 +318,19 @@ def test_geoapify_splits_full_boxes_and_dedupes(settings, monkeypatch):
                 200,
                 json={
                     "features": [
-                        feature(n, ["education.school"], osm=("w", i)) for i, n in enumerate(names)
+                        feature(n, ["education.school"], place_id=f"w{i}")
+                        for i, n in enumerate(names)
                     ]
                 },
             )
-        # Every quarter returns place w/1 (an edge duplicate) plus one of its own.
+        # Every quarter returns place w1 (an edge duplicate) plus one of its own.
         own = len(boxes)
         return httpx.Response(
             200,
             json={
                 "features": [
-                    feature("B", ["education.school"], osm=("w", 1)),
-                    feature(f"Q{own}", ["education.school"], osm=("w", 100 + own)),
+                    feature("B", ["education.school"], place_id="w1"),
+                    feature(f"Q{own}", ["education.school"], place_id=f"w{100 + own}"),
                 ]
             },
         )

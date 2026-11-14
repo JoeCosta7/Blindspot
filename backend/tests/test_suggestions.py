@@ -38,7 +38,7 @@ def sample_digest(sites_per_type: int = 2):
         site("repowering:4242", "brownfield", "Old Mill", acres=69.0, epa_pv_mw=10.0, city="Erie"),
         site("repowering:2", "brownfield", "Rail Yard", acres=40.0, transmission_miles=1.0),
         site("repowering:3", "brownfield", "Tannery", acres=float("nan")),
-        site("osm:node/1", "library", "Main Library", city=None),
+        site("geoapify:p1", "library", "Main Library", city=None),
         site("afdc:1", "ev_station", "Charger A"),
         site("afdc:2", "ev_station", "Charger B"),
         site(
