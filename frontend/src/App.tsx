@@ -14,6 +14,7 @@ import { type Basemap, MapView, type SelectMode, type Theme } from "./components
 import { PhotoViewer } from "./components/PhotoViewer";
 import { LoadingPanel, ResultsPanel, scoutKey } from "./components/ResultsPanel";
 import { bestCandidates, bestSites } from "./components/ScoutPanel";
+import { MAX_COUNTIES } from "./countyBox";
 import { featureBounds, unionBounds } from "./format";
 import type {
   AnalyzeRequest,
@@ -29,6 +30,10 @@ import type {
   ScoutRun,
   SiteCandidate,
 } from "./types";
+
+/** One or more counties chosen by click / Ctrl+click (not a drawn box). */
+type CountiesRequest = { mode: "counties"; fips: string[] };
+type PendingBody = AnalyzeRequest | CountiesRequest;
 
 /** A scouted building as a map marker. */
 function candidateAsset(candidate: SiteCandidate): Asset {
@@ -112,7 +117,7 @@ function ThemeIcon({ theme }: { theme: Theme }) {
 }
 
 interface PendingRequest {
-  body: AnalyzeRequest;
+  body: PendingBody;
   label: string;
   /** Covered by the loading animation on the map. */
   area: LoadingArea | null;
@@ -129,8 +134,9 @@ function Intro({ countiesError }: { countiesError: string | null }) {
       <ol>
         <li>Click a county on the map, or search for it by name.</li>
         <li>
-          To compare neighbors, choose <strong>Select area</strong> and drag a box over up to four
-          counties.
+          Hold <strong>Ctrl</strong> or <strong>⌘</strong> and click more counties to compare up to
+          four, or choose <strong>Select area</strong> and drag a box (the box shows how many
+          match).
         </li>
         <li>Open an opportunity to see its estimates, their assumptions, and funding leads.</li>
       </ol>
@@ -144,10 +150,37 @@ function Intro({ countiesError }: { countiesError: string | null }) {
   );
 }
 
+function countyLabel(feature: CountyFeature | undefined, fips: string): string {
+  return feature
+    ? `${feature.properties.NAMELSAD}, ${feature.properties.STUSPS}`
+    : fips;
+}
+
+async function analyzePending(
+  body: PendingBody,
+  signal: AbortSignal,
+): Promise<AnalyzeResponse> {
+  if (body.mode === "counties") {
+    const reports = await Promise.all(
+      body.fips.map((fips) => analyze({ mode: "county", fips }, signal)),
+    );
+    return {
+      counties: reports.flatMap((report) => report.counties),
+      truncated: false,
+      message:
+        body.fips.length > 1
+          ? `Comparing ${body.fips.length} counties. Ctrl/⌘+click a county to add or remove one.`
+          : null,
+    };
+  }
+  return analyze(body, signal);
+}
+
 export function App() {
   const [counties, setCounties] = useState<CountyCollection | null>(null);
   const [countiesError, setCountiesError] = useState<string | null>(null);
   const [mode, setMode] = useState<SelectMode>("county");
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [selectedFips, setSelectedFips] = useState<string[]>([]);
   const [fitTo, setFitTo] = useState<Bounds | null>(null);
   const [pending, setPending] = useState<PendingRequest | null>(null);
@@ -279,14 +312,16 @@ export function App() {
       setScoutRuns({});
       setViewed(null);
       try {
-        const result = await analyze(request.body, controller.signal);
+        const result = await analyzePending(request.body, controller.signal);
         if (controller.signal.aborted) return;
         const fips = result.counties.map((county) => county.fips);
         setResponse(result);
         setSelectedFips(fips);
         const done = areaOf(fips);
         if (done) setFlare({ area: done });
-        if (request.body.mode === "bbox") setFitTo(boundsOf(fips));
+        if (request.body.mode === "bbox" || request.body.mode === "counties") {
+          setFitTo(boundsOf(fips));
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "The request failed.");
@@ -297,23 +332,76 @@ export function App() {
     [boundsOf, areaOf],
   );
 
-  const selectCounty = useCallback(
-    (fips: string) => {
-      const feature = featuresByFips.get(fips);
-      setSelectedFips([fips]);
-      setFitTo(boundsOf([fips]));
-      void run({
-        body: { mode: "county", fips },
-        label: feature ? `${feature.properties.NAMELSAD}, ${feature.properties.STUSPS}` : fips,
-        area: feature?.geometry ?? null,
-      });
+  const pendingForFips = useCallback(
+    (ids: string[]): PendingRequest => {
+      const [first, ...rest] = ids;
+      if (!first || rest.length > 0) {
+        return {
+          body: { mode: "counties", fips: ids },
+          label: `${ids.length} counties`,
+          area: areaOf(ids),
+        };
+      }
+      const feature = featuresByFips.get(first);
+      return {
+        body: { mode: "county", fips: first },
+        label: countyLabel(feature, first),
+        area: feature?.geometry ?? areaOf(ids),
+      };
     },
-    [featuresByFips, boundsOf, run],
+    [featuresByFips, areaOf],
+  );
+
+  const selectCounty = useCallback(
+    (fips: string, opts?: { additive?: boolean }) => {
+      setMode("county");
+      if (!opts?.additive) {
+        setSelectionNotice(null);
+        setSelectedFips([fips]);
+        setFitTo(boundsOf([fips]));
+        void run(pendingForFips([fips]));
+        return;
+      }
+
+      const already = selectedFips.includes(fips);
+      if (already) {
+        const next = selectedFips.filter((id) => id !== fips);
+        setSelectionNotice(null);
+        setSelectedFips(next);
+        if (next.length === 0) {
+          inFlight.current?.abort();
+          setResponse(null);
+          setPending(null);
+          setError(null);
+          setLoading(false);
+          setFitTo(null);
+          return;
+        }
+        setFitTo(boundsOf(next));
+        void run(pendingForFips(next));
+        return;
+      }
+
+      if (selectedFips.length >= MAX_COUNTIES) {
+        setSelectionNotice(
+          `You can compare up to ${MAX_COUNTIES} counties. Ctrl/⌘+click a selected county to remove it.`,
+        );
+        return;
+      }
+
+      const next = [...selectedFips, fips];
+      setSelectionNotice(null);
+      setSelectedFips(next);
+      setFitTo(boundsOf(next));
+      void run(pendingForFips(next));
+    },
+    [boundsOf, run, selectedFips, pendingForFips],
   );
 
   const selectBox = useCallback(
     (sw: LonLat, ne: LonLat) => {
       setMode("county"); // one box per click of the button; panning comes back
+      setSelectionNotice(null);
       setSelectedFips([]);
       const [w, s] = sw;
       const [e, n] = ne;
@@ -489,6 +577,7 @@ export function App() {
           onNeedChange={setNeedId}
           onCountyClick={selectCounty}
           onBoxSelect={selectBox}
+          showCountyHint={!loading && !response}
           onAssetClick={(asset) => {
             const candidate = scouted.get(asset.id);
             if (candidate) showCandidate(candidate);
@@ -516,6 +605,13 @@ export function App() {
             title="Drag to resize"
             onPointerDown={startPanelResize}
           />
+          {selectionNotice && (
+            <div className="panel-body" style={{ paddingBottom: 0 }}>
+              <div className="notice notice-warning" role="status">
+                {selectionNotice}
+              </div>
+            </div>
+          )}
           {loading && pending && <LoadingPanel label={pending.label} />}
           {!loading && error && pending && (
             <div className="panel-body">

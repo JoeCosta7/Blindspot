@@ -92,10 +92,13 @@ interface Props {
   /** The need the map is colored by, if any. */
   needId: NeedId | null;
   onNeedChange: (id: NeedId | null) => void;
-  onCountyClick: (fips: string) => void;
+  /** Plain click replaces the selection; Ctrl/Cmd+click adds or removes (capped). */
+  onCountyClick: (fips: string, opts?: { additive?: boolean }) => void;
   onBoxSelect: (sw: LonLat, ne: LonLat) => void;
   /** A marker was clicked. When set, no popup opens; the app shows the site instead. */
   onAssetClick?: (asset: Asset) => void;
+  /** Show the Ctrl/⌘+click tip in county mode (hidden once a report is open). */
+  showCountyHint?: boolean;
   /** Rendered over the map, e.g. a site's photo. */
   overlay?: ReactNode;
 }
@@ -257,6 +260,7 @@ export function MapView(props: Props) {
     onCountyClick,
     onBoxSelect,
     onAssetClick,
+    showCountyHint = true,
     overlay,
   } = props;
   const needLayer = needMap?.layers.find((layer) => layer.id === needId) ?? null;
@@ -531,7 +535,10 @@ export function MapView(props: Props) {
         return; // a marker click is not a county click
       }
       const [county] = map.queryRenderedFeatures(event.point, { layers: [COUNTY_FILL] });
-      if (typeof county?.id === "string") latest.current.onCountyClick(county.id);
+      if (typeof county?.id === "string") {
+        const additive = Boolean(event.originalEvent.ctrlKey || event.originalEvent.metaKey);
+        latest.current.onCountyClick(county.id, { additive });
+      }
     });
   }, [styleVersion, counties]);
 
@@ -646,9 +653,12 @@ export function MapView(props: Props) {
   // --- box select -----------------------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !layersReady || mode !== "box") return;
-    return startBoxSelect(map, (sw, ne) => latest.current.onBoxSelect(sw, ne));
-  }, [layersReady, mode]);
+    if (!map || !layersReady || mode !== "box" || !counties) return;
+    return startBoxSelect(map, {
+      onSelect: (sw, ne) => latest.current.onBoxSelect(sw, ne),
+      counties: counties.features,
+    });
+  }, [layersReady, mode, counties]);
 
   if (!TOKEN || mapError) {
     return (
@@ -712,8 +722,17 @@ export function MapView(props: Props) {
           account.mapbox.com, then reload.
         </div>
       )}
-      {mode === "box" && (
-        <div className="map-hint">Drag a box over the counties to analyze. Esc cancels.</div>
+      {mode === "box" ? (
+        <div className="map-hint">
+          Drag a box over the counties to analyze. The label shows how many match (up to four). Esc
+          cancels.
+        </div>
+      ) : (
+        showCountyHint && (
+          <div className="map-hint map-hint-quiet">
+            Click a county to analyze. Hold Ctrl or ⌘ and click to compare up to four.
+          </div>
+        )
       )}
       {(assets.length > 0 || (needLayer && needMap)) && (
         <div className="legend">
