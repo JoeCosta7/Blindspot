@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     max_ev_markers_per_county: int = 300
     max_buildings_per_county: int = 300
 
+    # --- Gemini-suggested solutions (suggestions.py) ----------------------
+    # Most suggestions to ask for and show. 0 turns the feature off.
+    max_ai_solutions: int = 4
+    # Sites of each type listed in the digest sent to Gemini, best first. The
+    # digest gives the exact count for the rest.
+    digest_sites_per_type: int = 3
+
     # --- paths ------------------------------------------------------------
     data_dir: Path = BACKEND_DIR / "data"
     cache_dir: Path = BACKEND_DIR / ".cache"
