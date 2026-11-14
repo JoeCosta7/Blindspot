@@ -1,42 +1,18 @@
-"""County brief (CLAUDE.md section 12).
+"""County brief: the summary and caveats shown above the opportunities.
 
-Gemini writes words; code supplies every number. The model sees a compact
-payload of display-ready strings, and its output is rejected if it contains
-any number that is not in that payload. On rejection, error, timeout or a
-missing key, a deterministic template is used instead.
+Gemini writes the summary in the same call that writes the opportunities
+(opportunities.py), and it is checked there. This module holds what code
+writes: the payload the brief is built from, the caveats, and the
+deterministic template used when Gemini's summary is missing or rejected.
 """
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import json
-import logging
 import re
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
-
-from app import gemini
-from app.cache import DAY, cache_get, cache_set
-from app.config import Settings
 from app.estimates import format_number
-from app.models import Narrative, Need, Opportunity, OpportunityNote, SourceStatus
-
-log = logging.getLogger(__name__)
-
-SUMMARY_MAX_WORDS = 90
-NOTE_MAX_WORDS = 60
-MAX_GEMINI_CAVEATS = 4
-
-# Included verbatim in the prompt (CLAUDE.md section 12).
-PROMPT_RULES = (
-    "Write for a county official with no technical background.",
-    "Use only numbers that appear in the input. Do not calculate new ones.",
-    "Mention only the funding programs in the input, with their status.",
-    "Call every capacity, energy or household figure an estimate.",
-    "Do not promise eligibility or award.",
-)
+from app.models import Narrative, Need, Opportunity, OpportunityNote
 
 STATUS_WORDS = {
     "open": "open",
@@ -46,18 +22,11 @@ STATUS_WORDS = {
     "unverified": "not verified",
 }
 
-
-class _ModelNote(BaseModel):
-    opportunity_id: str
-    text: str
-
-
-class ModelNarrative(BaseModel):
-    """The response schema given to Gemini."""
-
-    summary: str
-    opportunity_notes: list[_ModelNote]
-    caveats: list[str]
+AI_CAVEAT = (
+    "The opportunities were written by Gemini from the needs, factors and sites in this "
+    "report. Each was checked to use only this report's needs, sites and numbers. "
+    "Feasibility and cost were not checked."
+)
 
 
 # --- payload -----------------------------------------------------------------
@@ -90,6 +59,7 @@ def build_payload(
         "county": f"{county_name}, {state}",
         "need_count": len(needs),
         "opportunity_count": len(opportunities),
+        "written_by_gemini": any(o.generated_by == "gemini" for o in opportunities),
         "needs": [
             {
                 "label": n.label,
@@ -139,34 +109,6 @@ def extract_numbers(text: str) -> set[float]:
     return {float(token) for token in _NUMBER.findall(_THOUSANDS.sub("", text))}
 
 
-def _words(text: str) -> int:
-    return len(text.split())
-
-
-def validation_error(narrative: ModelNarrative, payload: dict[str, Any]) -> str | None:
-    """Why the model's narrative must be rejected, or None if it is usable."""
-    if not narrative.summary.strip():
-        return "empty summary"
-    if _words(narrative.summary) > SUMMARY_MAX_WORDS:
-        return f"summary is over {SUMMARY_MAX_WORDS} words"
-    known_ids = {o["opportunity_id"] for o in payload["opportunities"]}
-    for note in narrative.opportunity_notes:
-        if note.opportunity_id not in known_ids:
-            return "note refers to an opportunity that is not in the input"
-        if _words(note.text) > NOTE_MAX_WORDS:
-            return f"an opportunity note is over {NOTE_MAX_WORDS} words"
-
-    allowed = extract_numbers(json.dumps(payload, ensure_ascii=False))
-    written = " ".join(
-        [narrative.summary, *(n.text for n in narrative.opportunity_notes), *narrative.caveats]
-    )
-    invented = sorted(extract_numbers(written) - allowed)
-    if invented:
-        shown = ", ".join(format_number(n) for n in invented[:5])
-        return f"contains numbers that are not in the input: {shown}"
-    return None
-
-
 # --- template ------------------------------------------------------------------
 
 
@@ -183,6 +125,8 @@ def _lower_first(text: str) -> str:
 def standard_caveats(payload: dict[str, Any], failed_sources: list[str]) -> list[str]:
     caveats = []
     opportunities = payload["opportunities"]
+    if payload.get("written_by_gemini"):
+        caveats.append(AI_CAVEAT)
     if any(o["estimates"] for o in opportunities):
         caveats.append(
             "Figures marked as estimates are rough. "
@@ -224,13 +168,12 @@ def template_narrative(payload: dict[str, Any], failed_sources: list[str]) -> Na
         lead = "The top priority is" if len(top) == 1 else "The top priorities are"
         summary = f"{county} has {len(needs)} flagged {noun}. {lead} {_join(top)}."
         if opportunities:
+            verb = "written for" if payload.get("written_by_gemini") else "matched to"
             if len(opportunities) == 1:
-                summary += (
-                    f' 1 opportunity was matched to these needs: "{opportunities[0]["title"]}".'
-                )
+                summary += f' 1 opportunity was {verb} these needs: "{opportunities[0]["title"]}".'
             else:
                 summary += (
-                    f" {len(opportunities)} opportunities were matched to these needs. "
+                    f" {len(opportunities)} opportunities were {verb} these needs. "
                     f'The highest-ranked is "{opportunities[0]["title"]}".'
                 )
         else:
@@ -260,101 +203,17 @@ def template_narrative(payload: dict[str, Any], failed_sources: list[str]) -> Na
     )
 
 
-# --- Gemini --------------------------------------------------------------------
-
-
-def build_prompt(payload: dict[str, Any]) -> str:
-    rules = "\n".join(f"{i}. {rule}" for i, rule in enumerate(PROMPT_RULES, start=1))
-    return (
-        "You are writing a short brief about sustainability opportunities in one US county.\n\n"
-        f"Rules:\n{rules}\n\n"
-        "Format:\n"
-        f"- summary: at most {SUMMARY_MAX_WORDS} words on the county's main needs and the "
-        "best opportunities. The needs and the opportunities are each listed from highest "
-        "to lowest priority; lead with the first ones.\n"
-        f"- opportunity_notes: one note per opportunity, at most {NOTE_MAX_WORDS} words, using "
-        "the opportunity_id exactly as given.\n"
-        f"- caveats: up to {MAX_GEMINI_CAVEATS} short sentences on what the reader should "
-        "confirm before acting.\n"
-        "- Copy numbers exactly as written in the input. Do not round, convert or combine them.\n"
-        "- Plain sentences only: no headings, bullet points or markdown.\n\n"
-        f"Input:\n{json.dumps(payload, ensure_ascii=False, indent=1)}"
-    )
-
-
-async def _call_gemini(prompt: str, settings: Settings) -> ModelNarrative:
-    return await gemini.generate(prompt, ModelNarrative, settings)
-
-
-def _from_model(
-    model: ModelNarrative, payload: dict[str, Any], failed_sources: list[str]
+def compose(
+    payload: dict[str, Any], failed_sources: list[str], gemini_summary: str | None
 ) -> Narrative:
-    caveats = [c.strip() for c in model.caveats if c.strip()][:MAX_GEMINI_CAVEATS]
-    if failed_sources:  # always stated by code, whatever the model wrote
-        caveats.append(failed_sources_caveat(failed_sources))
+    """The brief. `gemini_summary` is the checked summary from the opportunities
+    call, or None to use the template's. Caveats are always written by code."""
+    brief = template_narrative(payload, failed_sources)
+    if gemini_summary is None:
+        return brief
     return Narrative(
-        summary=model.summary.strip(),
-        opportunity_notes=[
-            OpportunityNote(opportunity_id=n.opportunity_id, text=n.text.strip())
-            for n in model.opportunity_notes
-        ],
-        caveats=caveats or standard_caveats(payload, failed_sources),
+        summary=gemini_summary,
+        opportunity_notes=[],
+        caveats=brief.caveats,
         generated_by="gemini",
-    )
-
-
-async def write_narrative(
-    payload: dict[str, Any], failed_sources: list[str], settings: Settings
-) -> tuple[Narrative, SourceStatus]:
-    """The narrative and a status entry saying how it was produced."""
-
-    def fallback(reason: str) -> tuple[Narrative, SourceStatus]:
-        return (
-            template_narrative(payload, failed_sources),
-            SourceStatus(source="gemini", ok=False, cached=False, message=reason),
-        )
-
-    if not payload["needs"] and not payload["opportunities"]:
-        return fallback("Nothing to summarize; template narrative used")
-    if not settings.gemini_api_key:
-        return fallback("GEMINI_API_KEY is not set; template narrative used")
-
-    key = {
-        "model": settings.gemini_model,
-        "payload": hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
-    }
-    hit = cache_get(settings.cache_dir, "gemini", key, 30 * DAY)
-    if hit is not None:
-        try:
-            model = ModelNarrative.model_validate(hit)
-            return (
-                _from_model(model, payload, failed_sources),
-                SourceStatus(source="gemini", ok=True, cached=True),
-            )
-        except ValidationError:
-            pass  # stale cache shape: fall through and call again
-
-    try:
-        model = await asyncio.wait_for(
-            _call_gemini(build_prompt(payload), settings), settings.gemini_timeout_s
-        )
-    except TimeoutError:
-        return fallback(
-            f"Gemini took longer than {settings.gemini_timeout_s:.0f} s; template narrative used"
-        )
-    except Exception as exc:  # any SDK, network or parsing failure
-        log.warning("Gemini call failed: %r", exc)
-        return fallback(
-            f"Gemini call failed ({gemini.describe_error(exc)}); template narrative used"
-        )
-
-    problem = validation_error(model, payload)
-    if problem:
-        log.warning("Gemini narrative rejected: %s", problem)
-        return fallback(f"Gemini output rejected ({problem}); template narrative used")
-
-    cache_set(settings.cache_dir, "gemini", key, model.model_dump())
-    return (
-        _from_model(model, payload, failed_sources),
-        SourceStatus(source="gemini", ok=True, cached=False),
     )

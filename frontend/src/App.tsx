@@ -239,7 +239,7 @@ export function App() {
   // Only the sites an opportunity is built on are drawn on the map.
   const assets = useMemo(() => {
     if (!activeReport) return [];
-    const used = new Set(activeReport.opportunities.map((o) => o.asset_id));
+    const used = new Set(activeReport.opportunities.flatMap((o) => o.asset_ids));
     return activeReport.assets.filter((asset) => used.has(asset.id));
   }, [activeReport]);
 

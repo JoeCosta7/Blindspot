@@ -1,13 +1,15 @@
 """Census ACS 5-year: county figures and the national baseline.
 
 Variable codes were confirmed against
-https://api.census.gov/data/2024/acs/acs5/variables.json on 2026-11-13.
+https://api.census.gov/data/2024/acs/acs5/variables.json on 2026-11-13
+(C24050, B15003 and B25002 on 2026-11-14).
 The API has required a key since at least that date: keyless calls get a 302
 to /data/missing_key.html.
 """
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass
 
 import httpx
@@ -47,8 +49,24 @@ VARIABLES: list[str] = [
     "B08303_011E",  # 45 to 59 minutes
     "B08303_012E",  # 60 to 89 minutes
     "B08303_013E",  # 90 or more minutes
+    # Factors only (factors.py): none of these triggers a need.
+    "C24050_001E",  # Civilian employed population 16 and over, by industry: total
+    "C24050_002E",  # Agriculture, forestry, fishing and hunting, and mining
+    "C24050_003E",  # Construction
+    "C24050_004E",  # Manufacturing
+    "B15003_001E",  # Educational attainment, population 25 and over: total
+    "B15003_022E",  # Bachelor's degree
+    "B15003_023E",  # Master's degree
+    "B15003_024E",  # Professional school degree
+    "B15003_025E",  # Doctorate degree
+    "B25002_001E",  # Occupancy status: total housing units
+    "B25002_003E",  # Vacant
 ]
 assert len(VARIABLES) <= 49  # the API allows 50 per call, NAME included
+
+# Part of the cache key, so a cached response fetched with an older variable
+# list is not read as if it had the newer variables.
+VARIABLES_KEY = hashlib.sha256(",".join(VARIABLES).encode()).hexdigest()[:8]
 
 Values = dict[str, float | None]
 
@@ -67,6 +85,14 @@ class AcsMetrics:
     no_vehicle_share: float | None
     drive_alone_share: float | None
     long_commute_share: float | None
+    # Factors only: what the county has to work with, not gaps.
+    housing_units: int | None = None
+    vacant_housing_share: float | None = None
+    construction_work_share: float | None = None
+    manufacturing_work_share: float | None = None
+    # Agriculture, forestry, fishing and hunting, and mining: one ACS category.
+    farm_forest_mining_work_share: float | None = None
+    bachelors_or_higher_share: float | None = None
 
 
 def parse_response(body: list[list[str | None]]) -> Values:
@@ -104,7 +130,16 @@ def _share(values: Values, numerators: list[str], denominator: str) -> float | N
 
 def metrics_from_values(v: Values) -> AcsMetrics:
     population = v.get("B01003_001E")
+    housing_units = v.get("B25002_001E")
     return AcsMetrics(
+        housing_units=int(housing_units) if housing_units is not None else None,
+        vacant_housing_share=_share(v, ["B25002_003E"], "B25002_001E"),
+        construction_work_share=_share(v, ["C24050_003E"], "C24050_001E"),
+        manufacturing_work_share=_share(v, ["C24050_004E"], "C24050_001E"),
+        farm_forest_mining_work_share=_share(v, ["C24050_002E"], "C24050_001E"),
+        bachelors_or_higher_share=_share(
+            v, ["B15003_022E", "B15003_023E", "B15003_024E", "B15003_025E"], "B15003_001E"
+        ),
         population=int(population) if population is not None else None,
         median_household_income=v.get("B19013_001E"),
         poverty_rate=_share(v, ["B17001_002E"], "B17001_001E"),
@@ -154,7 +189,12 @@ async def fetch_county(
     values, cached = await cached_fetch(
         settings.cache_dir,
         "census_county",
-        {"year": settings.acs_year, "state": state_fips, "county": county_code},
+        {
+            "year": settings.acs_year,
+            "state": state_fips,
+            "county": county_code,
+            "variables": VARIABLES_KEY,
+        },
         30 * DAY,
         lambda: _fetch(
             client, settings, {"for": f"county:{county_code}", "in": f"state:{state_fips}"}
@@ -167,7 +207,7 @@ async def fetch_national(client: httpx.AsyncClient, settings: Settings) -> tuple
     values, cached = await cached_fetch(
         settings.cache_dir,
         "census_national",
-        {"year": settings.acs_year},
+        {"year": settings.acs_year, "variables": VARIABLES_KEY},
         30 * DAY,
         lambda: _fetch(client, settings, {"for": "us:1"}),
     )

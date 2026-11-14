@@ -554,14 +554,6 @@ button {
   cursor: help;
 }
 
-.tag-ai {
-  flex: none;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  cursor: help;
-}
-
 .tag-fixture {
   background: var(--warn-bg);
   color: var(--warn-text);
@@ -770,8 +762,8 @@ button {
   font-weight: 700;
 }
 
-/* Rule-based opportunities are the main result: green, larger, with a slow
-   glow that rises and falls. Not on AI suggestions, which share .opportunity. */
+/* Opportunities are the main result: green, larger, with a slow glow that
+   rises and falls. */
 .opportunity-primary {
   --opportunity-green: #22c55e;
   padding: 16px;
@@ -846,13 +838,56 @@ button {
   font-size: 0.92rem;
 }
 
-/* --- AI-suggested solutions ---------------------------------------------------- */
+/* --- what Gemini wrote on an opportunity ----------------------------------------- */
 
-.suggestion-sites {
+.opportunity-sites {
   list-style: none;
   padding: 0;
   display: grid;
   gap: 4px;
+}
+
+.chip-factor {
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: help;
+}
+
+/* --- assets and factors ---------------------------------------------------------- */
+
+.factor-group {
+  display: grid;
+  gap: 8px;
+}
+
+.factor-group h3 {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.factor-list {
+  display: grid;
+  gap: 8px;
+}
+
+.factor dt {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.factor-value {
+  font-weight: 600;
+}
+
+.factor-comparison {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.factor-detail {
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .first-steps {

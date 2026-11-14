@@ -92,5 +92,11 @@ def make_metrics(**overrides) -> AcsMetrics:
         "no_vehicle_share": 0.08,
         "drive_alone_share": 0.70,
         "long_commute_share": 0.16,
+        "housing_units": 45_000,
+        "vacant_housing_share": 0.10,
+        "construction_work_share": 0.09,
+        "manufacturing_work_share": 0.10,
+        "farm_forest_mining_work_share": 0.02,
+        "bachelors_or_higher_share": 0.35,
     }
     return AcsMetrics(**{**base, **overrides})

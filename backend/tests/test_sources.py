@@ -45,9 +45,27 @@ def test_census_metrics_formulas():
             "B08303_011E": "60",
             "B08303_012E": "30",
             "B08303_013E": "10",
+            "C24050_001E": "20000",
+            "C24050_002E": "400",
+            "C24050_003E": "1800",
+            "C24050_004E": "3000",
+            "B15003_001E": "30000",
+            "B15003_022E": "4000",
+            "B15003_023E": "1500",
+            "B15003_024E": "300",
+            "B15003_025E": "200",
+            "B25002_001E": "22000",
+            "B25002_003E": "2200",
         }
     )
     m = census.metrics_from_values(census.parse_response(body))
+
+    # Factors: the workforce and the housing stock.
+    assert m.construction_work_share == pytest.approx(0.09)
+    assert m.manufacturing_work_share == pytest.approx(0.15)
+    assert m.farm_forest_mining_work_share == pytest.approx(0.02)
+    assert m.bachelors_or_higher_share == pytest.approx(0.20)  # bachelor's and above
+    assert (m.housing_units, m.vacant_housing_share) == (22_000, pytest.approx(0.10))
 
     assert m.population == 50_000
     assert m.median_household_income == 61_000
