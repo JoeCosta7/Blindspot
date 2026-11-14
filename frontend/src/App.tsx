@@ -29,6 +29,7 @@ import type {
   Opportunity,
   ScoutRun,
   SiteCandidate,
+  SourceStatus,
 } from "./types";
 
 /** One or more counties chosen by click / Ctrl+click (not a drawn box). */
@@ -159,10 +160,11 @@ function countyLabel(feature: CountyFeature | undefined, fips: string): string {
 async function analyzePending(
   body: PendingBody,
   signal: AbortSignal,
+  onSource: (fips: string, status: SourceStatus) => void,
 ): Promise<AnalyzeResponse> {
   if (body.mode === "counties") {
     const reports = await Promise.all(
-      body.fips.map((fips) => analyze({ mode: "county", fips }, signal)),
+      body.fips.map((fips) => analyze({ mode: "county", fips }, signal, onSource)),
     );
     return {
       counties: reports.flatMap((report) => report.counties),
@@ -173,7 +175,7 @@ async function analyzePending(
           : null,
     };
   }
-  return analyze(body, signal);
+  return analyze(body, signal, onSource);
 }
 
 export function App() {
@@ -185,6 +187,7 @@ export function App() {
   const [fitTo, setFitTo] = useState<Bounds | null>(null);
   const [pending, setPending] = useState<PendingRequest | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sourceProgress, setSourceProgress] = useState<Record<string, SourceStatus>>({});
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<AnalyzeResponse | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -303,6 +306,7 @@ export function App() {
       inFlight.current = controller;
       setPending(request);
       setLoading(true);
+      setSourceProgress({});
       setError(null);
       setResponse(null);
       setFocusAsset(null);
@@ -312,7 +316,15 @@ export function App() {
       setScoutRuns({});
       setViewed(null);
       try {
-        const result = await analyzePending(request.body, controller.signal);
+        const result = await analyzePending(request.body, controller.signal, (_fips, status) => {
+          // Prefer a failed status if the same source reports more than once
+          // (e.g. several Grants.gov queries folded into one row).
+          setSourceProgress((prev) => {
+            const prior = prev[status.source];
+            if (prior && !prior.ok) return prev;
+            return { ...prev, [status.source]: status };
+          });
+        });
         if (controller.signal.aborted) return;
         const fips = result.counties.map((county) => county.fips);
         setResponse(result);
@@ -612,7 +624,9 @@ export function App() {
               </div>
             </div>
           )}
-          {loading && pending && <LoadingPanel label={pending.label} />}
+          {loading && pending && (
+            <LoadingPanel label={pending.label} progress={sourceProgress} />
+          )}
           {!loading && error && pending && (
             <div className="panel-body">
               <div className="notice notice-warning" role="alert">
