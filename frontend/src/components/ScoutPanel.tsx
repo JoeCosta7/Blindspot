@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { formatNumber, SCOUT_LAYER_LABELS, SITE_STATUS, sourceName } from "../format";
 import type {
   Need,
@@ -6,7 +5,6 @@ import type {
   ScoutRun,
   ScoutStep,
   SiteCandidate,
-  SiteDrafts,
 } from "../types";
 import { EstimateRow } from "./EstimateRow";
 import { FundingBadge } from "./FundingBadge";
@@ -46,27 +44,18 @@ function Timeline({ steps, running }: { steps: ScoutStep[]; running: boolean }) 
 export function SiteCard({
   rank,
   candidate,
-  drafts,
   needs,
   onShowOnMap,
 }: {
   rank: number;
   candidate: SiteCandidate;
-  drafts: SiteDrafts | undefined;
   needs: Need[];
   onShowOnMap: (candidate: SiteCandidate) => void;
 }) {
-  const [copied, setCopied] = useState(false);
   const addressed = needs.filter((need) => candidate.need_ids.includes(need.id));
   const seen = candidate.observations.filter((o) => o.by_model);
   const recorded = candidate.observations.filter((o) => !o.by_model);
 
-  const copy = (text: string) => {
-    void navigator.clipboard?.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
 
   return (
     <article className={`card opportunity site site-${candidate.status}`}>
@@ -144,17 +133,6 @@ export function SiteCard({
           ))}
         </div>
       )}
-      {candidate.solution_ids.length > 0 && (
-        <div className="chips">
-          <span className="chips-label">Could host</span>
-          {candidate.solution_ids.map((id) => (
-            <span key={id} className="chip chip-factor">
-              {id.replace(/_/g, " ")}
-            </span>
-          ))}
-        </div>
-      )}
-
       {candidate.checks.length > 0 && (
         <ul className="scout-checks">
           {candidate.checks.map((check) => (
@@ -228,16 +206,6 @@ export function SiteCard({
         </details>
       )}
 
-      {drafts && (
-        <details className="scout-drafts">
-          <summary>Draft owner letter and grant paragraph ({drafts.generated_by})</summary>
-          <pre>{drafts.outreach_letter}</pre>
-          <button type="button" className="button" onClick={() => copy(drafts.outreach_letter)}>
-            {copied ? "Copied" : "Copy letter"}
-          </button>
-          <p className="note">{drafts.grant_paragraph}</p>
-        </details>
-      )}
     </article>
   );
 }
@@ -274,7 +242,6 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
   // so they are the same for every site and are shown once.
   const leads = [...new Map(best.flatMap((c) => c.funding).map((f) => [f.program_id, f])).values()];
   const failed = (result?.source_status ?? []).filter((s) => !s.ok);
-  const drafts = new Map((result?.drafts ?? []).map((d) => [d.building_id, d]));
   return (
     <div className="scout">
       {run.error && (
@@ -332,7 +299,6 @@ export function ScoutPanel({ run, needs, title, onStart, onShowOnMap }: Props) {
           key={candidate.building_id}
           rank={i + 1}
           candidate={candidate}
-          drafts={drafts.get(candidate.building_id)}
           needs={needs}
           onShowOnMap={onShowOnMap}
         />

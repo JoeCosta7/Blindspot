@@ -291,6 +291,8 @@ class Opportunity(BaseModel):
     # fits none of them; only a typed opportunity can get estimates and funding.
     solution_id: str | None
     title: str
+    # One plain sentence on what the project is, from the catalogue.
+    description: str | None = None
     # What would be done, and why it fits this county. Null for a rule match.
     summary: str | None = None
     rationale: str | None = None
@@ -481,6 +483,8 @@ class ScoutRequest(BaseModel):
     # The opportunity's project type, which decides what kind of host to look
     # for first (agent.profile_for). Null for an idea of Gemini's own.
     solution_id: str | None = None
+    # What the project is (catalogue description or Gemini's summary), for the host spec.
+    detail: str | None = None
     # The opportunity's own sites (report asset ids), tried first for site projects.
     asset_ids: list[str] = Field(default_factory=list)
 

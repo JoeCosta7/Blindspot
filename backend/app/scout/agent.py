@@ -53,6 +53,8 @@ class AgentAction(BaseModel):
         "finish",
     ]
     building_id: str | None = None
+    # inspect_roof: up to 4 buildings inspected together (faster than one by one).
+    building_ids: list[str] = []
     # search_properties: type words such as Industrial, Warehouse, Retail, Office, Flex.
     property_types: list[str] = []
     min_sqft: int | None = None
@@ -141,7 +143,8 @@ def build_prompt(state: ScoutState) -> str:
         "- search_scans(keywords): scanned buildings whose name or room labels contain a keyword.\n"
         "- search_imagery(text, near_building_id?): buildings found by describing them, e.g. "
         '"large flat-roofed warehouse with a big parking lot".\n'
-        "- inspect_roof(building_id): footprint, roof shape and material, existing solar, rooftop "
+        "- inspect_roof(building_ids, up to 4 at once): footprint, roof shape and material, "
+        "existing solar, rooftop "
         "equipment, cars and paved area, from the aerial record and live detection.\n"
         "- inspect_interior(building_id): floors, rooms and a summary from the 3D scan.\n"
         "- evaluate_site(building_id, solution_ids, note): code scores the site for those project "
@@ -183,7 +186,10 @@ async def gemini_decider(settings: Settings) -> Decider:
 
 def problem(action: AgentAction, state: ScoutState) -> str | None:
     """Why the action cannot run, or None."""
-    if action.tool in ("inspect_roof", "inspect_interior", "evaluate_site"):
+    if action.tool == "inspect_roof" and action.building_ids:
+        if not any(i in state.seen for i in action.building_ids):
+            return "inspect_roof needs building_ids from the buildings seen so far"
+    elif action.tool in ("inspect_roof", "inspect_interior", "evaluate_site"):
         if not action.building_id or action.building_id not in state.seen:
             return f"{action.tool} needs a building_id from the buildings seen so far"
     if action.tool == "evaluate_site":
@@ -244,7 +250,15 @@ async def run_tool(action: AgentAction, state: ScoutState) -> str:
     if action.tool == "search_imagery":
         return await tools.search_imagery(state, action.text or "", action.near_building_id, limit)
     if action.tool == "inspect_roof":
-        return await tools.inspect_roof(state, action.building_id or "")
+        ids = list(
+            dict.fromkeys(
+                [*action.building_ids, *([action.building_id] if action.building_id else [])]
+            )
+        )
+        ids = [i for i in ids if i in state.seen][:4]
+        results = await asyncio.gather(*(tools.inspect_roof(state, i) for i in ids))
+        state.last_result = "\n".join(results)
+        return state.last_result
     if action.tool == "inspect_interior":
         return await tools.inspect_interior(state, action.building_id or "")
     if action.tool == "evaluate_site":
@@ -291,9 +305,10 @@ def rule_actions(state: ScoutState) -> AgentAction:
         return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
     if not state.seen:
         return AgentAction(thought="", tool="finish")
-    for insp in state.seen.values():
-        if not insp.roof_checked and state.roofs_used < state.settings.scout_max_roofs:
-            return AgentAction(thought="", tool="inspect_roof", building_id=insp.building.id)
+    left = state.settings.scout_max_roofs - state.roofs_used
+    todo = [i.building.id for i in state.seen.values() if not i.roof_checked][: min(4, left)]
+    if todo:
+        return AgentAction(thought="", tool="inspect_roof", building_ids=todo)
     for insp in state.seen.values():
         if insp.roof_checked and insp.candidate is None:
             return AgentAction(thought="", tool="evaluate_site", building_id=insp.building.id)
@@ -343,6 +358,8 @@ async def run_scout(
         prefer_public=(profile or profiles.COMMERCIAL).prefer_public,
         focus_hosts=(profile or profiles.COMMERCIAL).hosts,
         land_mode=bool(profile and profile.land),
+        public_kinds=profile.public_kinds if profile else (),
+        check_ids=profile.check_ids if profile else (),
         imagery_text=(profile.imagery_text if profile else None),
         report_sites=report_sites or [],
         site_solution=site_solution,
@@ -361,7 +378,13 @@ async def run_scout(
             if focus
             else f"Scouting {county.name}. "
         )
-        + f"Needs in scope: {', '.join(top) or 'none'}.",
+        + f"Needs in scope: {', '.join(top) or 'none'}. "
+        + f"Looking for: {state.focus_hosts}"
+        + (
+            " (chosen for this project by Gemini)."
+            if profile and profile.chosen_by == "gemini"
+            else "."
+        ),
     )
     for event in _drain(state):
         yield event
@@ -419,7 +442,7 @@ async def run_scout(
         thought = _clean_thought(action, prompt) if generated_by == "gemini" else None
         if action.tool not in ("inspect_roof", "inspect_interior", "evaluate_site"):
             add_step(state, "action", thought or _code_text(action, state), action.tool)
-        elif thought:
+        elif thought and action.building_id in state.seen:
             add_step(
                 state, "action", thought, action.tool, state.seen[action.building_id or ""].building
             )
@@ -451,6 +474,14 @@ async def run_scout(
         (i.candidate for i in state.seen.values() if i.candidate),
         key=lambda c: (order[c.status], -c.score),
     )
+    # Photos only for the sites that will be shown: the best non-rejected ones.
+    best = [c for c in candidates if c.status != "rejected"][: settings.scout_target_sites]
+    if best:
+        add_step(state, "action", f"Fetching aerial photos of the best {len(best)} sites")
+        for event in _drain(state):
+            yield event
+        with_photos = {c.building_id: c for c in await tools.fetch_photos(state, best)}
+        candidates = [with_photos.get(c.building_id, c) for c in candidates]
     if not candidates and stopped != "error":
         stopped = "no_more_candidates" if state.seen else "error"
     result = ScoutResult(

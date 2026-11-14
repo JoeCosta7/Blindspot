@@ -218,6 +218,8 @@ export interface Opportunity {
    * only a typed opportunity can get estimates and funding. */
   solution_id: string | null;
   title: string;
+  /** One plain sentence on what the project is, from the catalogue. */
+  description: string | null;
   /** What would be done, and why it fits this county. Null for a rule match. */
   summary: string | null;
   rationale: string | null;

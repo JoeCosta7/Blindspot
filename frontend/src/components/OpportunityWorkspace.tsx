@@ -128,7 +128,6 @@ export function OpportunityWorkspace({
                   <SiteCard
                     rank={i + 1}
                     candidate={c}
-                    drafts={run?.result?.drafts.find((d) => d.building_id === c.building_id)}
                     needs={report.needs}
                     onShowOnMap={onShowCandidate}
                   />

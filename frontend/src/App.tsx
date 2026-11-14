@@ -298,6 +298,7 @@ export function App() {
       opportunity.title,
       opportunity.solution_id,
       opportunity.asset_ids,
+      opportunity.description ?? opportunity.summary ?? null,
       (event) => {
         if (controller.signal.aborted) return;
         update((run) => {

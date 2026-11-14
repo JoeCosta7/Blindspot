@@ -44,6 +44,8 @@ class Solution(BaseModel):
     id: str
     name: str
     title_template: str
+    # One plain sentence on what the project is, for the opportunity card.
+    description: str | None = None
     # "county" solutions have no host site: they produce one county-wide
     # opportunity whenever a trigger need is flagged.
     # "plant": a power plant with fossil units retiring or retired.

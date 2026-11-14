@@ -17,7 +17,8 @@
       "high_electricity_cost",
       "carbon_intensive_grid",
       "high_energy_burden"
-    ]
+    ],
+    "description": "Build a shared solar array on reclaimed land; renters and low-income households subscribe and save on bills."
   },
   {
     "id": "resilience_hub",
@@ -32,7 +33,8 @@
     "triggers": [
       "hazard_risk",
       "low_income"
-    ]
+    ],
+    "description": "Put solar panels and batteries on a public building so it can stay open as a shelter and charging point during outages."
   },
   {
     "id": "weatherization_clinic",
@@ -50,7 +52,8 @@
       "high_electricity_cost",
       "high_energy_burden",
       "utility_shutoff_risk"
-    ]
+    ],
+    "description": "Host sign-up days where residents get help applying for free insulation, sealing and heat-pump programs."
   },
   {
     "id": "public_ev_charging",
@@ -66,7 +69,8 @@
       "ev_charging_gap",
       "long_commute",
       "drive_alone"
-    ]
+    ],
+    "description": "Install public chargers at well-used public buildings where few exist today."
   },
   {
     "id": "landfill_gas_energy",
@@ -79,7 +83,8 @@
     "host_requires": "is_candidate",
     "triggers": [
       "landfill_gas_uncaptured"
-    ]
+    ],
+    "description": "Capture the methane a landfill releases and burn it for electricity or heat instead of letting it escape."
   },
   {
     "id": "small_hydro",
@@ -92,7 +97,8 @@
     "triggers": [
       "carbon_intensive_grid",
       "high_electricity_cost"
-    ]
+    ],
+    "description": "Add turbines to an existing dam that produces no power today."
   },
   {
     "id": "wind_on_reclaimed_land",
@@ -109,7 +115,8 @@
     "triggers": [
       "carbon_intensive_grid",
       "high_electricity_cost"
-    ]
+    ],
+    "description": "Place wind turbines on reclaimed land that EPA has screened for wind."
   },
   {
     "id": "shade_trees_depaving",
@@ -124,7 +131,8 @@
     "triggers": [
       "urban_heat",
       "low_tree_canopy"
-    ]
+    ],
+    "description": "Replace unused pavement with trees and planting to cool hot, paved areas."
   },
   {
     "id": "farm_digester",
@@ -134,7 +142,8 @@
     "hosts": [],
     "triggers": [
       "unmanaged_farm_waste"
-    ]
+    ],
+    "description": "Help large livestock farms install digesters that turn manure into biogas and cut runoff."
   },
   {
     "id": "school_heat_pumps",
@@ -147,7 +156,8 @@
     ],
     "triggers": [
       "delivered_fuel_heat"
-    ]
+    ],
+    "description": "Replace oil or propane heating in schools with ground-source heat pumps."
   },
   {
     "id": "landfill_composting",
@@ -160,7 +170,8 @@
     ],
     "triggers": [
       "landfill_gas_uncaptured"
-    ]
+    ],
+    "description": "Divert food scraps from the landfill to a composting site, cutting the methane the landfill makes."
   },
   {
     "id": "repower_fossil_plant",
@@ -176,7 +187,8 @@
       "high_electricity_cost",
       "high_energy_burden",
       "poor_air_quality"
-    ]
+    ],
+    "description": "Reuse a retiring fossil plant's land and grid connection for solar and battery storage."
   },
   {
     "id": "drinking_water_compliance",
@@ -186,7 +198,8 @@
     "hosts": [],
     "triggers": [
       "unsafe_drinking_water"
-    ]
+    ],
+    "description": "Give small water systems with health-based violations technical and funding help to fix them."
   },
   {
     "id": "watershed_restoration",
@@ -196,7 +209,8 @@
     "hosts": [],
     "triggers": [
       "impaired_waters"
-    ]
+    ],
+    "description": "Restore stream banks and buffers so impaired streams and lakes meet their uses again."
   },
   {
     "id": "microtransit",
@@ -207,7 +221,8 @@
     "triggers": [
       "no_vehicle",
       "long_commute"
-    ]
+    ],
+    "description": "Run on-demand shared rides, booked by phone or app, for residents without a car."
   },
   {
     "id": "mobility_hub",
@@ -222,7 +237,8 @@
       "no_vehicle",
       "drive_alone",
       "poor_air_quality"
-    ]
+    ],
+    "description": "Set up e-bike and car-share stations at libraries or colleges so people can get around without owning a car."
   },
   {
     "id": "flood_buyout",
@@ -235,7 +251,8 @@
     ],
     "hazards": [
       "Inland flooding"
-    ]
+    ],
+    "description": "Buy homes that flood again and again from willing owners and return the land to open space."
   },
   {
     "id": "wildfire_defensible_space",
@@ -248,7 +265,8 @@
     ],
     "hazards": [
       "Wildfire"
-    ]
+    ],
+    "description": "Help homeowners clear brush around their homes and harden them against embers."
   },
   {
     "id": "green_stormwater",
@@ -267,7 +285,8 @@
     ],
     "hazards": [
       "Inland flooding"
-    ]
+    ],
+    "description": "Turn paved areas into rain gardens and swales that soak up stormwater and reduce flooding."
   },
   {
     "id": "mobile_home_repair",
@@ -279,7 +298,8 @@
       "mobile_homes",
       "delivered_fuel_heat",
       "high_energy_burden"
-    ]
+    ],
+    "description": "Repair or replace old, inefficient manufactured homes for the households living in them."
   },
   {
     "id": "heat_pump_group_buy",
@@ -291,7 +311,8 @@
       "delivered_fuel_heat",
       "high_energy_burden",
       "old_housing"
-    ]
+    ],
+    "description": "Negotiate a group price with local installers so more households can switch to heat pumps."
   },
   {
     "id": "utility_assistance_drive",
@@ -306,7 +327,8 @@
       "utility_shutoff_risk",
       "high_energy_burden",
       "low_income"
-    ]
+    ],
+    "description": "Hold sign-up events that connect households to energy-bill assistance before a shutoff."
   },
   {
     "id": "water_system_consolidation",
@@ -316,7 +338,8 @@
     "hosts": [],
     "triggers": [
       "unsafe_drinking_water"
-    ]
+    ],
+    "description": "Join small water systems that keep failing standards to a larger, better-run system."
   },
   {
     "id": "farm_conservation_buffers",
@@ -327,6 +350,7 @@
     "triggers": [
       "impaired_waters",
       "unmanaged_farm_waste"
-    ]
+    ],
+    "description": "Help farmers plant stream buffers and cover crops that keep soil and manure out of waterways."
   }
 ]

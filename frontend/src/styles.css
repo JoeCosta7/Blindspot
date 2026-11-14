@@ -2045,3 +2045,8 @@ button {
   background: none;
   cursor: zoom-in;
 }
+
+.opportunity-description {
+  font-size: 0.92rem;
+  color: var(--muted);
+}

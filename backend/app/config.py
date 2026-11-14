@@ -212,6 +212,8 @@ class Settings(BaseSettings):
     scout_factor_no_scan: float = 0.85
     scout_factor_low_confidence: float = 0.7
     scout_factor_footprint_mismatch: float = 0.6
+    # Each project check a site fails (data/site_checks.json). Our own choice.
+    scout_factor_failed_check: float = 0.9
     # A privately owned site, against one the county owns (schools, libraries).
     scout_factor_private_site: float = 0.9
 

@@ -8,6 +8,7 @@ Code, not the model, writes every number, check, estimate and score here.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -35,6 +36,7 @@ from app.models import (
     SiteStatus,
     SourceStatus,
 )
+from app.scout import checks as site_checks
 from app.scout import measure
 from app.scout.provider import (
     Building,
@@ -60,21 +62,6 @@ TOOLS = (
 )
 # Project types that need a scanned interior to be judged at all.
 INTERIOR_SOLUTIONS = {"cooling_center"}
-# Which checks a project needs. A check runs only when a kept project is in its group.
-SOLAR_PROJECTS = {
-    "rooftop_solar_commercial",
-    "parking_canopy_solar",
-    "resilience_hub",
-    "community_solar",
-}
-VEHICLE_PROJECTS = {"public_ev_charging", "mobility_hub", "parking_canopy_solar"}
-INTERIOR_PROJECTS = {
-    "cooling_center",
-    "resilience_hub",
-    "weatherization_clinic",
-    "utility_assistance_drive",
-    "school_heat_pumps",
-}
 # Projects sized from the measured roof (Vexcel footprint less rooftop equipment).
 MEASURED_ROOF_PROJECTS = {"rooftop_solar_commercial", "resilience_hub"}
 # Project types that need a flat roof with no solar on it.
@@ -136,6 +123,8 @@ class ScoutState:
     imagery_text: str | None = None
     report_sites: list[Asset] = field(default_factory=list)
     site_solution: matching.Solution | None = None
+    public_kinds: tuple[str, ...] = ()
+    check_ids: tuple[str, ...] = ()
     focus_hosts: str = ""
     seen: dict[str, Inspection] = field(default_factory=dict)
     steps: list[ScoutStep] = field(default_factory=list)
@@ -286,13 +275,30 @@ async def search_report_sites(state: ScoutState, limit: int) -> str:
 async def search_public_buildings(state: ScoutState, kinds: list[str], limit: int) -> str:
     """Schools, libraries and colleges from the county report, as candidates.
     A nearby 3D scan is linked when the scan index is available."""
-    own_hosts = state.site_solution.hosts if state.site_solution else []
+    own_hosts = list(state.public_kinds) or (
+        state.site_solution.hosts if state.site_solution else []
+    )
     hosts = [h for h in own_hosts if h in PUBLIC_KINDS]
     asked = [k.strip().lower() for k in kinds if k.strip().lower() in PUBLIC_KINDS]
     # Only the kinds the project can be hosted at, in its catalogue order
     # (a weatherization clinic: libraries before schools).
     wanted = [k for k in asked if not hosts or k in hosts] or hosts or list(PUBLIC_KINDS)
-    pool = [a for kind in wanted for a in state.public_buildings if a.type == kind]
+    # Take the kinds in turn so one common kind (265 schools in Harris County)
+    # cannot fill every slot. A library named for a school is the school's own.
+    by_kind = {
+        kind: [
+            a
+            for a in state.public_buildings
+            if a.type == kind and not (kind == "library" and "school" in a.name.lower())
+        ]
+        for kind in wanted
+    }
+    pool = [
+        group[i]
+        for i in range(max((len(g) for g in by_kind.values()), default=0))
+        for group in by_kind.values()
+        if i < len(group)
+    ]
     if not pool:
         add_step(
             state,
@@ -510,6 +516,19 @@ async def search_imagery(state: ScoutState, text: str, near_id: str | None, limi
 # --- inspections ------------------------------------------------------------------------
 
 
+def needed_labels(state: ScoutState) -> frozenset[str]:
+    """Detection labels the run's project needs: its checks, plus rooftop
+    equipment and panels when the estimate is sized from a measured roof."""
+    ids = {state.site_solution.id} if state.site_solution else {s.id for s in state.solutions}
+    rows = site_checks.selected(ids, state.check_ids, state.settings.data_dir / "site_checks.json")
+    labels = site_checks.detection_labels(rows)
+    if ids & MEASURED_ROOF_PROJECTS:
+        labels |= {"rooftop hvac unit", "solar panel"}
+    if ids & ROOF_SOLUTIONS:
+        labels.add("solar panel")
+    return frozenset(labels)
+
+
 def _site_text(roof: RoofRecord) -> str:
     """What the aerial record says about a piece of land."""
     parts: list[str] = []
@@ -545,7 +564,7 @@ def _roof_text(roof: RoofRecord) -> str:
     parts.append(
         "solar already on the roof (record)" if roof.solar_present else "no solar on record"
     )
-    if roof.detection_failed:
+    if roof.detection_failed and not roof.detection_failed.startswith("not run"):
         parts.append("live detection failed")
     else:
         parts.append(
@@ -587,7 +606,9 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
         b,
     )
     try:
-        insp.roof = await state.provider.roof(b, allow_no_parcel=state.land_mode)
+        insp.roof = await state.provider.roof(
+            b, allow_no_parcel=state.land_mode, labels=needed_labels(state)
+        )
         _status(state, "vexcel", True)
     except SourceError as exc:
         insp.roof_error = str(exc)
@@ -599,10 +620,6 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
             state, "observation", f"No parcel record at {b.name}'s location.", "inspect_roof", b
         )
         return _record(state, insp, f"{b.id}: no parcel or building footprint at this point")
-    try:
-        insp.picture = await state.provider.image(b, insp.roof)
-    except Exception as exc:  # the image is for the card; the inspection stands
-        log.warning("scout image for %s failed: %r", b.id, exc)
     text = _site_text(insp.roof) if state.land_mode else _roof_text(insp.roof)
     add_step(state, "observation", f"{b.name}: {text}", "inspect_roof", b)
     return _record(state, insp, f"{b.id}: {text}")
@@ -795,6 +812,32 @@ async def _site_yield(state: ScoutState, b: Building) -> tuple[float | None, boo
         return state.solar_yield, False
 
 
+async def fetch_photos(state: ScoutState, candidates: list[SiteCandidate]) -> list[SiteCandidate]:
+    """Photos for the given candidates only, fetched together. A failed photo
+    leaves its candidate without one."""
+
+    async def one(c: SiteCandidate) -> SiteCandidate:
+        insp = state.seen.get(c.building_id)
+        if insp is None or insp.roof is None:
+            return c
+        try:
+            insp.picture = await state.provider.image(insp.building, insp.roof)
+        except Exception as exc:  # the photo is for the card; the site stands
+            log.warning("scout image for %s failed: %r", c.building_id, exc)
+            return c
+        if insp.picture is None:
+            return c
+        return c.model_copy(
+            update={
+                "image_url": f"/api/scout/image/{insp.picture.name}",
+                "image_view": insp.picture.view,
+                "image_options": _image_options(insp.picture),
+            }
+        )
+
+    return list(await asyncio.gather(*(one(c) for c in candidates)))
+
+
 async def evaluate_site(
     state: ScoutState, building_id: str, solution_ids: list[str], note: str | None
 ) -> str:
@@ -842,23 +885,24 @@ async def evaluate_site(
         kept.append(solution)
         need_ids += [n.id for n in matched if n.id not in need_ids]
 
-    checks: list[LayerCheck] = []
     kept_ids = {s.id for s in kept}
-    if roof is not None and kept_ids:
-        tolerance = state.settings.scout_footprint_tolerance
-        wanted_checks = []
-        if kept_ids & INTERIOR_PROJECTS:
-            wanted_checks.append(measure.footprint_check(roof, interior, tolerance))
-        if kept_ids & (INTERIOR_PROJECTS | SOLAR_PROJECTS):
-            wanted_checks.append(measure.record_check(roof, b, tolerance))
-        if kept_ids & SOLAR_PROJECTS:
-            wanted_checks.append(measure.solar_check(roof))
-        if kept_ids & VEHICLE_PROJECTS:
-            wanted_checks.append(measure.vehicle_check(roof))
-        checks += [c for c in wanted_checks if c]
+    # Which checks run depends on the project: data/site_checks.json.
+    checks: list[LayerCheck] = site_checks.run_checks(
+        kept_ids,
+        roof,
+        interior,
+        b,
+        state.settings.scout_footprint_tolerance,
+        state.settings.data_dir / "site_checks.json",
+        state.check_ids,
+    )
     factor, reasons = measure.confidence_factor(
         roof, interior, checks, state.settings, land=state.land_mode
     )
+    failed = [c for c in checks if not c.ok and not c.label.endswith("vs footprint")]
+    if failed:
+        factor *= state.settings.scout_factor_failed_check ** len(failed)
+        reasons.append(f"{len(failed)} check(s) not met: " + ", ".join(c.label for c in failed))
     # The county can act on its own buildings directly; a private site needs the
     # owner as a partner, so it ranks a little lower (our own choice, config).
     if state.prefer_public and b.found_by != "geoapify":
@@ -917,7 +961,9 @@ async def evaluate_site(
     else:
         status, reason = (
             "shortlisted",
-            "all checks passed" if checks else "no cross-layer check possible",
+            ("all checks passed" if not failed else "some checks not met")
+            if checks
+            else "no checks apply",
         )
         if reasons:
             reason += "; " + "; ".join(reasons)

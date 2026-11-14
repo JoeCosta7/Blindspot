@@ -1,25 +1,12 @@
 import { useState } from "react";
 import type {
   Factor,
-  FundingMatch,
   Need,
   Opportunity,
-  ProjectDocument,
   ScoutRun,
   SiteCandidate,
 } from "../types";
 import { EstimateRow } from "./EstimateRow";
-import { FundingBadge } from "./FundingBadge";
-
-const DOCUMENT_KIND_LABEL: Record<ProjectDocument["kind"], string> = {
-  grant_application: "Grant application",
-  program_guide: "Program guide",
-  tax_form: "Tax form",
-  property_agreement: "Property form",
-  environmental_review: "Environmental review",
-  interconnection: "Interconnection",
-  other: "Document",
-};
 
 /** Site Scout for this opportunity: present only in the counties with building data. */
 export interface ScoutHooks {
@@ -28,139 +15,9 @@ export interface ScoutHooks {
   onShowCandidate: (candidate: SiteCandidate) => void;
 }
 
-function DocumentCard({ doc }: { doc: ProjectDocument }) {
-  return (
-    <li className="document-card">
-      <span className="document-kind">{DOCUMENT_KIND_LABEL[doc.kind]}</span>
-      {doc.source_url ? (
-        <a href={doc.source_url} target="_blank" rel="noreferrer">
-          {doc.name}
-        </a>
-      ) : (
-        <span className="document-name">{doc.name}</span>
-      )}
-      <p className="muted document-desc">{doc.description}</p>
-      {(doc.agency || doc.verified_on) && (
-        <p className="muted document-meta">
-          {[doc.agency, doc.verified_on ? `Checked ${doc.verified_on}` : null]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      )}
-    </li>
-  );
-}
-
 /** Funding programs and the forms/packets that go with them, in one place. */
-function FundingAndDocuments({
-  funding,
-  documents,
-  checklist,
-  siteLabel,
-  typed,
-  byGemini,
-}: {
-  funding: FundingMatch[];
-  documents: ProjectDocument[];
-  checklist: string[];
-  siteLabel: string | null;
-  typed: boolean;
-  byGemini: boolean;
-}) {
-  if (!typed) {
-    return (
-      <p className="muted">
-        No size estimate or funding lead: this is {byGemini ? "Gemini's own idea, " : ""}not one of
-        the project types we have formulas and a funding table for.
-      </p>
-    );
-  }
-
-  const empty = funding.length === 0 && documents.length === 0 && checklist.length === 0;
-  return (
-    <section className="funding-list">
-      <h4>Funding and documents{siteLabel ? ` for ${siteLabel}` : ""}</h4>
-      {empty ? (
-        <p className="muted">
-          No program in our funding table or on Grants.gov matches this yet, and no application
-          packets are listed for this project type.
-        </p>
-      ) : (
-        <>
-          {funding.map((lead) => (
-            <FundingBadge key={lead.program_id} funding={lead} />
-          ))}
-          {documents.length > 0 && (
-            <ul className="document-cards">
-              {documents.map((doc) => (
-                <DocumentCard key={doc.id} doc={doc} />
-              ))}
-            </ul>
-          )}
-          {checklist.length > 0 && (
-            <div className="documents-checklist">
-              <h5>Also gather locally</h5>
-              <ul>
-                {checklist.map((name) => (
-                  <li key={name}>{name}</li>
-                ))}
-              </ul>
-              <p className="muted compliance-note">
-                Checklist names only — no invented form links. Use your attorney, the owner, or the
-                agency for the actual packet.
-              </p>
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function ActionPlan({
-  title,
-  steps,
-  compliance,
-}: {
-  title: string;
-  steps: string[];
-  compliance: string[];
-}) {
-  if (steps.length === 0 && compliance.length === 0) return null;
-  return (
-    <section className="site-action">
-      <h4>{title}</h4>
-      {steps.length > 0 && (
-        <div className="first-steps">
-          <h5>Course of action</h5>
-          <ol>
-            {steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-        </div>
-      )}
-      {compliance.length > 0 && (
-        <div className="compliance-checks">
-          <h5>Compliance checks</h5>
-          <ul>
-            {compliance.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-          <p className="muted compliance-note">
-            Planning checks from known site facts — not legal advice. Confirm permits and local
-            rules with counsel and the right agencies.
-          </p>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function collapsedMeta(fundingCount: number, estimateCount: number): string {
+function collapsedMeta(estimateCount: number): string {
   const parts: string[] = [];
-  if (fundingCount > 0) parts.push(`${fundingCount} funding lead${fundingCount === 1 ? "" : "s"}`);
   if (estimateCount > 0) parts.push(`${estimateCount} estimate${estimateCount === 1 ? "" : "s"}`);
   return parts.join(" · ");
 }
@@ -190,12 +47,8 @@ export function OpportunityCard({
   // Absent in reports saved before the field existed.
   const fits = new Map((opportunity.need_fits ?? []).map((fit) => [fit.need_id, fit.text]));
   const drawsOn = factors.filter((factor) => opportunity.factor_ids.includes(factor.id));
-  const byGemini = opportunity.generated_by === "gemini";
   const typed = opportunity.solution_id !== null;
-  const plan = opportunity.plan.length > 0 ? opportunity.plan : opportunity.first_steps;
   const [expanded, setExpanded] = useState(false);
-  const documents = opportunity.documents ?? [];
-  const documentsNeeded = opportunity.documents_needed ?? [];
   const detailId = `opportunity-detail-${opportunity.id}`;
 
   function toggleExpanded() {
@@ -239,6 +92,9 @@ export function OpportunityCard({
         )}
       </header>
 
+      {opportunity.description && (
+        <p className="opportunity-description">{opportunity.description}</p>
+      )}
       {opportunity.summary && <p className="note">{opportunity.summary}</p>}
 
       {addressed.length > 0 && fits.size === 0 && (
@@ -269,10 +125,10 @@ export function OpportunityCard({
 
       {!expanded && (
         <p className="muted opportunity-preview">
-          {collapsedMeta(opportunity.funding.length, opportunity.estimates.length)}
+          {collapsedMeta(opportunity.estimates.length)}
           {" · "}
           <button type="button" className="linkish" onClick={toggleExpanded}>
-            Show plan and funding
+            Show details
           </button>
         </p>
       )}
@@ -301,12 +157,6 @@ export function OpportunityCard({
             </div>
           )}
 
-          <ActionPlan
-            title="Plan"
-            steps={plan}
-            compliance={opportunity.compliance}
-          />
-
           {opportunity.estimates.length > 0 && (
             <ul className="estimates">
               {opportunity.estimates.map((estimate) => (
@@ -318,17 +168,8 @@ export function OpportunityCard({
             <p className="muted">No size estimate: the data needed for one is not available.</p>
           )}
 
-          <FundingAndDocuments
-            funding={opportunity.funding}
-            documents={documents}
-            checklist={documentsNeeded}
-            siteLabel={null}
-            typed={typed}
-            byGemini={byGemini}
-          />
-
           <button type="button" className="linkish opportunity-collapse" onClick={toggleExpanded}>
-            Hide plan and funding
+            Hide details
           </button>
         </div>
       )}

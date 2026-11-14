@@ -59,6 +59,7 @@ export async function scout(
   focus: string,
   solutionId: string | null,
   assetIds: string[],
+  detail: string | null,
   onEvent: (event: ScoutEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -71,6 +72,7 @@ export async function scout(
       focus,
       solution_id: solutionId,
       asset_ids: assetIds,
+      detail,
     }),
     signal,
   });

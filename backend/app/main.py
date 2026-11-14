@@ -35,6 +35,7 @@ from app.models import (
 from app.needmap import build_need_map
 from app.pipeline import analyze_county
 from app.scout import agent as scout_agent
+from app.scout import host_spec
 from app.scout import provider as scout_provider
 from app.sources import SourceError, census, energy_communities, vexcel
 
@@ -254,7 +255,19 @@ async def scout(
         except Exception:  # the parquet file is optional here
             energy_community, checked = None, False
         provider = scout_provider.get_provider(client, settings)
-        profile = scout_agent.profile_for(body.solution_id, body.focus)
+        catalogue = matching.load_solutions(settings.data_dir / "solutions.json")
+        own_type = next((s for s in catalogue if s.id == body.solution_id), None)
+        needs = report.needs
+        if body.need_ids:
+            needs = [n for n in needs if n.id in body.need_ids] or needs
+        profile = await host_spec.resolve(
+            body.focus or "",
+            body.detail,
+            [n.label for n in needs],
+            body.solution_id,
+            list(own_type.hosts) if own_type else [],
+            settings,
+        )
         own = [a for a in report.assets if a.id in body.asset_ids]
         report_sites = own + [
             a for a in report.assets if a.type in profile.site_types and a.id not in body.asset_ids
@@ -271,17 +284,16 @@ async def scout(
             if not same:
                 unique.append(a)
         report_sites = unique
-        site_solution = next(
-            (
-                s
-                for s in matching.load_solutions(settings.data_dir / "solutions.json")
-                if s.id == body.solution_id
-            ),
-            None,
+        # Sites are judged for the opportunity's own project; an idea of
+        # Gemini's own gets a stand-in type built from its needs.
+        site_solution = own_type or matching.Solution(
+            id="other",
+            name=body.focus or "This project",
+            title_template=body.focus or "This project",
+            asset_kind="land" if profile.land else "building",
+            hosts=list(profile.public_kinds) or ["site"],
+            triggers=[n.id for n in needs],
         )
-        needs = report.needs
-        if body.need_ids:
-            needs = [n for n in needs if n.id in body.need_ids] or needs
         async for event in scout_agent.run_scout(
             county,
             needs,

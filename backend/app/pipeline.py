@@ -1022,6 +1022,7 @@ async def analyze_county(
                 id=proposal.id,
                 solution_id=solution.id if solution else None,
                 title=proposal.title,
+                description=solution.description if solution else None,
                 summary=proposal.summary,
                 rationale=proposal.rationale,
                 plan=list(proposal.plan),

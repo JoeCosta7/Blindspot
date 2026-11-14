@@ -34,6 +34,13 @@ class Profile:
     site_types: tuple[str, ...] = ()
     # Site profiles: what to ask Vexcel's semantic search for.
     imagery_text: str | None = None
+    # Public building kinds that suit the project, best first.
+    public_kinds: tuple[str, ...] = ()
+    # Checks to run (ids in data/site_checks.json); empty means the table's
+    # own project lists decide.
+    check_ids: tuple[str, ...] = ()
+    # "gemini" when written for this opportunity, "catalogue" otherwise.
+    chosen_by: str = "catalogue"
 
 
 PUBLIC = Profile(
@@ -75,6 +82,14 @@ POWER_PLANT = Profile(
     site_types=("power_plant",),
     imagery_text="power plant with smokestacks, switchyard and open land",
 )
+PAVED = Profile(
+    ("search_imagery", "search_properties"),
+    ("Retail", "Industrial", "Office"),
+    False,
+    "large paved lots: shopping centres, offices and industrial sites",
+    land=True,
+    imagery_text="large paved parking lot with very few trees",
+)
 DAM = Profile(
     SITE_FIRST,
     (),
@@ -90,10 +105,10 @@ PROFILES: dict[str, Profile] = {
     "resilience_hub": PUBLIC,
     "weatherization_clinic": PUBLIC,
     "public_ev_charging": PUBLIC,
-    "shade_trees_depaving": PUBLIC,
+    "shade_trees_depaving": PAVED,
     "school_heat_pumps": PUBLIC,
     "mobility_hub": PUBLIC,
-    "green_stormwater": PUBLIC,
+    "green_stormwater": PAVED,
     "utility_assistance_drive": PUBLIC,
     "community_solar": RECLAIMED_LAND,
     "wind_on_reclaimed_land": RECLAIMED_LAND,
