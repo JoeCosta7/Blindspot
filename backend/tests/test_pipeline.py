@@ -8,18 +8,32 @@ from app import factors, narrative, opportunities, peers, pipeline
 from app.sources import (
     SourceError,
     afdc,
+    air_quality,
+    attains,
     census,
     dams,
+    drinking_water,
     earthengine,
+    energy_burden,
+    energy_communities,
     farms,
     geoapify,
+    grantsgov,
     lmop,
     nri,
+    openfema,
     openmeteo,
+    places,
+    power_plants,
     pvwatts,
     repowering,
+    rucc,
     state_energy,
     svi,
+    transit,
+    uswtdb,
+    utilities,
+    wildfire,
 )
 from tests.conftest import make_county, make_metrics
 
@@ -194,11 +208,53 @@ def sources(monkeypatch):
     monkeypatch.setattr(farms, "farms_for_county", lambda data_dir, fips: None)
     monkeypatch.setattr(earthengine, "fetch_county_metrics", returning(None))
     monkeypatch.setattr(svi, "svi_for_county", lambda data_dir, fips: None)
+    # Sources added 2026-11-14: nothing found unless a test says otherwise.
+    monkeypatch.setattr(energy_burden, "burden_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(energy_communities, "status_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(power_plants, "plants_for_county", lambda data_dir, fips: [])
+    monkeypatch.setattr(utilities, "utilities_for_county", lambda data_dir, fips: [])
+    monkeypatch.setattr(rucc, "rucc_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(places, "places_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(air_quality, "design_values_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(wildfire, "wildfire_for_county", lambda data_dir, fips: None)
+    monkeypatch.setattr(openfema, "fetch_declarations", returning(None))
+    monkeypatch.setattr(drinking_water, "fetch_water_systems", returning([]))
+    monkeypatch.setattr(attains, "fetch_county_waters", returning(None))
+    monkeypatch.setattr(uswtdb, "fetch_turbines", returning(None))
+    monkeypatch.setattr(transit, "fetch_stops", returning(None))
     monkeypatch.setattr(
         openmeteo,
         "fetch_climate",
         returning({"heating_degree_days": 6500.0, "wind_speed_100m": 6.2}),
     )
+    monkeypatch.setattr(grantsgov, "search", fake_grants_search)
+
+
+def grant_hit(opp_id, title, agency_code, status="posted", close_date="2099-01-21"):
+    return {
+        "id": opp_id,
+        "number": f"N-{opp_id}",
+        "title": title,
+        "agency_code": agency_code,
+        "agency": agency_code,
+        "status": status,
+        "open_date": "2026-10-01",
+        "close_date": close_date,
+        "aln": [],
+    }
+
+
+GRANT_HITS = {
+    "brownfield": [grant_hit("1", "FY27 Brownfield Cleanup Grants", "EPA")],
+    "landfill": [
+        grant_hit("2", "Solid Waste Management Grant Program", "USDA-RUS"),
+        grant_hit("3", "Landfill research for space habitats", "NASA"),  # agency not listed
+    ],
+}
+
+
+async def fake_grants_search(client, settings, keyword):
+    return {"fetched_on": "2026-11-14", "hits": GRANT_HITS.get(keyword, [])}, False
 
 
 def analyze(settings):
@@ -255,6 +311,7 @@ def test_full_report(sources, settings):
         "mine_land",
         "college",
         "non_powered_dam",
+        "power_plant",
     }
 
     by_id = {o.id: o for o in report.opportunities}
@@ -270,7 +327,7 @@ def test_full_report(sources, settings):
     assert solar.funding[0].program_id == "epa_brownfields_fy27"
 
     gas = by_id["landfill_gas_energy:lmop:7"]
-    assert gas.funding == []
+    assert [f.program_id for f in gas.funding] == ["grantsgov:2"]  # live listing only
     assert gas.estimates[0].label == "Landfill gas collected"
 
     asset_ids = {a.id for a in report.assets}
@@ -789,3 +846,35 @@ def test_peers_failure_keeps_the_report(sources, settings, monkeypatch):
     status = {s.source: s for s in report.source_status}
     assert status["peers"].ok is False
     assert report.peers == [] and report.needs
+
+
+# --- Grants.gov live leads ------------------------------------------------------
+
+
+def live(o):
+    return [f for f in o.funding if f.program_id.startswith("grantsgov:")]
+
+
+def test_grant_leads_join_the_funding_list(sources, settings):
+    report = analyze(settings)
+    by_solution = {o.solution_id: o for o in report.opportunities}
+
+    # The NASA hit is dropped: its agency is not listed for the query.
+    [lead] = live(by_solution["landfill_gas_energy"])
+    assert (lead.name, lead.status, lead.deadline) == (
+        "Solid Waste Management Grant Program",
+        "open",
+        "2099-01-21",
+    )
+    assert lead.source_url == "https://www.grants.gov/search-results-detail/2"
+    assert live(by_solution["public_ev_charging"]) == []
+    assert next(s for s in report.source_status if s.source == "grants_gov").ok
+
+
+def test_grants_failure_keeps_the_report(sources, settings, monkeypatch):
+    monkeypatch.setattr(grantsgov, "search", raising(SourceError("Grants.gov returned HTTP 503")))
+    report = analyze(settings)
+
+    assert report.opportunities and not any(live(o) for o in report.opportunities)
+    status = next(s for s in report.source_status if s.source == "grants_gov")
+    assert not status.ok and "HTTP 503" in (status.message or "")

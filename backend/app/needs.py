@@ -8,7 +8,19 @@ from typing import Any
 
 from app.config import Settings
 from app.models import Need, NeedLevel
-from app.sources import afdc, earthengine, farms, lmop, nri, state_energy
+from app.sources import (
+    afdc,
+    air_quality,
+    attains,
+    drinking_water,
+    earthengine,
+    energy_burden,
+    farms,
+    lmop,
+    nri,
+    places,
+    state_energy,
+)
 from app.sources.census import AcsMetrics
 
 
@@ -417,4 +429,211 @@ def farm_waste_need(farm_row: dict[str, Any] | None, settings: Settings) -> Need
         level="high" if high else "elevated",
         source=farms.SOURCE_LABEL,
         detail=detail,
+    )
+
+
+def _pct(share: float) -> str:
+    return f"{share * 100:.1f}%"
+
+
+def energy_burden_need(burden: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Energy spending as a share of income for households below 200% of the
+    poverty line, against the same households nationally, scored like an ACS
+    need (DOE LEAD)."""
+    if not burden or not burden.get("national"):
+        return None
+    county, national = burden["county"], burden["national"]
+    value, baseline = county.get("burden_low_income"), national.get("burden_low_income")
+    if not value or not baseline:
+        return None
+    severity, level = score_ratio(value / baseline, settings)
+    if level is None:
+        return None
+    detail = (
+        f"Households below 200% of the poverty line spend {_pct(value)} of their income on "
+        "electricity, gas and other home fuels"
+    )
+    overall = county.get("burden_all")
+    if overall:
+        detail += f"; all households in the county spend {_pct(overall)}"
+    detail += ". DOE's LEAD Tool builds these from ACS 2018-2022 and EIA data."
+    return Need(
+        id="high_energy_burden",
+        label="High energy bills for low-income households",
+        theme="energy",
+        value=float(value),
+        national_value=float(baseline),
+        unit="share",
+        severity=severity,
+        level=level,
+        source=energy_burden.SOURCE_LABEL,
+        detail=detail,
+    )
+
+
+def utility_shutoff_need(places_row: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Adults who were threatened with a utility shut-off in the past year,
+    against the adult-weighted US county average (CDC PLACES)."""
+    if not places_row or not places_row.get("national"):
+        return None
+    value = places_row["county"].get("utility_shutoff_threat")
+    baseline = places_row["national"].get("utility_shutoff_threat")
+    if not value or not baseline:
+        return None
+    severity, level = score_ratio(value / baseline, settings)
+    if level is None:
+        return None
+    return Need(
+        id="utility_shutoff_risk",
+        label="Households threatened with utility shut-offs",
+        theme="energy",
+        value=float(value),
+        national_value=float(baseline),
+        unit="share",
+        severity=severity,
+        level=level,
+        source=places.SOURCE_LABEL,
+        detail=(
+            "Share of adults whose electric, gas, oil or water company threatened to shut off "
+            "service in the past 12 months. A model-based survey estimate. "
+            + places.NATIONAL_NOTE
+        ),
+    )
+
+
+def drinking_water_need(systems: list[dict[str, Any]] | None, settings: Settings) -> Need | None:
+    """Active community water systems with a health-based violation (EPA ECHO).
+
+    `high` when one of them is also an EPA enforcement priority; `elevated`
+    otherwise. The value is the share of people served by the county's
+    community systems who are served by one with a health-based violation.
+    """
+    if not systems:
+        return None
+    flagged = [s for s in systems if s.get("health_violation")]
+    if not flagged:
+        return None
+    served = sum(int(s.get("population") or 0) for s in systems)
+    affected = sum(int(s.get("population") or 0) for s in flagged)
+    priority = [s for s in flagged if s.get("enforcement_priority")]
+    flagged.sort(key=lambda s: -int(s.get("population") or 0))
+    named = ", ".join(
+        f"{s['name']} ({int(s.get('population') or 0):,} people)" for s in flagged[:3]
+    )
+    more = f" and {len(flagged) - 3} more" if len(flagged) > 3 else ""
+    detail = (
+        f"{len(flagged)} of {len(systems)} community water systems had a health-based "
+        f"violation (a contaminant or disinfectant above its legal limit): {named}{more}."
+    )
+    if priority:
+        detail += f" {len(priority)} of them are EPA enforcement priorities."
+    detail += (
+        " People served counts each system's whole service area, which can cross county lines."
+    )
+    return Need(
+        id="unsafe_drinking_water",
+        label="Drinking water systems with health-based violations",
+        theme="water",
+        value=affected / served if served else None,
+        national_value=None,
+        unit="share",
+        severity=settings.severity_high if priority else settings.severity_elevated,
+        level="high" if priority else "elevated",
+        source=drinking_water.SOURCE_LABEL,
+        detail=detail,
+    )
+
+
+def impaired_waters_need(waters: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Share of the county's assessed water bodies that do not support their
+    designated uses, against the same share nationally (EPA ATTAINS)."""
+    if not waters:
+        return None
+    county, national = waters.get("county") or {}, waters.get("national") or {}
+    assessed, impaired = int(county.get("assessed") or 0), int(county.get("impaired") or 0)
+    us_assessed = int(national.get("assessed") or 0)
+    us_impaired = int(national.get("impaired") or 0)
+    if assessed < settings.attains_min_assessed or not impaired or not us_impaired:
+        return None
+    value, baseline = impaired / assessed, us_impaired / us_assessed
+    severity, level = score_ratio(value / baseline, settings)
+    if level is None:
+        return None
+    causes = list((county.get("causes") or {}).keys())[:4]
+    detail = (
+        f"{impaired:,} of {assessed:,} assessed streams, rivers and lakes in or crossing the "
+        "county do not meet the uses the state set for them"
+    )
+    detail += f"; leading causes: {', '.join(causes)}." if causes else "."
+    detail += " States divide and assess waters differently, so this compares best within a state."
+    return Need(
+        id="impaired_waters",
+        label="Polluted streams and lakes",
+        theme="water",
+        value=value,
+        national_value=baseline,
+        unit="share",
+        severity=severity,
+        level=level,
+        source=attains.SOURCE_LABEL,
+        detail=detail,
+    )
+
+
+def _air_value(value: float, unit: str) -> str:
+    return f"{value:.3f} ppm" if unit == "ppm" else f"{value:.1f} ug/m3"
+
+
+def air_quality_need(values: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """The county's worst monitored PM2.5 or ozone design value against its
+    national standard. `high` at or above the standard, `elevated` at or above
+    `air_elevated_share_of_standard` of it. Above the standard, severity grows
+    with how far above it is, as an ACS ratio does."""
+    if not values:
+        return None
+    checks = [
+        ("pm25_annual_ugm3", settings.pm25_annual_standard_ugm3, "PM2.5, annual", "ug_m3"),
+        ("pm25_24h_ugm3", settings.pm25_24h_standard_ugm3, "PM2.5, 24-hour", "ug_m3"),
+        ("ozone_ppm", settings.ozone_standard_ppm, "Ozone", "ppm"),
+    ]
+    found = [
+        (float(values[key]) / limit, key, limit, name, unit)
+        for key, limit, name, unit in checks
+        if isinstance(values.get(key), (int, float))
+    ]
+    if not found:
+        return None
+    found.sort(key=lambda f: -f[0])
+    ratio, key, limit, _, unit = found[0]
+    if ratio < settings.air_elevated_share_of_standard:
+        return None
+    high = ratio >= 1.0
+    severity = (
+        max(settings.severity_high, score_ratio(ratio, settings)[0])
+        if high
+        else settings.severity_elevated
+    )
+    parts = [
+        f"{name}: {_air_value(float(values[k]), u)} against a standard of {_air_value(lim, u)}"
+        for _, k, lim, name, u in found
+    ]
+    return Need(
+        id="poor_air_quality",
+        label=(
+            "Air pollution at or above the national standard"
+            if high
+            else "Air pollution close to the national standard"
+        ),
+        theme="health",
+        value=float(values[key]),
+        national_value=limit,
+        unit=unit,  # type: ignore[arg-type]
+        severity=severity,
+        level="high" if high else "elevated",
+        source=air_quality.SOURCE_LABEL,
+        detail=(
+            "; ".join(parts) + ". Each is the highest 2023-2025 design value among the county's "
+            "monitors, so it describes the worst monitored spot. PM2.5 is fine particle "
+            "pollution."
+        ),
     )

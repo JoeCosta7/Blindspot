@@ -29,6 +29,12 @@ EXISTING_SITE_SOLUTIONS = {
     "school_heat_pumps",
     "landfill_composting",
 }
+# Added 2026-11-14 with the EIA-860, ECHO and ATTAINS sources.
+NEW_SOURCE_SOLUTIONS = {
+    "repower_fossil_plant",
+    "drinking_water_compliance",
+    "watershed_restoration",
+}
 
 
 def run(needs, assets, **kwargs):
@@ -50,11 +56,13 @@ def test_solutions_table_is_consistent_with_the_contract():
         "library",
         "college",
         "non_powered_dam",
+        "power_plant",
     }
     assert {s.id for s in SOLUTIONS} == {
         *MVP_SOLUTIONS,
         *STRETCH_SOLUTIONS,
         *EXISTING_SITE_SOLUTIONS,
+        *NEW_SOURCE_SOLUTIONS,
     }
     for solution in SOLUTIONS:
         assert set(solution.triggers) <= need_ids, solution.id

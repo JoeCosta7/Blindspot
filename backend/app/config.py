@@ -69,8 +69,12 @@ class Settings(BaseSettings):
     # stops at severity_high (75), and this lets a top-tier one of those outrank
     # a middle-tier need that reached severity 100.
     # A theme left out counts in full.
+    # Added 2026-11-14: "water" (unsafe drinking water, impaired streams) and
+    # "health" (air pollution) are pollution needs and join the top tier.
     need_priority_weights: dict[str, float] = {
         "waste": 1.0,
+        "water": 1.0,
+        "health": 1.0,
         "energy": 0.7,
         "resilience": 0.7,
         "equity": 0.7,
@@ -108,6 +112,26 @@ class Settings(BaseSettings):
     # 240 m scale we reduce at, too few to describe a county. Our own cut-off.
     ee_min_built_up_share: float = 0.001
 
+    # --- air quality (EPA design values 2023-2025) -------------------------
+    # Levels of the national standards, as stated in the notes of EPA's design
+    # value tables (read 2026-11-14): 2024 annual PM2.5 9.0 ug/m3, 2006 24-hour
+    # PM2.5 35 ug/m3, 2015 8-hour ozone 0.070 ppm.
+    pm25_annual_standard_ugm3: float = 9.0
+    pm25_24h_standard_ugm3: float = 35.0
+    ozone_standard_ppm: float = 0.070
+    # A design value at or above this share of its standard flags the need as
+    # "elevated"; at or above the standard, "high". Our own cut-off.
+    air_elevated_share_of_standard: float = 0.9
+
+    # --- water ---------------------------------------------------------------
+    # Fewer assessed water bodies than this in a county is too few for a
+    # share; no impaired-waters need is flagged. Our own cut-off.
+    attains_min_assessed: int = 5
+
+    # --- history window --------------------------------------------------------
+    # Years of FEMA major disaster declarations to count.
+    disaster_history_years: int = 20
+
     # --- output caps ------------------------------------------------------
     # Most opportunities to ask Gemini for, and to take from the rule matches
     # when Gemini is unavailable.
@@ -115,11 +139,15 @@ class Settings(BaseSettings):
     # Rule matches only: sites offered per project type.
     assets_per_solution: int = 2
     max_pvwatts_sites: int = 5
+    # Live Grants.gov listings shown per opportunity.
+    max_grant_leads: int = 3
     # Some counties have thousands of RE-Powering sites or chargers. The map
     # gets the largest sites first, up to these limits; counts are still exact.
     max_sites_per_county: int = 150
     max_ev_markers_per_county: int = 300
     max_buildings_per_county: int = 300
+    # Plants that could be repowered come first, then the largest.
+    max_power_plants_per_county: int = 100
 
     # --- peer counties (peers.py) ------------------------------------------
     peer_count: int = 5

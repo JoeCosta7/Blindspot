@@ -42,8 +42,13 @@ NeedId = Literal[
     "unmanaged_farm_waste",  # large livestock farms without digesters
     "urban_heat",  # built-up land much hotter than the county's natural land (Landsat)
     "low_tree_canopy",  # little tree canopy on the county's built-up land (USFS TCC)
+    "high_energy_burden",  # low-income households' energy bills against income (DOE LEAD)
+    "utility_shutoff_risk",  # adults threatened with a utility shut-off (CDC PLACES)
+    "unsafe_drinking_water",  # community water systems with health-based violations (EPA ECHO)
+    "impaired_waters",  # assessed streams and lakes not meeting their uses (EPA ATTAINS)
+    "poor_air_quality",  # PM2.5 or ozone at or near the national standard (EPA design values)
 ]
-NeedTheme = Literal["equity", "energy", "transportation", "waste", "resilience"]
+NeedTheme = Literal["equity", "energy", "transportation", "waste", "resilience", "water", "health"]
 NeedLevel = Literal["elevated", "high"]
 NeedUnit = Literal[
     "share",
@@ -54,6 +59,8 @@ NeedUnit = Literal[
     "usd_per_month",
     "lb_co2_per_mwh",
     "celsius",  # a temperature difference in degrees Celsius
+    "ug_m3",  # micrograms per cubic meter (PM2.5)
+    "ppm",  # parts per million (ozone)
 ]
 
 AssetType = Literal[
@@ -67,6 +74,7 @@ AssetType = Literal[
     "college",
     "ev_station",
     "non_powered_dam",  # dam in ORNL's hydropower potential assessment
+    "power_plant",  # plant of 1 MW or more in EIA-860, operating or retired
 ]
 
 # What kind of thing a factor is. "workforce" is the county's local talent.
@@ -198,6 +206,9 @@ class FundingMatch(BaseModel):
     key_terms: str
     verified_on: str | None
     source_url: str | None
+    # Why the program applies here, when that depends on the county or site,
+    # e.g. which energy community category the county falls in.
+    note: str | None = None
 
 
 class Opportunity(BaseModel):
@@ -226,6 +237,8 @@ class Opportunity(BaseModel):
     factor_ids: list[str] = Field(default_factory=list)
     score: int = Field(ge=0, le=100)
     estimates: list[Estimate]
+    # The curated table's matches plus live Grants.gov listings (program_id
+    # "grantsgov:<id>", found by the searches in data/grants_queries.json).
     funding: list[FundingMatch]
     generated_by: Literal["gemini", "rules"]
 

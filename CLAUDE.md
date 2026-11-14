@@ -330,6 +330,33 @@ contributors" wherever it is shown; keep it in the footer.
 
 See section 12.
 
+### 6.9 Sources added 2026-11-14
+
+All URLs, columns and parameters below were opened or called live on
+2026-11-14. Each module docstring in `backend/app/sources/` has the details.
+
+| Source | How | Module | Feeds |
+|---|---|---|---|
+| DOE LEAD Tool 2022 (OEDI 6219), county FPL files | startup, `prep_data.py lead` | `energy_burden.py` | need `high_energy_burden`, factor |
+| Treasury energy community data (IRS Notice 2026-39) | startup, `energy_communities` | `energy_communities.py` | energy community bonus gating (`FundingMatch.note`), factor |
+| EIA-860 2025 (plants, generators) | startup, `eia860` | `power_plants.py` | asset `power_plant`, solution `repower_fossil_plant`, factor |
+| EIA-861 2025 (service territory, sales, utility data) | startup, `eia861` | `utilities.py` | factor (utilities, ownership, residential price) |
+| USDA ERS Rural-Urban Continuum Codes 2023 | startup, `rucc` | `rucc.py` | factor |
+| CDC PLACES 2025 county (data.cdc.gov `i46a-9kgh`) | startup, `places` | `places.py` | need `utility_shutoff_risk`, profile facts |
+| EPA air quality design values 2023-2025 | startup, `air` | `air_quality.py` | need `poor_air_quality`, factor |
+| USFS Wildfire Risk to Communities, 2026 county summary | startup, `wildfire` | `wildfire.py` | factor |
+| OpenFEMA Disaster Declarations Summaries v2 | on demand, no key | `openfema.py` | factor |
+| EPA ECHO SDW services (`p_fips`, `p_act=Y`, `p_pswt=CWS`) | on demand, no key | `drinking_water.py` | need `unsafe_drinking_water`, factor |
+| EPA ATTAINS_Assessment map service (gispub.epa.gov) | on demand, no key | `attains.py` | need `impaired_waters`, factor |
+| US Wind Turbine Database API | on demand, no key | `uswtdb.py` | factor |
+| BTS National Transit Map stops (ArcGIS) | on demand, no key | `transit.py` | factor |
+
+Not added: FCC Broadband Data Collection (the map's endpoints reject
+scripted clients and the public API needs a registered account) and the DOE
+Billion-Ton 2023 county biomass data (download needs a Bioenergy KDF login).
+The attains.epa.gov REST API now needs an api.data.gov key, so the map
+service is used instead.
+
 ---
 
 ## 7. API contract
