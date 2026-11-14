@@ -96,6 +96,7 @@ def test_no_host_asset_means_no_opportunity():
 def test_score_follows_priority_not_severity():
     # needs.prioritize halves transportation needs: the charger gap is the more
     # severe need here, but the weatherization clinic outranks the chargers.
+    # The list given here is not in priority order; the ranking does not rely on it.
     needs = [
         make_need("ev_charging_gap", 100).model_copy(update={"priority": 50}),
         make_need("old_housing", 80),
@@ -179,14 +180,38 @@ def test_top_six_and_first_choice_assets_rank_first():
     ]
     matches = run(needs, assets)
     assert len(matches) == 6
-    # Equal scores: every solution's first-choice asset comes before any second choice.
-    assert {m.solution.id for m in matches[:4]} == {
+    # Equal scores: every solution's first-choice asset is selected before any
+    # second choice, so all four solutions make the list.
+    assert {m.solution.id for m in matches} == {
         "community_solar",
         "resilience_hub",
         "weatherization_clinic",
         "public_ev_charging",
     }
     assert len(run(needs, assets, max_opportunities=3)) == 3
+
+
+def test_opportunities_follow_the_order_of_the_needs():
+    # Ranked needs: hazard risk, then old housing, then the charger gap. Each
+    # opportunity sits at the place of the highest-ranked need it addresses,
+    # even where a lower-ranked one scores higher.
+    needs = [
+        make_need("hazard_risk", 90),
+        make_need("old_housing", 80),
+        make_need("ev_charging_gap", 70),
+        make_need("low_income", 20),
+    ]
+    assets = [make_asset("lib", "library"), make_asset("b", "brownfield", acres=50.0)]
+    matches = run(needs, assets)
+    assert [m.solution.id for m in matches] == [
+        "resilience_hub",  # hazard risk, the top need
+        "weatherization_clinic",  # old housing
+        "public_ev_charging",  # the charger gap
+        "community_solar",  # low income only
+    ]
+    # The hub scores below the clinic, (90 + mean of 90 and 20) / 2 against 80,
+    # but answers the higher-ranked need, so it leads.
+    assert [m.score for m in matches[:2]] == [72, 80]
 
 
 def test_second_sites_do_not_crowd_out_a_lower_scoring_solution():

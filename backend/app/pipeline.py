@@ -394,9 +394,12 @@ def proposals_from_drafts(
     assets: list[Asset],
     solutions: tuple[matching.Solution, ...],
 ) -> list[_Proposal]:
-    """Gemini's drafts, scored and ranked by code. A draft keeps its project
-    type only if it names a site that type can be built at; without one there
-    is nothing to size, so it is treated as an idea of Gemini's own."""
+    """Gemini's drafts, scored and ranked by code: in the order of the needs
+    they address (the top need's opportunities first), then by score.
+
+    A draft keeps its project type only if it names a site that type can be
+    built at; without one there is nothing to size, so it is treated as an idea
+    of Gemini's own."""
     assets_by_id = {a.id: a for a in assets}
     solutions_by_id = {s.id: s for s in solutions}
     proposals: list[_Proposal] = []
@@ -433,7 +436,8 @@ def proposals_from_drafts(
                 factor_ids=tuple(draft.factor_ids),
             )
         )
-    proposals.sort(key=lambda p: -p.score)  # stable: Gemini's order breaks ties
+    # Stable: Gemini's order breaks ties.
+    proposals.sort(key=lambda p: (matching.top_need_rank(p.needs, flagged), -p.score))
     return proposals
 
 

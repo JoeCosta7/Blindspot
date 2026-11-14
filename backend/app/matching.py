@@ -136,6 +136,22 @@ def need_score(needs: list[Need]) -> float:
     return (max(priorities) + sum(priorities) / len(priorities)) / 2
 
 
+def need_rank_key(need: Need) -> tuple[int, int, str]:
+    """The order of the Needs tab: priority, then severity, then id
+    (the same key as needs.prioritize)."""
+    return (-need.priority, -need.severity, need.id)
+
+
+def top_need_rank(addressed: list[Need], flagged: list[Need]) -> int:
+    """Where the highest-ranked need an opportunity addresses sits in the
+    county's needs, as the Needs tab orders them: 0 for the top need.
+    Opportunities are ordered by this first, so the list of opportunities
+    follows the list of needs. One that addresses no flagged need goes last."""
+    ranked = sorted(flagged, key=need_rank_key)
+    position = {need.id: i for i, need in enumerate(ranked)}
+    return min((position[n.id] for n in addressed if n.id in position), default=len(ranked))
+
+
 def match_opportunities(
     needs: list[Need],
     assets: list[Asset],
@@ -144,8 +160,9 @@ def match_opportunities(
     assets_per_solution: int = 2,
     max_opportunities: int = 6,
 ) -> list[Match]:
-    """Up to `max_opportunities`, ranked by score. These are the rule matches
-    the report falls back to when Gemini does not write the opportunities.
+    """Up to `max_opportunities`, in the order of the needs they address, then
+    by score. These are the rule matches the report falls back to when Gemini
+    does not write the opportunities. `needs` should have their priority set (needs.prioritize).
 
     score = need score * asset factor. The factor is 1.0 if the asset has the
     data its estimate needs and 0.7 otherwise.
@@ -154,8 +171,9 @@ def match_opportunities(
     answers energy, pollution or resilience needs of the same severity.
 
     Each solution's best site is selected before any solution's second site, so
-    a second charger location cannot push a whole solution off the list. The
-    selected opportunities are then ordered by score.
+    a second charger location cannot push a whole solution off the list; among
+    those, the ones meeting higher-ranked needs are selected first. The selected
+    opportunities are then ordered by the top need they address, then by score.
     """
     matches: list[tuple[tuple, Match]] = []
     for order, solution in enumerate(solutions):
@@ -163,6 +181,7 @@ def match_opportunities(
         if not matched:
             continue
         base = need_score(matched)
+        need_rank = top_need_rank(matched, needs)
         picked: list[Asset | None]
         if solution.asset_kind == "county":
             picked = [None]
@@ -173,8 +192,9 @@ def match_opportunities(
             factor = 1.0 if has_data else MISSING_DATA_FACTOR
             score = round(base * factor)
             match = Match(solution=solution, asset=asset, needs=matched, score=score)
-            matches.append(((rank, -score, order), match))
+            matches.append(((rank, need_rank, -score, order), match))
     matches.sort(key=lambda m: m[0])
     selected = matches[:max_opportunities]
-    selected.sort(key=lambda m: (m[0][1], m[0][0], m[0][2]))  # score, then first choices
+    # Top need addressed, then score, then first choices.
+    selected.sort(key=lambda m: (m[0][1], m[0][2], m[0][0], m[0][3]))
     return [match for _, match in selected]
