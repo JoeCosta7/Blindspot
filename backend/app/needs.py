@@ -338,6 +338,25 @@ def low_tree_canopy_need(metrics: dict[str, Any] | None, settings: Settings) -> 
     )
 
 
+def prioritize(needs: list[Need], settings: Settings) -> list[Need]:
+    """The needs with their priority set, highest priority first.
+
+    priority = severity * a weight from config.py: the one set for the need
+    itself if there is one, otherwise the one for its theme. Severity alone
+    ranks a county's needs by how far each is from the US figure, which says
+    nothing about how much the gap matters for sustainability. Equal priorities
+    fall back to severity, then to the id for a stable order.
+    """
+    by_theme = settings.need_priority_weights
+    by_need = settings.need_priority_overrides
+    ranked = []
+    for need in needs:
+        weight = by_need.get(need.id, by_theme.get(need.theme, 1.0))
+        ranked.append(need.model_copy(update={"priority": min(100, round(need.severity * weight))}))
+    ranked.sort(key=lambda need: (-need.priority, -need.severity, need.id))
+    return ranked
+
+
 def _count_phrase(count: int, singular: str, plural: str) -> str:
     return f"{count:,} {singular if count == 1 else plural}"
 

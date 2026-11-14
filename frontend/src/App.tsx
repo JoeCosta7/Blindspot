@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { analyze, fetchCounties, FIXTURE_MODE } from "./api";
 import { CountySearch } from "./components/CountySearch";
+import type { LoadingArea } from "./components/loadingSweep";
 import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
 import { LoadingPanel, ResultsPanel } from "./components/ResultsPanel";
 import { featureBounds, unionBounds } from "./format";
@@ -64,6 +65,8 @@ function ThemeIcon({ theme }: { theme: Theme }) {
 interface PendingRequest {
   body: AnalyzeRequest;
   label: string;
+  /** Covered by the loading animation on the map. */
+  area: LoadingArea | null;
 }
 
 function Intro({ countiesError }: { countiesError: string | null }) {
@@ -104,6 +107,7 @@ export function App() {
   const [response, setResponse] = useState<AnalyzeResponse | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [focusAsset, setFocusAsset] = useState<Asset | null>(null);
+  const [flare, setFlare] = useState<{ area: LoadingArea } | null>(null);
   const inFlight = useRef<AbortController | null>(null);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [basemap, setBasemap] = useState<Basemap>(
@@ -150,6 +154,20 @@ export function App() {
     [featuresByFips],
   );
 
+  /** The returned counties as one shape, for the finish flare. */
+  const areaOf = useCallback(
+    (fips: string[]): LoadingArea | null => {
+      const polygons: GeoJSON.Position[][][] = [];
+      for (const id of fips) {
+        const geometry = featuresByFips.get(id)?.geometry;
+        if (geometry?.type === "Polygon") polygons.push(geometry.coordinates);
+        else if (geometry?.type === "MultiPolygon") polygons.push(...geometry.coordinates);
+      }
+      return polygons.length > 0 ? { type: "MultiPolygon", coordinates: polygons } : null;
+    },
+    [featuresByFips],
+  );
+
   const run = useCallback(
     async (request: PendingRequest) => {
       inFlight.current?.abort(); // a newer selection replaces an older one
@@ -167,6 +185,8 @@ export function App() {
         const fips = result.counties.map((county) => county.fips);
         setResponse(result);
         setSelectedFips(fips);
+        const done = areaOf(fips);
+        if (done) setFlare({ area: done });
         if (request.body.mode === "bbox") setFitTo(boundsOf(fips));
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -175,7 +195,7 @@ export function App() {
         if (inFlight.current === controller) setLoading(false);
       }
     },
-    [boundsOf],
+    [boundsOf, areaOf],
   );
 
   const selectCounty = useCallback(
@@ -186,6 +206,7 @@ export function App() {
       void run({
         body: { mode: "county", fips },
         label: feature ? `${feature.properties.NAMELSAD}, ${feature.properties.STUSPS}` : fips,
+        area: feature?.geometry ?? null,
       });
     },
     [featuresByFips, boundsOf, run],
@@ -195,7 +216,13 @@ export function App() {
     (sw: LonLat, ne: LonLat) => {
       setMode("county"); // one box per click of the button; panning comes back
       setSelectedFips([]);
-      void run({ body: { mode: "bbox", sw, ne }, label: "Selected area" });
+      const [w, s] = sw;
+      const [e, n] = ne;
+      const box: LoadingArea = {
+        type: "Polygon",
+        coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]],
+      };
+      void run({ body: { mode: "bbox", sw, ne }, label: "Selected area", area: box });
     },
     [run],
   );
@@ -270,6 +297,8 @@ export function App() {
           fitTo={fitTo}
           assets={assets}
           focusAsset={focusAsset}
+          loadingArea={loading ? (pending?.area ?? null) : null}
+          flare={flare}
           onCountyClick={selectCounty}
           onBoxSelect={selectBox}
         />

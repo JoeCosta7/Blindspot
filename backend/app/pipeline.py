@@ -359,7 +359,7 @@ async def analyze_county(
     ):
         if extra:
             flagged.append(extra)
-    flagged.sort(key=lambda n: (-n.severity, n.id))
+    flagged = needs.prioritize(flagged, settings)
 
     # --- matching -------------------------------------------------------------
     solutions = matching.load_solutions(data_dir / "solutions.json")

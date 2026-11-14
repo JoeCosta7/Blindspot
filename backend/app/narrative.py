@@ -98,7 +98,7 @@ def build_payload(
                 "national_value": format_need_value(n.national_value, n.unit),
                 "detail": n.detail,
             }
-            for n in sorted(needs, key=lambda n: -n.severity)
+            for n in sorted(needs, key=lambda n: (-n.priority, -n.severity))
         ],
         "opportunities": [
             {
@@ -221,7 +221,7 @@ def template_narrative(payload: dict[str, Any], failed_sources: list[str]) -> Na
     else:
         top = [_lower_first(n["label"]) for n in needs[:3]]
         noun = "need" if len(needs) == 1 else "needs"
-        lead = "The most severe is" if len(top) == 1 else "The most severe are"
+        lead = "The top priority is" if len(top) == 1 else "The top priorities are"
         summary = f"{county} has {len(needs)} flagged {noun}. {lead} {_join(top)}."
         if opportunities:
             if len(opportunities) == 1:
@@ -270,7 +270,8 @@ def build_prompt(payload: dict[str, Any]) -> str:
         f"Rules:\n{rules}\n\n"
         "Format:\n"
         f"- summary: at most {SUMMARY_MAX_WORDS} words on the county's main needs and the "
-        "best opportunities.\n"
+        "best opportunities. The needs and the opportunities are each listed from highest "
+        "to lowest priority; lead with the first ones.\n"
         f"- opportunity_notes: one note per opportunity, at most {NOTE_MAX_WORDS} words, using "
         "the opportunity_id exactly as given.\n"
         f"- caveats: up to {MAX_GEMINI_CAVEATS} short sentences on what the reader should "

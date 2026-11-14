@@ -76,6 +76,8 @@ PROMPT_RULES = (
     "Write for a county official with no technical background.",
     'Every solution must directly reduce at least one need listed under "needs". Put '
     "only the need_id values it directly reduces in need_ids, exactly as given.",
+    "The needs are listed from highest to lowest priority. Solve the first ones before "
+    "the later ones, and list your solutions in that order.",
     "Base each solution on this county's own data, and use a place listed under "
     '"sites" where one fits. Put the site_id values of the places it would use in '
     "site_ids, exactly as given. Leave site_ids empty only for a county-wide program.",
@@ -245,7 +247,7 @@ def build_digest(
                     "detail": n.detail,
                 }
             )
-            for n in sorted(needs, key=lambda n: -n.severity)
+            for n in sorted(needs, key=lambda n: (-n.priority, -n.severity))
         ],
         "sites": sites,
         "not_found": [ASSET_LABELS.get(t, t) for t in missing_types],

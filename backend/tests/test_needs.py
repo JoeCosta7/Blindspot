@@ -1,7 +1,8 @@
 import pytest
 
 from app import needs
-from tests.conftest import make_metrics
+from app.models import Need
+from tests.conftest import make_metrics, make_need
 
 
 @pytest.mark.parametrize(
@@ -19,6 +20,76 @@ from tests.conftest import make_metrics
 )
 def test_score_ratio(settings, ratio, severity, level):
     assert needs.score_ratio(ratio, settings) == (severity, level)
+
+
+def themed(need_id: str, severity: int, theme: str) -> Need:
+    return make_need(need_id, severity).model_copy(update={"theme": theme})
+
+
+def test_prioritize_weights_severity_by_theme_and_need(settings):
+    flagged = [
+        themed("ev_charging_gap", 100, "transportation"),
+        themed("long_commute", 25, "transportation"),
+        themed("old_housing", 100, "energy"),
+        themed("urban_heat", 75, "resilience"),
+        themed("landfill_gas_uncaptured", 75, "waste"),
+        themed("carbon_intensive_grid", 100, "energy"),
+        themed("hazard_risk", 75, "resilience"),
+        themed("low_income", 60, "equity"),
+    ]
+    ranked = needs.prioritize(flagged, settings)
+
+    assert [(n.id, n.priority) for n in ranked] == [
+        # Top tier, in full: pollution, the carbon-heavy grid and hazard risk.
+        # The last two are set by need, over the weight of their themes.
+        ("carbon_intensive_grid", 100),
+        ("hazard_risk", 75),
+        ("landfill_gas_uncaptured", 75),
+        # Middle tier at 0.7: a need at severity 100 stays below a top-tier 75.
+        ("old_housing", 70),
+        ("urban_heat", 52),
+        # Transportation at 0.5.
+        ("ev_charging_gap", 50),
+        ("low_income", 42),
+        ("long_commute", 12),
+    ]
+    # Severity still says how far the county is from the US figure.
+    assert next(n for n in ranked if n.id == "ev_charging_gap").severity == 100
+    assert flagged[0].priority == 100  # the input is not changed
+
+
+def test_prioritize_uses_the_configured_weights(settings):
+    flagged = [
+        themed("ev_charging_gap", 100, "transportation"),
+        themed("landfill_gas_uncaptured", 75, "waste"),
+        themed("low_income", 80, "equity"),
+    ]
+    custom = settings.model_copy(
+        update={
+            "need_priority_weights": {"transportation": 0.25, "waste": 2.0},
+            "need_priority_overrides": {},
+        }
+    )
+    ranked = needs.prioritize(flagged, custom)
+    assert [(n.id, n.priority) for n in ranked] == [
+        ("landfill_gas_uncaptured", 100),  # capped at 100
+        ("low_income", 80),  # a theme with no weight counts in full
+        ("ev_charging_gap", 25),
+    ]
+
+    # A weight set for the need itself replaces the weight of its theme.
+    custom = custom.model_copy(update={"need_priority_overrides": {"ev_charging_gap": 0.9}})
+    ranked = needs.prioritize(flagged, custom)
+    assert [(n.id, n.priority) for n in ranked][:2] == [
+        ("landfill_gas_uncaptured", 100),
+        ("ev_charging_gap", 90),
+    ]
+
+
+def test_priority_defaults_to_severity_for_reports_saved_without_it():
+    saved = make_need("old_housing", 80).model_dump()
+    del saved["priority"]
+    assert Need.model_validate(saved).priority == 80
 
 
 def test_acs_needs_flags_only_elevated_or_high(settings):

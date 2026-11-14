@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ASSET_STYLES, formatAcres, formatNumber } from "../format";
 import type { Asset, Bounds, CountyCollection, LonLat } from "../types";
 import { startBoxSelect } from "./boxSelect";
+import { type LoadingArea, playFinishFlare, startLoadingSweep } from "./loadingSweep";
 
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 
@@ -46,6 +47,12 @@ function countyColors(basemap: Basemap, theme: Theme) {
   return { accent: "#15803d", line: "#94a3b8", lineWidth: 0.4 };
 }
 
+/** Sweep and flare colors that read on each basemap. */
+function sweepColors(basemap: Basemap, theme: Theme) {
+  if (basemap === "satellite" || theme === "dark") return { line: "#bbf7d0", glow: "#4ade80" };
+  return { line: "#15803d", glow: "#22c55e" };
+}
+
 interface Props {
   counties: CountyCollection | null;
   mode: SelectMode;
@@ -59,6 +66,10 @@ interface Props {
   assets: Asset[];
   /** Fly to this asset and open its popup. */
   focusAsset: Asset | null;
+  /** While a report loads, the area to cover with the loading animation. */
+  loadingArea: LoadingArea | null;
+  /** Played once each time a new object arrives: the report has loaded. */
+  flare: { area: LoadingArea } | null;
   onCountyClick: (fips: string) => void;
   onBoxSelect: (sw: LonLat, ne: LonLat) => void;
 }
@@ -132,6 +143,8 @@ export function MapView(props: Props) {
     fitTo,
     assets,
     focusAsset,
+    loadingArea,
+    flare,
     onCountyClick,
     onBoxSelect,
   } = props;
@@ -426,6 +439,23 @@ export function MapView(props: Props) {
       .setDOMContent(popupContent(focusAsset))
       .addTo(map);
   }, [layersReady, focusAsset]);
+
+  // --- loading animation ---------------------------------------------------------
+  // Keyed on layersVersion so a basemap swap mid-load puts it back.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || layersVersion === 0 || !loadingArea) return;
+    const colors = sweepColors(latest.current.basemap, latest.current.theme);
+    return startLoadingSweep(map, loadingArea, colors);
+  }, [layersVersion, loadingArea]);
+
+  // Not keyed on layersVersion: a basemap swap should not replay it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReady || !flare) return;
+    const colors = sweepColors(latest.current.basemap, latest.current.theme);
+    return playFinishFlare(map, flare.area, colors);
+  }, [layersReady, flare]);
 
   // --- box select -----------------------------------------------------------------
   useEffect(() => {
