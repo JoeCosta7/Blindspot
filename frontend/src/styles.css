@@ -15,6 +15,28 @@
   --high-bg: #fde8e6;
   --elevated: #9a5b00;
   --elevated-bg: #fdf0d5;
+  --on-accent: #ffffff;
+  --overlay-bg: rgb(255 255 255 / 94%);
+  --shadow: rgb(0 0 0 / 12%);
+  --placeholder-bg: #e9ece6;
+  --hint-bg: #1c2420;
+  --hint-text: #ffffff;
+  --select-fill: rgb(21 128 61 / 12%);
+  --estimate-bg: #eef0f2;
+  --estimate-text: #44505a;
+  --estimate-border: #9aa5ae;
+  --skeleton-a: #e8ebe6;
+  --skeleton-b: #f2f4f0;
+  --open-border: #15803d;
+  --open-bg: #dcf3e2;
+  --open-text: #0f5c2c;
+  --deadline-border: #c98a00;
+  --neutral-border: #8a949c;
+  --neutral-bg: #f7f8f8;
+  --neutral-chip-bg: #e6e9eb;
+  --neutral-chip-text: #3d474e;
+  --bar-national: #a3ada7;
+  color-scheme: light;
   --panel-width: 460px;
   --radius: 8px;
   font-family:
@@ -26,6 +48,49 @@
   font-size: 15px;
   line-height: 1.45;
   color: var(--text);
+}
+
+:root[data-theme="dark"] {
+  --bg: #111614;
+  --surface: #1a201d;
+  --border: #2e3732;
+  --text: #e4e9e5;
+  --muted: #9aa69f;
+  --accent: #3fb36b;
+  --accent-soft: #1b3124;
+  --on-accent: #06120a;
+  --warn-bg: #2e2410;
+  --warn-border: #8a6a1f;
+  --warn-text: #f1cf7a;
+  --info-bg: #142233;
+  --info-border: #3b6591;
+  --high: #ff8a7a;
+  --high-bg: #3a1814;
+  --elevated: #f0b54a;
+  --elevated-bg: #33260d;
+  --overlay-bg: rgb(26 32 29 / 94%);
+  --shadow: rgb(0 0 0 / 45%);
+  --placeholder-bg: #161b18;
+  --hint-bg: #e4e9e5;
+  --hint-text: #111614;
+  --select-fill: rgb(63 179 107 / 18%);
+  --estimate-bg: #232a26;
+  --estimate-text: #b8c2bc;
+  --estimate-border: #56615a;
+  --skeleton-a: #1d2420;
+  --skeleton-b: #262e2a;
+  --open-border: #3fb36b;
+  --open-bg: #17351f;
+  --open-text: #8fe0aa;
+  --deadline-border: #d9a227;
+  --neutral-border: #6b757c;
+  --neutral-bg: #1d2321;
+  --neutral-chip-bg: #2a3130;
+  --neutral-chip-text: #c3cbc7;
+  --bar-national: #5f6a64;
+  /* Map overlays sit on a near-black basemap and need a lighter edge. */
+  --map-control-edge: #56625b;
+  color-scheme: dark;
 }
 
 * {
@@ -120,7 +185,7 @@ button {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: #e9ece6;
+  background: var(--placeholder-bg);
   text-align: center;
 }
 
@@ -179,6 +244,7 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  color: var(--text);
 }
 
 .search-results {
@@ -192,7 +258,7 @@ button {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
+  box-shadow: 0 6px 20px var(--shadow);
 }
 
 .search-results li {
@@ -229,7 +295,7 @@ button {
 
 .mode-toggle button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .button {
@@ -238,7 +304,7 @@ button {
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .link-button {
@@ -254,7 +320,120 @@ button {
   text-underline-offset: 2px;
 }
 
+.theme-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+}
+
 /* --- map overlays ------------------------------------------------------------ */
+
+.basemap-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 2px 8px var(--shadow);
+  font-size: 0.88rem;
+}
+
+.basemap-toggle button {
+  padding: 6px 12px;
+  border: none;
+  background: var(--surface);
+}
+
+.basemap-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+
+.basemap-toggle button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.basemap-toggle button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.map-notice {
+  position: absolute;
+  z-index: 2;
+  top: 50px;
+  left: 10px;
+  max-width: 300px;
+  padding: 8px 10px;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+}
+
+/* Mapbox popups and controls follow the theme. */
+.mapboxgl-popup-content {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.mapboxgl-popup-close-button {
+  color: var(--muted);
+}
+
+.mapboxgl-popup-anchor-top .mapboxgl-popup-tip,
+.mapboxgl-popup-anchor-top-left .mapboxgl-popup-tip,
+.mapboxgl-popup-anchor-top-right .mapboxgl-popup-tip {
+  border-bottom-color: var(--surface);
+}
+
+.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip,
+.mapboxgl-popup-anchor-bottom-left .mapboxgl-popup-tip,
+.mapboxgl-popup-anchor-bottom-right .mapboxgl-popup-tip {
+  border-top-color: var(--surface);
+}
+
+.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: var(--surface);
+}
+
+.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: var(--surface);
+}
+
+:root[data-theme="dark"] .mapboxgl-ctrl-group {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--map-control-edge);
+}
+
+:root[data-theme="dark"] .basemap-toggle,
+:root[data-theme="dark"] .legend {
+  border-color: var(--map-control-edge);
+}
+
+:root[data-theme="dark"] .mapboxgl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+
+:root[data-theme="dark"] .mapboxgl-ctrl-icon {
+  filter: invert(1);
+}
 
 .map-hint {
   position: absolute;
@@ -262,8 +441,8 @@ button {
   left: 50%;
   transform: translateX(-50%);
   padding: 6px 12px;
-  background: var(--text);
-  color: #fff;
+  background: var(--hint-bg);
+  color: var(--hint-text);
   border-radius: 999px;
   font-size: 0.9rem;
   pointer-events: none;
@@ -275,7 +454,7 @@ button {
   left: 12px;
   bottom: 32px;
   padding: 8px 10px;
-  background: rgb(255 255 255 / 94%);
+  background: var(--overlay-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 0.82rem;
@@ -307,7 +486,7 @@ button {
   position: absolute;
   z-index: 5;
   border: 2px dashed var(--accent);
-  background: rgb(21 128 61 / 12%);
+  background: var(--select-fill);
   pointer-events: none;
 }
 
@@ -369,9 +548,9 @@ button {
 }
 
 .tag-estimate {
-  background: #eef0f2;
-  color: #44505a;
-  border: 1px dashed #9aa5ae;
+  background: var(--estimate-bg);
+  color: var(--estimate-text);
+  border: 1px dashed var(--estimate-border);
   cursor: help;
 }
 
@@ -457,7 +636,7 @@ button {
 .skeleton {
   height: 84px;
   border-radius: var(--radius);
-  background: linear-gradient(90deg, #e8ebe6 25%, #f2f4f0 50%, #e8ebe6 75%);
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 50%, var(--skeleton-a) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
@@ -508,7 +687,7 @@ button {
 .tabs button.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .county-head h2 {
@@ -586,7 +765,7 @@ button {
   place-items: center;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -707,15 +886,15 @@ button {
 }
 
 .funding-open {
-  border-left-color: #15803d;
+  border-left-color: var(--open-border);
 }
 .funding-open .funding-status {
-  background: #dcf3e2;
-  color: #0f5c2c;
+  background: var(--open-bg);
+  color: var(--open-text);
 }
 
 .funding-open_with_deadlines {
-  border-left-color: #c98a00;
+  border-left-color: var(--deadline-border);
 }
 .funding-open_with_deadlines .funding-status {
   background: var(--elevated-bg);
@@ -725,14 +904,14 @@ button {
 .funding-paused,
 .funding-uncertain,
 .funding-unverified {
-  border-left-color: #8a949c;
-  background: #f7f8f8;
+  border-left-color: var(--neutral-border);
+  background: var(--neutral-bg);
 }
 .funding-paused .funding-status,
 .funding-uncertain .funding-status,
 .funding-unverified .funding-status {
-  background: #e6e9eb;
-  color: #3d474e;
+  background: var(--neutral-chip-bg);
+  color: var(--neutral-chip-text);
 }
 .funding-unverified {
   border-style: dashed;
@@ -799,7 +978,7 @@ button {
 }
 
 .bar-national {
-  background: #a3ada7;
+  background: var(--bar-national);
 }
 
 .bar-value {
