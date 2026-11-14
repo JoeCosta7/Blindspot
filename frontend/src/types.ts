@@ -463,6 +463,15 @@ export interface AnalyzeResponse {
   message: string | null;
 }
 
+/** One line of the NDJSON stream from POST /api/analyze?progress=1. */
+export interface AnalyzeEvent {
+  type: "source" | "done" | "error";
+  fips: string | null;
+  status: SourceStatus | null;
+  response: AnalyzeResponse | null;
+  message: string | null;
+}
+
 // --- frontend-only -----------------------------------------------------------
 
 /** Properties written by backend/scripts/prep_data.py. */

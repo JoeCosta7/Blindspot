@@ -454,6 +454,20 @@ class AnalyzeResponse(BaseModel):
     message: str | None = None
 
 
+class AnalyzeEvent(BaseModel):
+    """One line of the NDJSON stream from POST /api/analyze?progress=1.
+
+    `source` events arrive as each data fetch finishes; `done` carries the
+    full response last. `error` is used when a county cannot be analyzed.
+    """
+
+    type: Literal["source", "done", "error"]
+    fips: str | None = None
+    status: SourceStatus | None = None
+    response: AnalyzeResponse | None = None
+    message: str | None = None
+
+
 class HealthResponse(BaseModel):
     ok: bool
     counties_loaded: int

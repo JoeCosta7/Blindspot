@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -20,6 +20,7 @@ from app.config import Settings, get_settings
 from app.geo import County, CountyIndex
 from app.models import (
     AnalyzeBboxRequest,
+    AnalyzeEvent,
     AnalyzeRequest,
     AnalyzeResponse,
     CountyReport,
@@ -29,6 +30,7 @@ from app.models import (
     ScoutRequest,
     ScoutResult,
     ScoutStep,
+    SourceStatus,
 )
 from app.needmap import build_need_map
 from app.pipeline import analyze_county
@@ -90,7 +92,10 @@ def _load_fixture(settings: Settings, county: County) -> CountyReport | None:
 
 
 async def _report_for(
-    county: County, client: httpx.AsyncClient, settings: Settings
+    county: County,
+    client: httpx.AsyncClient,
+    settings: Settings,
+    on_progress: Callable[[SourceStatus], Awaitable[None]] | None = None,
 ) -> CountyReport:
     """The county's report: the saved one when `serve_saved_reports` is on and
     a usable file exists, otherwise a live analysis. A saved file that cannot
@@ -102,8 +107,13 @@ async def _report_for(
             log.warning("saved report for %s is unusable, analyzing live: %s", county.fips, exc)
             saved = None
         if saved is not None:
+            if on_progress is not None:
+                for status in saved.source_status:
+                    await on_progress(status)
             return saved
-    return await analyze_county(county, client, settings)
+    if on_progress is None:
+        return await analyze_county(county, client, settings)
+    return await analyze_county(county, client, settings, on_progress=on_progress)
 
 
 @app.get("/api/health")
@@ -147,12 +157,34 @@ async def need_map(request: Request) -> NeedMapResponse:
     return build_need_map(all_values, national, settings)
 
 
-@app.post("/api/analyze")
+def _analyze_message(
+    counties: list[County],
+    truncated: bool,
+    max_counties: int,
+    skipped_fixtures: int | None = None,
+) -> str | None:
+    if truncated:
+        return (
+            f"The box covers more than {max_counties} counties. "
+            f"Showing the {max_counties} with the largest overlap; "
+            "zoom in to choose others."
+        )
+    if not counties:
+        return "No county matched the box. Draw it over a county's center or most of its area."
+    if skipped_fixtures:
+        return f"{skipped_fixtures} selected counties have no saved report."
+    return None
+
+
+@app.post("/api/analyze", response_model=None)
 async def analyze(
     body: AnalyzeRequest,
     request: Request,
     fixture: bool = Query(False, description="Serve saved reports; no network calls"),
-) -> AnalyzeResponse:
+    progress: bool = Query(
+        False, description="Stream NDJSON source updates, then the full response"
+    ),
+) -> AnalyzeResponse | StreamingResponse:
     settings: Settings = request.app.state.settings
     index: CountyIndex = request.app.state.counties
 
@@ -167,31 +199,91 @@ async def analyze(
             raise HTTPException(404, f"No county with FIPS {body.fips}")
         counties = [county]
 
-    if fixture:
-        loaded = [_load_fixture(settings, c) for c in counties]
-        reports = [r for r in loaded if r is not None]
-        skipped = len(loaded) - len(reports)
-        if not reports and counties:
-            raise HTTPException(404, "No saved report for this selection")
-        message = f"{skipped} selected counties have no saved report." if skipped else None
-    else:
-        reports = list(
-            await asyncio.gather(
-                *(_report_for(c, request.app.state.client, settings) for c in counties)
+    if not progress:
+        if fixture:
+            loaded = [_load_fixture(settings, c) for c in counties]
+            reports = [r for r in loaded if r is not None]
+            skipped = len(loaded) - len(reports)
+            if not reports and counties:
+                raise HTTPException(404, "No saved report for this selection")
+            message = _analyze_message(counties, truncated, settings.max_counties, skipped or None)
+        else:
+            reports = list(
+                await asyncio.gather(
+                    *(_report_for(c, request.app.state.client, settings) for c in counties)
+                )
             )
-        )
-        message = None
+            message = _analyze_message(counties, truncated, settings.max_counties)
+        return AnalyzeResponse(counties=reports, truncated=truncated, message=message)
 
-    if truncated:
-        message = (
-            f"The box covers more than {settings.max_counties} counties. "
-            f"Showing the {settings.max_counties} with the largest overlap; "
-            "zoom in to choose others."
-        )
-    elif not counties:
-        message = "No county matched the box. Draw it over a county's center or most of its area."
+    async def events() -> AsyncIterator[str]:
+        reports: list[CountyReport] = []
+        skipped = 0
+        for county in counties:
+            if fixture:
+                report = _load_fixture(settings, county)
+                if report is None:
+                    skipped += 1
+                    continue
+                for status in report.source_status:
+                    yield (
+                        AnalyzeEvent(
+                            type="source", fips=county.fips, status=status
+                        ).model_dump_json()
+                        + "\n"
+                    )
+                reports.append(report)
+                continue
 
-    return AnalyzeResponse(counties=reports, truncated=truncated, message=message)
+            queue: asyncio.Queue[SourceStatus | object] = asyncio.Queue()
+            done = object()
+
+            async def on_progress(status: SourceStatus) -> None:
+                await queue.put(status)
+
+            async def run_one() -> CountyReport:
+                try:
+                    return await _report_for(
+                        county, request.app.state.client, settings, on_progress=on_progress
+                    )
+                finally:
+                    await queue.put(done)
+
+            task = asyncio.create_task(run_one())
+            while True:
+                item = await queue.get()
+                if item is done:
+                    break
+                assert isinstance(item, SourceStatus)
+                yield (
+                    AnalyzeEvent(type="source", fips=county.fips, status=item).model_dump_json()
+                    + "\n"
+                )
+            reports.append(await task)
+
+        if fixture and not reports and counties:
+            yield (
+                AnalyzeEvent(
+                    type="error", message="No saved report for this selection"
+                ).model_dump_json()
+                + "\n"
+            )
+            return
+
+        message = _analyze_message(
+            counties, truncated, settings.max_counties, skipped or None
+        )
+        yield (
+            AnalyzeEvent(
+                type="done",
+                response=AnalyzeResponse(
+                    counties=reports, truncated=truncated, message=message
+                ),
+            ).model_dump_json()
+            + "\n"
+        )
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
 
 
 # --- Site Scout -----------------------------------------------------------------------

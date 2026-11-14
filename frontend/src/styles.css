@@ -784,12 +784,46 @@ body.panel-resizing .map {
   display: grid;
   gap: 5px;
   font-size: 0.92rem;
+  max-height: min(42vh, 360px);
+  overflow: auto;
 }
 
 .loading-sources li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+}
+
+.loading-mark {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.loading-source-ok .loading-mark {
+  color: #15803d;
+}
+
+.loading-source-fail .loading-mark {
+  color: #b91c1c;
+}
+
+.loading-source-pending {
+  color: var(--muted);
+}
+
+.loading-source-ok .loading-source-label {
+  color: var(--text);
+}
+
+.loading-source-fail .loading-source-label {
+  color: var(--text);
 }
 
 .spinner {
@@ -799,6 +833,15 @@ body.panel-resizing .map {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
+}
+
+.funding-deadline {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.funding-deadline-passed {
+  color: #b91c1c;
 }
 
 .skeleton {
