@@ -69,6 +69,19 @@ AssetType = Literal[
     "non_powered_dam",  # dam in ORNL's hydropower potential assessment
 ]
 
+# What kind of thing a factor is. "workforce" is the county's local talent.
+FactorCategory = Literal[
+    "climate",
+    "energy",
+    "land",
+    "buildings",
+    "workforce",
+    "economy",
+    "community",
+    "infrastructure",
+    "agriculture",
+]
+
 FundingStatus = Literal["open", "open_with_deadlines", "paused", "uncertain", "unverified"]
 
 AttributeValue = float | int | str | bool | None
@@ -127,9 +140,9 @@ ProfileUnit = Literal[
 
 
 class ProfileFact(BaseModel):
-    """Something the county has to work with (its workforce, industries,
-    climate, land) rather than a gap. Shown for context and given to Gemini's
-    suggestions; it never flags a need or changes a score."""
+    """A measured figure about the county's workforce, industries, community,
+    climate or land, as profile.py builds it. Not sent to the browser as is:
+    factors.py turns each one into a `Factor`, and the report carries those."""
 
     id: str
     category: ProfileCategory
@@ -141,6 +154,23 @@ class ProfileFact(BaseModel):
     source: str
     # Plain-language specifics, e.g. what an occupation group includes.
     note: str | None = None
+
+
+class Factor(BaseModel):
+    """One fact about the county that a solution could draw on: its climate,
+    land, buildings, workforce, economy, community, energy system,
+    infrastructure or farms. Together with the mapped assets, the factors are
+    everything Gemini is given to build opportunities from. Values are
+    display-ready text so the same wording reaches the model and the panel."""
+
+    id: str
+    category: FactorCategory
+    label: str
+    value: str
+    # The same figure for the US, where there is one.
+    comparison: str | None = None
+    detail: str | None = None
+    source: str
 
 
 class Resources(BaseModel):
@@ -171,16 +201,33 @@ class FundingMatch(BaseModel):
 
 
 class Opportunity(BaseModel):
+    """A way to meet one or more needs with what the county has.
+
+    Written by Gemini from the needs, factors and sites ("gemini"), or, when
+    Gemini is unavailable or its answer is rejected, matched by the rules in
+    data/solutions.json ("rules"). Either way code supplies the score, the
+    estimates and the funding leads; Gemini writes none of them.
+    """
+
     id: str
-    solution_id: str
+    # A project type from data/solutions.json. Null for an idea of Gemini's that
+    # fits none of them; only a typed opportunity can get estimates and funding.
+    solution_id: str | None
     title: str
-    # Null for a county-wide opportunity with no single site, such as farm
-    # digesters: the farm census gives counts, not locations.
-    asset_id: str | None
+    # What would be done, and why it fits this county. Null for a rule match.
+    summary: str | None = None
+    rationale: str | None = None
+    first_steps: list[str] = Field(default_factory=list)
     need_ids: list[NeedId]
+    # The mapped sites it would use, the main one first. Empty for a county-wide
+    # opportunity.
+    asset_ids: list[str] = Field(default_factory=list)
+    # The factors it draws on.
+    factor_ids: list[str] = Field(default_factory=list)
     score: int = Field(ge=0, le=100)
     estimates: list[Estimate]
     funding: list[FundingMatch]
+    generated_by: Literal["gemini", "rules"]
 
 
 class OpportunityNote(BaseModel):
@@ -190,25 +237,10 @@ class OpportunityNote(BaseModel):
 
 class Narrative(BaseModel):
     summary: str
+    # Only the template writes these; a Gemini opportunity carries its own text.
     opportunity_notes: list[OpportunityNote]
     caveats: list[str]
     generated_by: Literal["gemini", "template"]
-
-
-class SuggestedSolution(BaseModel):
-    """A solution proposed by Gemini from a digest of this report. Unlike an
-    Opportunity it is not rule-matched: it has no score, estimate or funding,
-    and nothing in it has been checked for feasibility. Code only confirms that
-    its needs and sites exist and that it contains no number the digest lacks."""
-
-    id: str
-    title: str
-    summary: str
-    rationale: str
-    need_ids: list[NeedId]
-    # Sites the suggestion names. Empty for a county-wide suggestion.
-    asset_ids: list[str]
-    first_steps: list[str]
 
 
 class SourceStatus(BaseModel):
@@ -243,13 +275,11 @@ class CountyReport(BaseModel):
     # Asset types searched for and not found, so the panel can say so.
     missing_asset_types: list[AssetType] = Field(default_factory=list)
     resources: Resources
-    # What the county has to work with; see ProfileFact. Empty for reports
-    # saved before it existed.
-    profile: list[ProfileFact] = Field(default_factory=list)
+    # Everything known about the county that a solution could draw on.
+    factors: list[Factor] = Field(default_factory=list)
+    # Written by Gemini from the needs, factors and assets above. The `gemini`
+    # entry in `source_status` says why when they are rule matches instead.
     opportunities: list[Opportunity]
-    # Written by Gemini; empty when it was not used or every suggestion was
-    # rejected. The `gemini_solutions` entry in `source_status` says which.
-    suggested_solutions: list[SuggestedSolution] = Field(default_factory=list)
     narrative: Narrative
     source_status: list[SourceStatus]
 

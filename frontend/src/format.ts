@@ -2,6 +2,7 @@ import type {
   AssetType,
   Bounds,
   CountyFeature,
+  FactorCategory,
   FundingStatus,
   NeedTheme,
   NeedUnit,
@@ -137,10 +138,23 @@ export const SOURCE_NAMES: Record<string, string> = {
   state_energy: "State electricity bills and grid carbon (EIA, EPA eGRID)",
   dams: "ORNL non-powered dams",
   farms: "USDA farm census and EPA digester database",
+  earthengine: "Urban heat and tree canopy (Google Earth Engine)",
   svi: "CDC Social Vulnerability Index",
   climate: "Climate history (Open-Meteo)",
-  gemini: "Gemini narrative",
-  gemini_solutions: "Gemini suggested solutions",
+  gemini: "Gemini opportunities and brief",
+};
+
+/** Headings for the factor categories, in the order the backend sends them. */
+export const FACTOR_CATEGORY_LABELS: Record<FactorCategory, string> = {
+  climate: "Climate",
+  energy: "Energy",
+  land: "Land",
+  buildings: "Buildings",
+  workforce: "Workforce and local talent",
+  economy: "Economy",
+  community: "Community",
+  infrastructure: "Infrastructure",
+  agriculture: "Agriculture",
 };
 
 export const sourceName = (source: string): string => SOURCE_NAMES[source] ?? source;

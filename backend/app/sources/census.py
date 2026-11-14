@@ -1,7 +1,8 @@
 """Census ACS 5-year: county figures and the national baseline.
 
 Variable codes were confirmed against
-https://api.census.gov/data/2024/acs/acs5/variables.json on 2026-11-13.
+https://api.census.gov/data/2024/acs/acs5/variables.json on 2026-11-13
+(C24050, B15003 and B25002 on 2026-11-14).
 The API has required a key since at least that date: keyless calls get a 302
 to /data/missing_key.html.
 """
@@ -66,6 +67,9 @@ VARIABLES: list[str] = [
     "C24050_007E",  # Industry: transportation and warehousing, and utilities
     "C24050_057E",  # Occupation: natural resources, construction, and maintenance
     "C24050_071E",  # Occupation: production, transportation, and material moving
+    # Housing stock, for factors.py. Confirmed the same way on 2026-11-14.
+    "B25002_001E",  # Occupancy status: total housing units
+    "B25002_003E",  # Vacant
 ]
 assert len(VARIABLES) <= 49  # the API allows 50 per call, NAME included
 # In every cache key, so adding a variable does not serve 30-day-old rows without it.
@@ -100,6 +104,9 @@ class AcsMetrics:
     construction_industry_share: float | None = None
     manufacturing_industry_share: float | None = None
     transport_utilities_industry_share: float | None = None
+    # Housing stock, for factors.py.
+    housing_units: int | None = None
+    vacant_housing_share: float | None = None
 
 
 def parse_response(body: list[list[str | None]]) -> Values:
@@ -137,6 +144,7 @@ def _share(values: Values, numerators: list[str], denominator: str) -> float | N
 
 def metrics_from_values(v: Values) -> AcsMetrics:
     population = v.get("B01003_001E")
+    housing_units = v.get("B25002_001E")
     return AcsMetrics(
         population=int(population) if population is not None else None,
         median_household_income=v.get("B19013_001E"),
@@ -164,6 +172,8 @@ def metrics_from_values(v: Values) -> AcsMetrics:
         construction_industry_share=_share(v, ["C24050_003E"], "C24050_001E"),
         manufacturing_industry_share=_share(v, ["C24050_004E"], "C24050_001E"),
         transport_utilities_industry_share=_share(v, ["C24050_007E"], "C24050_001E"),
+        housing_units=int(housing_units) if housing_units is not None else None,
+        vacant_housing_share=_share(v, ["B25002_003E"], "B25002_001E"),
     )
 
 

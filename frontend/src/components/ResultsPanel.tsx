@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  ASSET_STYLES,
   formatAcres,
   formatDollars,
   formatShare,
@@ -8,12 +7,13 @@ import {
   sourceName,
 } from "../format";
 import type { AnalyzeResponse, Asset, CountyReport } from "../types";
+import { FactorList } from "./FactorList";
 import { NeedList } from "./NeedList";
 import { OpportunityCard } from "./OpportunityCard";
-import { ProfileList } from "./ProfileList";
-import { SuggestionCard } from "./SuggestionCard";
 
-type Tab = "opportunities" | "suggestions" | "needs" | "profile";
+// The three parts of a report: what is wrong, what the county has, and the
+// opportunities Gemini builds from the two.
+type Tab = "opportunities" | "needs" | "assets";
 
 const LOADING_SOURCES = [
   "Census ACS: county and national figures",
@@ -28,7 +28,7 @@ const LOADING_SOURCES = [
   "NLR: EV charging stations",
   "NLR PVWatts: solar yield",
   "Open-Meteo: ten years of weather",
-  "Gemini: written brief and suggested solutions",
+  "Gemini: opportunities and brief, written from the needs and assets",
 ];
 
 export function LoadingPanel({ label }: { label: string }) {
@@ -104,8 +104,8 @@ function ContextStats({ report }: { report: CountyReport }) {
 }
 
 function SourceNotice({ report }: { report: CountyReport }) {
-  // The Gemini entries are about how the brief and the suggestions were written,
-  // not missing data. The Suggestions tab reports its own failure.
+  // The Gemini entry is about who wrote the opportunities, not missing data.
+  // The Opportunities tab reports it.
   const failed = report.source_status.filter((s) => !s.ok && !s.source.startsWith("gemini"));
   if (failed.length === 0) return null;
   return (
@@ -126,39 +126,54 @@ function SourceNotice({ report }: { report: CountyReport }) {
   );
 }
 
-function SuggestionList({
+function OpportunityList({
   report,
-  assetsById,
   onShowOnMap,
 }: {
   report: CountyReport;
-  assetsById: Map<string, Asset>;
   onShowOnMap: (asset: Asset) => void;
 }) {
-  if (report.suggested_solutions.length === 0) {
-    const status = report.source_status.find((s) => s.source === "gemini_solutions");
+  const assetsById = new Map(report.assets.map((asset) => [asset.id, asset]));
+  const byGemini = report.opportunities.some((o) => o.generated_by === "gemini");
+  const gemini = report.source_status.find((s) => s.source === "gemini");
+
+  if (report.opportunities.length === 0) {
     return (
-      <p className="muted">
-        No suggestions for this report.
-        {status?.message && ` ${status.message}.`}
-      </p>
+      <div className="muted">
+        <p>
+          No opportunity could be written. An opportunity uses something the county has to meet a
+          flagged need. See the Needs and Assets tabs for what was found.
+        </p>
+        {gemini && !gemini.ok && gemini.message && <p>{gemini.message}.</p>}
+      </div>
     );
   }
   return (
     <>
-      <p className="muted">
-        Proposed by Gemini from a summary of this report, in addition to the rule-based
-        opportunities. Each one was checked to use only needs, sites and numbers from this report.
-        Feasibility, cost and funding were not checked.
-      </p>
-      {report.suggested_solutions.map((suggestion) => (
-        <SuggestionCard
-          key={suggestion.id}
-          suggestion={suggestion}
-          assets={suggestion.asset_ids
+      {byGemini ? (
+        <p className="muted">
+          Written by Gemini from this county's needs and assets. Each one was checked to use only
+          needs, sites and numbers from this report. The scores, estimates and funding leads are
+          added by code. Feasibility and cost were not checked.
+        </p>
+      ) : (
+        <div className="notice notice-info" role="status">
+          Gemini did not write these{gemini?.message ? ` (${gemini.message})` : ""}. Showing the
+          rule-based matches instead: each pairs a flagged need with a local site that can host a
+          standard fix for it.
+        </div>
+      )}
+      {report.opportunities.map((opportunity, i) => (
+        <OpportunityCard
+          key={opportunity.id}
+          rank={i + 1}
+          opportunity={opportunity}
+          assets={opportunity.asset_ids
             .map((id) => assetsById.get(id))
             .filter((asset): asset is Asset => asset !== undefined)}
           needs={report.needs}
+          factors={report.factors}
+          note={undefined}
           onShowOnMap={onShowOnMap}
         />
       ))}
@@ -174,19 +189,10 @@ function CountyView({
   onShowOnMap: (asset: Asset) => void;
 }) {
   const [tab, setTab] = useState<Tab>("opportunities");
-  const assetsById = new Map(report.assets.map((asset) => [asset.id, asset]));
-  // Template notes only restate what the card already shows, so they are
-  // displayed only when Gemini wrote them.
-  const notes = new Map(
-    report.narrative.generated_by === "gemini"
-      ? report.narrative.opportunity_notes.map((note) => [note.opportunity_id, note.text])
-      : [],
-  );
   const tabs: [Tab, string][] = [
     ["opportunities", `Opportunities (${report.opportunities.length})`],
-    ["suggestions", `Suggestions (${report.suggested_solutions.length})`],
     ["needs", `Needs (${report.needs.length})`],
-    ["profile", "Profile"],
+    ["assets", `Assets (${report.factors.length})`],
   ];
 
   return (
@@ -225,43 +231,13 @@ function CountyView({
       </div>
 
       <div role="tabpanel">
-        {tab === "opportunities" &&
-          (report.opportunities.length === 0 ? (
-            <div className="muted">
-              <p>
-                No opportunity could be matched. An opportunity needs a flagged need and a local
-                site that can host a fix for it. See the Needs tab for what was found.
-              </p>
-              {report.missing_asset_types.length > 0 && (
-                <p>
-                  Looked for and not found:{" "}
-                  {report.missing_asset_types
-                    .map((type) => ASSET_STYLES[type].plural.toLowerCase())
-                    .join(", ")}
-                  .
-                </p>
-              )}
-            </div>
-          ) : (
-            report.opportunities.map((opportunity, i) => (
-              <OpportunityCard
-                key={opportunity.id}
-                rank={i + 1}
-                opportunity={opportunity}
-                asset={
-                  opportunity.asset_id !== null ? assetsById.get(opportunity.asset_id) : undefined
-                }
-                needs={report.needs}
-                note={notes.get(opportunity.id)}
-                onShowOnMap={onShowOnMap}
-              />
-            ))
-          ))}
-        {tab === "suggestions" && (
-          <SuggestionList report={report} assetsById={assetsById} onShowOnMap={onShowOnMap} />
+        {tab === "opportunities" && (
+          <OpportunityList report={report} onShowOnMap={onShowOnMap} />
         )}
         {tab === "needs" && <NeedList needs={report.needs} />}
-        {tab === "profile" && <ProfileList profile={report.profile ?? []} />}
+        {tab === "assets" && (
+          <FactorList factors={report.factors} missingAssetTypes={report.missing_asset_types} />
+        )}
       </div>
 
       {report.narrative.caveats.length > 0 && (

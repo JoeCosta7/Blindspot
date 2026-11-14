@@ -1,9 +1,9 @@
 """County profile: what the county has to work with, as opposed to its needs.
 
 Pure functions, like needs.py. A profile fact never flags a need or changes a
-score; it is context for the official and an input to Gemini's suggestions
-(for example, a large construction workforce makes a weatherization program
-easier to staff).
+score. factors.py turns each one into a factor: it is shown in the Assets tab
+and given to Gemini, which builds the opportunities from it (for example, a
+large construction workforce makes a weatherization program easier to staff).
 """
 
 from __future__ import annotations

@@ -61,13 +61,17 @@ async def main(argv: list[str]) -> int:
                     f"{e.label} {format_number(e.value)} {e.unit}" for e in o.estimates
                 )
                 funds = ", ".join(f"{f.program_id} [{f.status}]" for f in o.funding)
-                print(f"  {o.score:3d}  {o.title}")
+                print(
+                    f"  {o.score:3d}  {o.title}  [{o.generated_by}: {o.solution_id or 'own idea'}]"
+                )
+                print(f"       needs:     {', '.join(o.need_ids)}")
+                print(f"       uses:      {', '.join(o.factor_ids + o.asset_ids) or 'none'}")
+                if o.summary:
+                    print(f"       what:      {o.summary}")
                 print(f"       estimates: {figures or 'none'}")
                 print(f"       funding:   {funds or 'none'}")
+            print(f"  factors: {len(report.factors)}")
             print(f"  narrative ({report.narrative.generated_by}): {report.narrative.summary}")
-            for suggestion in report.suggested_solutions:
-                needs = ", ".join(suggestion.need_ids)
-                print(f"  suggestion: {suggestion.title}  (needs: {needs})")
             for s in report.source_status:
                 state = "ok" if s.ok else "FAILED"
                 note = " (cached)" if s.cached else ""

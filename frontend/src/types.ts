@@ -86,30 +86,28 @@ export interface Asset {
   source: string;
 }
 
-export type ProfileCategory = "workforce" | "economy" | "community" | "climate" | "geography";
-export type ProfileUnit =
-  | "share"
-  | "years"
-  | "degree_days_f" // per year, against 65 F
-  | "days_per_year"
-  | "inches_per_year"
-  | "m_per_s"
-  | "percentile" // 0-1 rank among US counties
-  | "feet"
-  | "degrees";
+export type FactorCategory =
+  | "climate"
+  | "energy"
+  | "land"
+  | "buildings"
+  | "workforce"
+  | "economy"
+  | "community"
+  | "infrastructure"
+  | "agriculture";
 
-/** Something the county has to work with (workforce, industries, climate,
- * land) rather than a gap. Context only: never flags a need or changes a score. */
-export interface ProfileFact {
+/** One fact about the county that a solution could draw on. Values are
+ * display-ready text. */
+export interface Factor {
   id: string;
-  category: ProfileCategory;
+  category: FactorCategory;
   label: string;
-  value: number;
-  /** Null when there is no national figure to compare against. */
-  national_value: number | null;
-  unit: ProfileUnit;
+  value: string;
+  /** The same figure for the US, where there is one. */
+  comparison: string | null;
+  detail: string | null;
   source: string;
-  note: string | null;
 }
 
 export interface Resources {
@@ -138,16 +136,28 @@ export interface FundingMatch {
   source_url: string | null;
 }
 
+/** A way to meet one or more needs with what the county has. Written by Gemini
+ * from the needs, factors and sites, or matched by rule when Gemini is
+ * unavailable. Code supplies the score, estimates and funding either way. */
 export interface Opportunity {
   id: string;
-  solution_id: string;
+  /** A catalogued project type. Null for an idea of Gemini's that fits none;
+   * only a typed opportunity can get estimates and funding. */
+  solution_id: string | null;
   title: string;
-  /** Null for a county-wide opportunity with no single site. */
-  asset_id: string | null;
+  /** What would be done, and why it fits this county. Null for a rule match. */
+  summary: string | null;
+  rationale: string | null;
+  first_steps: string[];
   need_ids: NeedId[];
+  /** The mapped sites it would use, the main one first. Empty when county-wide. */
+  asset_ids: string[];
+  /** The factors it draws on. */
+  factor_ids: string[];
   score: number;
   estimates: Estimate[];
   funding: FundingMatch[];
+  generated_by: "gemini" | "rules";
 }
 
 export interface OpportunityNote {
@@ -157,22 +167,10 @@ export interface OpportunityNote {
 
 export interface Narrative {
   summary: string;
+  /** Only the template writes these; a Gemini opportunity carries its own text. */
   opportunity_notes: OpportunityNote[];
   caveats: string[];
   generated_by: "gemini" | "template";
-}
-
-/** Proposed by Gemini from a digest of the report. Not rule-matched: no score,
- * estimate or funding, and not checked for feasibility. */
-export interface SuggestedSolution {
-  id: string;
-  title: string;
-  summary: string;
-  rationale: string;
-  need_ids: NeedId[];
-  /** Sites the suggestion names. Empty for a county-wide suggestion. */
-  asset_ids: string[];
-  first_steps: string[];
 }
 
 export interface SourceStatus {
@@ -206,12 +204,11 @@ export interface CountyReport {
   /** Asset types searched for and not found. */
   missing_asset_types: AssetType[];
   resources: Resources;
-  /** Empty for reports saved before it existed. */
-  profile: ProfileFact[];
+  /** Everything known about the county that a solution could draw on. */
+  factors: Factor[];
+  /** Written by Gemini from the needs, factors and assets. The `gemini` entry
+   * in `source_status` says why when they are rule matches instead. */
   opportunities: Opportunity[];
-  /** Empty when Gemini was not used or every suggestion was rejected; the
-   * `gemini_solutions` entry in `source_status` says which. */
-  suggested_solutions: SuggestedSolution[];
   narrative: Narrative;
   source_status: SourceStatus[];
 }

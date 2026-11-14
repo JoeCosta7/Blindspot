@@ -14,7 +14,8 @@ You need three keys before anything useful runs:
 | `NLR_API_KEY` | `backend/.env` | Solar yield and EV stations. |
 | `VITE_MAPBOX_TOKEN` | `frontend/.env` | The map. Search and reports work without it. |
 
-`GEMINI_API_KEY` is optional: without it the brief comes from a fixed template.
+`GEMINI_API_KEY` writes the opportunities and the brief. Without it the report
+still loads, with opportunities from the fixed rules and a template brief.
 
 ```bash
 # backend (Python 3.11+; developed on 3.14)
@@ -37,7 +38,7 @@ to `backend/data/fixtures/`, and `http://localhost:5173/?fixture=1` serves them.
 
 ## Status
 
-Working and tested (95 backend tests; frontend builds in strict mode):
+Working and tested (146 backend tests; frontend builds in strict mode):
 
 - `prep_data.py` builds all seven national files from the real sources.
 - `POST /api/analyze` for a county or a box, with every source under a 15 s
@@ -53,13 +54,15 @@ Not yet run against the real service:
 
 - **Map interaction**: clicking a county, hover, popups and box select have
   not been driven. Selection so far has gone through the search box.
-- **Gemini**: no key. The call, number validation, caching and fallback are
-  tested with a fake model.
 
-`backend/data/fixtures/54055.json` (Mercer County, WV) is a real report with
-Census data, saved on 2026-11-14 before public buildings came from Geoapify:
-it has none, so no resilience hub, clinic or charging opportunity. Regenerate
-it with `python scripts/warm_cache.py 54055`.
+Gemini was run for Mercer County, WV and Glacier County, MT on 2026-11-14 with
+`gemini-3.5-flash-lite`; the rest of its handling is tested with a fake model.
+
+`backend/data/fixtures/54055.json` (Mercer County, WV) is a real report saved
+on 2026-11-14 with Gemini-written opportunities, on a machine without the
+Geoapify and Earth Engine keys: it has no schools or libraries, and no heat,
+tree-canopy, land-cover or terrain figures. Regenerate it with
+`python scripts/warm_cache.py 54055` where those keys are set.
 
 ## Stretch sources
 
@@ -80,7 +83,7 @@ Things to know about them:
   county figure. The panel labels the bar "State average". The eGRID rate is
   for power generated in the state, not power used there.
 - **Farm digesters have no map point.** The census gives counts, not farm
-  locations, so that opportunity is county-wide and `asset_id` is null.
+  locations, so that opportunity is county-wide and `asset_ids` is empty.
 - **Hog threshold.** EPA's screening size is 500 cows or 2,000 hogs. The census
   has no 2,000-hog class by county, so a county with only 1,000-hog farms is
   `elevated`, not `high`.
@@ -152,16 +155,39 @@ programs. EIA's Table 5A gives 863 kWh a month for 2024 (10,359 a year);
   sustainability track, made because the EV charging gap sits at severity 100
   in most counties and led almost every report. There is no water-quality
   source: water enters only through flood and drought in the hazard rating.
-- **AI-suggested solutions.** `suggestions.py` has Gemini propose up to four
-  further solutions per county, shown in their own "Suggestions" tab. This departs
-  from rule 2 of the plan: Gemini chooses these solutions. It is sent a digest,
-  not the report (flagged needs, headline figures, and the best three sites of
-  each type with exact counts), and still supplies no numbers or funding
-  programs: a suggestion that names a need, site or number missing from the
-  digest is dropped. Set `MAX_AI_SOLUTIONS=0` to turn it off.
-- **Contract additions** in `models.py`: `Need.detail`, `asset_counts`,
-  `missing_asset_types`, extra `context` and `resources` fields, and `agency`
-  and `key_terms` on funding matches. `Opportunity.asset_id` can be null.
+- **Gemini writes the opportunities.** This replaces the rule matcher as the
+  main path and departs from rule 2 of the plan. A report now has three parts:
+  1. **Needs** (`needs.py`), unchanged: problems flagged from the data.
+  2. **Assets and factors** (`factors.py`): what the county has to work with.
+     Mapped sites as before, plus county-level facts on climate, energy, land,
+     buildings, workforce, economy, community, infrastructure and agriculture,
+     each with the US figure beside it where one exists. Shown in the Assets
+     tab. The county profile (`profile.py`: trades and industries, schooling,
+     broadband, the CDC Social Vulnerability Index, ten years of Open-Meteo
+     weather, and Earth Engine land cover and terrain) is folded into this
+     list, so there is one list and no separate Profile tab or `profile` field.
+  3. **Opportunities** (`opportunities.py`): one Gemini call per county is sent
+     a digest of parts 1 and 2 and returns up to `MAX_OPPORTUNITIES` projects
+     plus the county summary. Each names the needs it answers, the factors and
+     sites it draws on, and first steps.
+
+  Code still supplies every number. An opportunity that names a need, factor,
+  site or number missing from the digest is dropped. The score comes from the
+  priority of the needs addressed. Size estimates and funding leads are added
+  only when Gemini labels the project as a type from `solutions.json` and
+  names a site of a kind that type is built at; its other ideas show neither.
+  With no key, an error, a timeout or nothing valid, the rule matches from
+  `matching.py` are served instead and marked `generated_by: "rules"`.
+- **Workforce and housing figures** come from extra ACS variables, checked
+  against the 2024 variable list on 2026-11-14: `C24050` (industry and
+  occupation), `B06009` (education), `B28002` (broadband), `B01002` (median
+  age) and `B25002` (vacancy).
+- **Contract additions** in `models.py`: `Need.detail`, `Need.priority`,
+  `factors`, `asset_counts`, `missing_asset_types`, extra `context` and
+  `resources` fields, and `agency` and `key_terms` on funding matches. An
+  opportunity has `asset_ids` and `factor_ids` (either can be empty),
+  `summary`, `rationale`, `first_steps` and `generated_by`; `solution_id` is
+  null for a project that is not in the catalogue.
 - **Funding table.** Seven entries, all from section 11. Public EV charging and
   landfill gas have no program yet, and no state programs are entered.
 - `sources/_parquet.py` and `frontend/src/format.ts` are small shared helpers

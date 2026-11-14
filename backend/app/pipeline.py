@@ -1,5 +1,14 @@
-"""analyze_county(): run every source concurrently, then needs -> matching ->
-estimates -> funding -> narrative and Gemini's suggested solutions.
+"""analyze_county(): the three parts of a report, in order.
+
+1. Needs: every source runs concurrently, then needs.py flags the county's
+   environmental and socioeconomic problems.
+2. Assets and factors: the mapped sites, and factors.py's county-level facts
+   (climate, land, buildings, workforce, economy, community, energy,
+   infrastructure), which include everything profile.py measures.
+3. Opportunities: Gemini writes them from 1 and 2 (opportunities.py). Code
+   then adds the score, the estimates and the funding leads. If Gemini is
+   unavailable or its answer is rejected, the rule matches from matching.py
+   are served instead.
 
 A failed source never fails the request. Each one runs under a timeout and
 reports into `source_status`; the rest of the report is built from whatever
@@ -13,11 +22,12 @@ import logging
 import string
 from collections import Counter
 from collections.abc import Awaitable, Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import httpx
 
-from app import estimates, funding, matching, narrative, needs, profile, suggestions
+from app import estimates, factors, funding, matching, narrative, needs, opportunities, profile
 from app.config import Settings
 from app.geo import County
 from app.models import (
@@ -66,8 +76,7 @@ SOURCE_NAMES = {
     "earthengine": "Urban heat and tree canopy (Google Earth Engine)",
     "svi": "CDC Social Vulnerability Index",
     "climate": "Climate history (Open-Meteo)",
-    "gemini": "Gemini narrative",
-    "gemini_solutions": "Gemini suggested solutions",
+    "gemini": "Gemini opportunities and brief",
 }
 
 BUILDING_TYPES = ("school", "library", "college")
@@ -249,6 +258,117 @@ def _cap_for_map(groups: list[tuple[list[Asset], int]], must_include: set[str]) 
     return shown
 
 
+# --- opportunities ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Proposal:
+    """An opportunity before code adds its estimates and funding leads."""
+
+    id: str
+    title: str
+    # The project type, when it is one data/solutions.json knows.
+    solution: matching.Solution | None
+    needs: list[Need]
+    # The sites it uses. For a typed proposal the first is the host the
+    # estimates are sized on.
+    assets: list[Asset]
+    score: int
+    generated_by: Literal["gemini", "rules"]
+    summary: str | None = None
+    rationale: str | None = None
+    first_steps: tuple[str, ...] = ()
+    factor_ids: tuple[str, ...] = ()
+
+    @property
+    def host(self) -> Asset | None:
+        return self.assets[0] if self.solution and self.assets else None
+
+
+def proposals_from_drafts(
+    drafts: list[opportunities.Draft],
+    flagged: list[Need],
+    assets: list[Asset],
+    solutions: tuple[matching.Solution, ...],
+) -> list[_Proposal]:
+    """Gemini's drafts, scored and ranked by code. A draft keeps its project
+    type only if it names a site that type can be built at; without one there
+    is nothing to size, so it is treated as an idea of Gemini's own."""
+    assets_by_id = {a.id: a for a in assets}
+    solutions_by_id = {s.id: s for s in solutions}
+    proposals: list[_Proposal] = []
+    for number, draft in enumerate(drafts, start=1):
+        addressed = [n for n in flagged if n.id in draft.need_ids]
+        named = [assets_by_id[i] for i in draft.asset_ids if i in assets_by_id]
+        solution = solutions_by_id.get(draft.solution_id or "")
+        factor = 1.0
+        if solution is not None and solution.asset_kind != "county":
+            hosts = [
+                a
+                for a in named
+                if a.type in solution.hosts
+                and (solution.host_requires is None or a.attributes.get(solution.host_requires))
+            ]
+            if hosts:
+                named = [hosts[0], *(a for a in named if a.id != hosts[0].id)]
+                if not estimates.has_estimate_inputs(solution.asset_kind, hosts[0].attributes):
+                    factor = matching.MISSING_DATA_FACTOR
+            else:
+                solution = None
+        proposals.append(
+            _Proposal(
+                id=f"ai:{number}",
+                title=draft.title,
+                solution=solution,
+                needs=addressed,
+                assets=named,
+                score=round(matching.need_score(addressed) * factor),
+                generated_by="gemini",
+                summary=draft.summary,
+                rationale=draft.rationale,
+                first_steps=tuple(draft.first_steps),
+                factor_ids=tuple(draft.factor_ids),
+            )
+        )
+    proposals.sort(key=lambda p: -p.score)  # stable: Gemini's order breaks ties
+    return proposals
+
+
+def proposals_from_matches(matches: list[matching.Match]) -> list[_Proposal]:
+    return [
+        _Proposal(
+            id=match.id,
+            title=match.title,
+            solution=match.solution,
+            needs=match.needs,
+            assets=[match.asset] if match.asset else [],
+            score=match.score,
+            generated_by="rules",
+        )
+        for match in matches
+    ]
+
+
+def size_estimates(
+    solution_id: str, asset: Asset, solar_yield: float | None, site_specific: bool
+) -> list[Estimate]:
+    """The labelled estimates for one project type at one site."""
+    if solution_id == "community_solar":
+        acres = asset.attributes.get("acres")
+        return estimates.solar_on_land(
+            float(acres) if isinstance(acres, (int, float)) else None, solar_yield, site_specific
+        )
+    if solution_id == "resilience_hub":
+        return estimates.resilience_hub(solar_yield, site_specific)
+    if solution_id == "landfill_gas_energy":
+        return estimates.landfill_gas(asset.attributes)
+    if solution_id == "small_hydro":
+        return estimates.hydro_at_dam(asset.attributes)
+    if solution_id == "wind_on_reclaimed_land":
+        return estimates.wind_on_land(asset.attributes)
+    return []
+
+
 # --- the pipeline ---------------------------------------------------------------
 
 
@@ -375,26 +495,78 @@ async def analyze_county(
             flagged.append(extra)
     flagged = needs.prioritize(flagged, settings)
 
-    # --- matching -------------------------------------------------------------
-    solutions = matching.load_solutions(data_dir / "solutions.json")
-    matches = matching.match_opportunities(
-        flagged,
-        all_assets,
-        solutions,
-        centroid,
-        settings.assets_per_solution,
-        settings.max_opportunities,
+    # --- assets and factors: what the county has to work with --------------------
+    # The profile (trades and industries, social vulnerability, weather history,
+    # land cover and terrain) joins the other factors, so Gemini builds the
+    # opportunities from all of it.
+    county_profile = (
+        (profile.acs_profile(acs, acs_national, settings) if acs else [])
+        + profile.svi_profile(svi_row)
+        + profile.climate_profile(climate)
+        + profile.land_profile(ee_metrics)
     )
+    county_factors = factors.build_factors(
+        acs=acs,
+        acs_national=acs_national,
+        energy=energy,
+        nri_row=nri_row,
+        solar_yield=centroid_yield,
+        farm_row=farm_row,
+        ee_metrics=ee_metrics,
+        assets=all_assets,
+        settings=settings,
+        profile=county_profile,
+    )
+    counts = Counter(a.type for a in all_assets)
+    searched: list[tuple[str, tuple[str, ...]]] = [
+        ("repowering", repowering.SITE_TYPES),
+        ("lmop", ("lmop_landfill",)),
+        ("geoapify", BUILDING_TYPES),
+        ("ev_stations", ("ev_station",)),
+        ("dams", ("non_powered_dam",)),
+    ]
+    missing = [t for source, types in searched if ok[source] for t in types if counts[t] == 0]
+
+    # --- opportunities: Gemini writes them from the needs, factors and sites ------
+    solutions = matching.load_solutions(data_dir / "solutions.json")
+    digest = opportunities.build_digest(
+        county.name,
+        county.state,
+        flagged,
+        county_factors,
+        all_assets,
+        missing,
+        solutions,
+        settings.digest_sites_per_type,
+    )
+    failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
+    plan, gemini_status = await opportunities.write_opportunities(digest, settings)
+    statuses.append(gemini_status)
+    if plan is not None:
+        proposals = proposals_from_drafts(plan.drafts, flagged, all_assets, solutions)
+    else:  # no key, an error, a timeout or nothing usable: the rule matches
+        proposals = proposals_from_matches(
+            matching.match_opportunities(
+                flagged,
+                all_assets,
+                solutions,
+                centroid,
+                settings.assets_per_solution,
+                settings.max_opportunities,
+            )
+        )
 
     # --- site-specific solar yield for the top sites ----------------------------
     solar_assets: dict[str, Asset] = {}
-    for match in matches:
+    for proposal in proposals:
+        host = proposal.host
         if (
-            match.asset is not None
-            and match.solution.id in SOLAR_SOLUTIONS
+            host is not None
+            and proposal.solution is not None
+            and proposal.solution.id in SOLAR_SOLUTIONS
             and len(solar_assets) < settings.max_pvwatts_sites
         ):
-            solar_assets.setdefault(match.asset.id, match.asset)
+            solar_assets.setdefault(host.id, host)
     site_results = await asyncio.gather(
         *(
             _run(
@@ -412,57 +584,42 @@ async def analyze_county(
     }
 
     # --- estimates and funding -------------------------------------------------
+    # Only a typed opportunity gets these: an idea of Gemini's own has no
+    # project type to size or to look up in the funding table.
     programs = funding.load_programs(data_dir / "funding_programs.json")
-    opportunities: list[Opportunity] = []
-    for match in matches:
-        asset = match.asset
-        site_yield = site_yields.get(asset.id) if asset else None
-        solar_yield = site_yield if site_yield is not None else centroid_yield
-        figures: list[Estimate]
-        if asset is None:
-            figures = []  # county-wide: no site to size
-        elif match.solution.id == "community_solar":
-            acres = asset.attributes.get("acres")
-            figures = estimates.solar_on_land(
-                float(acres) if isinstance(acres, (int, float)) else None,
-                solar_yield,
+    built: list[Opportunity] = []
+    for proposal in proposals:
+        solution, host = proposal.solution, proposal.host
+        figures: list[Estimate] = []
+        if solution is not None and host is not None:
+            site_yield = site_yields.get(host.id)
+            figures = size_estimates(
+                solution.id,
+                host,
+                site_yield if site_yield is not None else centroid_yield,
                 site_yield is not None,
             )
-        elif match.solution.id == "resilience_hub":
-            figures = estimates.resilience_hub(solar_yield, site_yield is not None)
-        elif match.solution.id == "landfill_gas_energy":
-            figures = estimates.landfill_gas(asset.attributes)
-        elif match.solution.id == "small_hydro":
-            figures = estimates.hydro_at_dam(asset.attributes)
-        elif match.solution.id == "wind_on_reclaimed_land":
-            figures = estimates.wind_on_land(asset.attributes)
-        else:
-            figures = []
-        opportunities.append(
+        built.append(
             Opportunity(
-                id=match.id,
-                solution_id=match.solution.id,
-                title=match.title,
-                asset_id=asset.id if asset else None,
-                need_ids=[n.id for n in match.needs],
-                score=match.score,
+                id=proposal.id,
+                solution_id=solution.id if solution else None,
+                title=proposal.title,
+                summary=proposal.summary,
+                rationale=proposal.rationale,
+                first_steps=list(proposal.first_steps),
+                need_ids=[n.id for n in proposal.needs],
+                asset_ids=[a.id for a in proposal.assets],
+                factor_ids=list(proposal.factor_ids),
+                score=proposal.score,
                 estimates=figures,
-                funding=funding.match_funding(
-                    programs, match.solution.id, asset.type if asset else None
+                funding=(
+                    funding.match_funding(programs, solution.id, host.type if host else None)
+                    if solution
+                    else []
                 ),
+                generated_by=proposal.generated_by,
             )
         )
-
-    # --- what the map gets, and what was looked for but not found ----------------
-    counts = Counter(a.type for a in all_assets)
-    searched: list[tuple[str, tuple[str, ...]]] = [
-        ("repowering", repowering.SITE_TYPES),
-        ("lmop", ("lmop_landfill",)),
-        ("geoapify", BUILDING_TYPES),
-        ("ev_stations", ("ev_station",)),
-        ("dams", ("non_powered_dam",)),
-    ]
-    missing = [t for source, types in searched if ok[source] for t in types if counts[t] == 0]
 
     population = acs.population if acs else None
     context = CountyContext(
@@ -480,38 +637,13 @@ async def analyze_county(
         land_in_farms_acres=farm_row.get("land_in_farms_acres") if farm_row else None,
         cropland_acres=farm_row.get("cropland_acres") if farm_row else None,
     )
-    county_profile = (
-        (profile.acs_profile(acs, acs_national, settings) if acs else [])
-        + profile.svi_profile(svi_row)
-        + profile.climate_profile(climate)
-        + profile.land_profile(ee_metrics)
-    )
 
-    # --- Gemini: the brief and the suggested solutions, at the same time ----------
-    failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
-    payload = narrative.build_payload(county.name, county.state, flagged, opportunities)
-    digest = suggestions.build_digest(
-        county.name,
-        county.state,
-        population,
-        context,
-        resources,
-        flagged,
-        all_assets,
-        missing,
-        opportunities,
-        settings.digest_sites_per_type,
-        county_profile,
-    )
-    (brief, gemini_status), (suggested, suggestions_status) = await asyncio.gather(
-        narrative.write_narrative(payload, failed, settings),
-        suggestions.suggest_solutions(digest, settings),
-    )
-    statuses += [gemini_status, suggestions_status]
+    # --- the brief: Gemini's summary from the same call, or the template ----------
+    payload = narrative.build_payload(county.name, county.state, flagged, built)
+    brief = narrative.compose(payload, failed, plan.summary if plan else None)
 
     # --- what the map gets: capped, but never without a site the report names -----
-    used = {o.asset_id for o in opportunities if o.asset_id}
-    used.update(asset_id for s in suggested for asset_id in s.asset_ids)
+    used = {asset_id for o in built for asset_id in o.asset_ids}
     shown_assets = _cap_for_map(
         [
             (sites, settings.max_sites_per_county),
@@ -534,9 +666,8 @@ async def analyze_county(
         asset_counts=dict(counts),
         missing_asset_types=missing,  # type: ignore[arg-type]
         resources=resources,
-        profile=county_profile,
-        opportunities=opportunities,
-        suggested_solutions=suggested,
+        factors=county_factors,
+        opportunities=built,
         narrative=brief,
         source_status=statuses,
     )

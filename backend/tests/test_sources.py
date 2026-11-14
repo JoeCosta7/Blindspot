@@ -45,9 +45,14 @@ def test_census_metrics_formulas():
             "B08303_011E": "60",
             "B08303_012E": "30",
             "B08303_013E": "10",
+            "B25002_001E": "22000",
+            "B25002_003E": "2200",
         }
     )
     m = census.metrics_from_values(census.parse_response(body))
+
+    # The housing stock, for factors.py.
+    assert (m.housing_units, m.vacant_housing_share) == (22_000, pytest.approx(0.10))
 
     assert m.population == 50_000
     assert m.median_household_income == 61_000
@@ -71,6 +76,8 @@ def test_census_profile_formulas():
             "C24050_001E": "2000",
             "C24050_002E": "100",
             "C24050_003E": "160",
+            "C24050_004E": "240",
+            "C24050_007E": "60",
             "C24050_057E": "300",
             "C24050_071E": "400",
         }
@@ -85,6 +92,8 @@ def test_census_profile_formulas():
     assert m.production_transport_occupation_share == pytest.approx(0.20)
     assert m.agriculture_mining_industry_share == pytest.approx(0.05)
     assert m.construction_industry_share == pytest.approx(0.08)
+    assert m.manufacturing_industry_share == pytest.approx(0.12)
+    assert m.transport_utilities_industry_share == pytest.approx(0.03)
 
 
 def test_census_variables_fit_one_call():

@@ -1,5 +1,10 @@
 """Need + asset -> opportunity, ranked (CLAUDE.md section 9). Pure functions.
 
+Gemini now writes the opportunities (opportunities.py). This module is used
+for three things: the catalogue of project types Gemini may label an
+opportunity with, the score, and the rule matches served when Gemini is
+unavailable or its answer is rejected.
+
 The rules live in data/solutions.json. `hosts` is ordered: for buildings the
 first listed type is preferred, which keeps three building solutions from all
 landing on the same school.
@@ -120,6 +125,15 @@ def pick_assets(
     return sorted(candidates, key=key)[:limit]
 
 
+def need_score(needs: list[Need]) -> float:
+    """How much the needs an opportunity addresses count, 0 to 100: halfway
+    between their highest priority and their mean priority. The mean alone
+    marks a solution down for also answering lesser needs, and the highest
+    alone ignores them."""
+    priorities = [n.priority for n in needs]
+    return (max(priorities) + sum(priorities) / len(priorities)) / 2
+
+
 def match_opportunities(
     needs: list[Need],
     assets: list[Asset],
@@ -128,13 +142,11 @@ def match_opportunities(
     assets_per_solution: int = 2,
     max_opportunities: int = 6,
 ) -> list[Match]:
-    """Up to `max_opportunities`, ranked by score.
+    """Up to `max_opportunities`, ranked by score. These are the rule matches
+    the report falls back to when Gemini does not write the opportunities.
 
-    score = need score * asset factor. The need score is halfway between the
-    highest priority among the matched needs and their mean priority: the mean
-    alone marks a solution down for also answering lesser needs, and the highest
-    alone ignores them. The factor is 1.0 if the asset has the data its estimate
-    needs and 0.7 otherwise.
+    score = need score * asset factor. The factor is 1.0 if the asset has the
+    data its estimate needs and 0.7 otherwise.
     A need's priority is its severity weighted by theme (needs.prioritize), so
     a solution that only answers transportation needs ranks below one that
     answers energy, pollution or resilience needs of the same severity.
@@ -148,8 +160,7 @@ def match_opportunities(
         matched = [n for n in needs if n.id in solution.triggers]
         if not matched:
             continue
-        priorities = [n.priority for n in matched]
-        need_score = (max(priorities) + sum(priorities) / len(priorities)) / 2
+        base = need_score(matched)
         picked: list[Asset | None]
         if solution.asset_kind == "county":
             picked = [None]
@@ -158,7 +169,7 @@ def match_opportunities(
         for rank, asset in enumerate(picked):
             has_data = has_estimate_inputs(solution.asset_kind, asset.attributes if asset else {})
             factor = 1.0 if has_data else MISSING_DATA_FACTOR
-            score = round(need_score * factor)
+            score = round(base * factor)
             match = Match(solution=solution, asset=asset, needs=matched, score=score)
             matches.append(((rank, -score, order), match))
     matches.sort(key=lambda m: m[0])

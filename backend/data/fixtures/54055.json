@@ -20,21 +20,23 @@
    "national_value": 767.2,
    "unit": "lb_co2_per_mwh",
    "severity": 100,
+   "priority": 100,
    "level": "high",
    "source": "EPA eGRID2023 (state average)",
    "detail": "State average for WV: carbon dioxide per megawatt-hour generated in the state. Power crosses state lines, so this is not exactly what the county's homes use."
   },
   {
-   "id": "ev_charging_gap",
-   "label": "Few or no public EV chargers",
-   "theme": "transportation",
-   "value": 1.0245376773730854,
-   "national_value": 2.5149400309472787,
-   "unit": "per_10k_residents",
-   "severity": 100,
+   "id": "landfill_gas_uncaptured",
+   "label": "Landfill with no gas energy project",
+   "theme": "waste",
+   "value": 1.0,
+   "national_value": null,
+   "unit": "count",
+   "severity": 75,
+   "priority": 75,
    "level": "high",
-   "source": "NLR Alternative Fuel Stations",
-   "detail": "6 public charging stations in the county."
+   "source": "EPA LMOP (September 2024)",
+   "detail": "EPA candidate landfill: Mercer County Landfill."
   },
   {
    "id": "low_income",
@@ -44,6 +46,7 @@
    "national_value": 80734.0,
    "unit": "usd",
    "severity": 100,
+   "priority": 70,
    "level": "high",
    "source": "ACS 2020-2024",
    "detail": null
@@ -56,33 +59,23 @@
    "national_value": 0.055939517589784424,
    "unit": "share",
    "severity": 100,
+   "priority": 70,
    "level": "high",
    "source": "ACS 2020-2024",
    "detail": null
   },
   {
-   "id": "landfill_gas_uncaptured",
-   "label": "Landfill with no gas energy project",
-   "theme": "waste",
-   "value": 1.0,
-   "national_value": null,
-   "unit": "count",
-   "severity": 75,
+   "id": "ev_charging_gap",
+   "label": "Few or no public EV chargers",
+   "theme": "transportation",
+   "value": 1.0245376773730854,
+   "national_value": 2.5123722727268913,
+   "unit": "per_10k_residents",
+   "severity": 100,
+   "priority": 50,
    "level": "high",
-   "source": "EPA LMOP (September 2024)",
-   "detail": "EPA candidate landfill: Mercer County Landfill."
-  },
-  {
-   "id": "old_housing",
-   "label": "Housing built before 1980",
-   "theme": "energy",
-   "value": 0.5982961322201397,
-   "national_value": 0.49652532591555765,
-   "unit": "share",
-   "severity": 41,
-   "level": "elevated",
-   "source": "ACS 2020-2024",
-   "detail": null
+   "source": "NLR Alternative Fuel Stations",
+   "detail": "6 public charging stations in the county."
   },
   {
    "id": "hazard_risk",
@@ -92,9 +85,23 @@
    "national_value": null,
    "unit": "rating",
    "severity": 40,
+   "priority": 40,
    "level": "elevated",
    "source": "FEMA National Risk Index (December 2025)",
    "detail": "Inland flooding: Relatively Moderate"
+  },
+  {
+   "id": "old_housing",
+   "label": "Housing built before 1980",
+   "theme": "energy",
+   "value": 0.5982961322201397,
+   "national_value": 0.49652532591555765,
+   "unit": "share",
+   "severity": 41,
+   "priority": 29,
+   "level": "elevated",
+   "source": "ACS 2020-2024",
+   "detail": null
   },
   {
    "id": "drive_alone",
@@ -104,6 +111,7 @@
    "national_value": 0.687856966335113,
    "unit": "share",
    "severity": 38,
+   "priority": 19,
    "level": "elevated",
    "source": "ACS 2020-2024",
    "detail": null
@@ -1669,262 +1677,428 @@
   "land_in_farms_acres": 60763.0,
   "cropland_acres": 10713.0
  },
+ "factors": [
+  {
+   "id": "solar_resource",
+   "category": "climate",
+   "label": "Solar resource",
+   "value": "1,306 kWh a year per kW of panels",
+   "comparison": null,
+   "detail": "Typical-year output of a fixed south-facing array at the county center.",
+   "source": "NLR PVWatts v8"
+  },
+  {
+   "id": "natural_hazards",
+   "category": "climate",
+   "label": "Natural hazard risk ratings",
+   "value": "Inland flooding: Relatively Moderate; Wildfire: Very Low; Drought: Very Low; Heat wave: Very Low",
+   "comparison": null,
+   "detail": "FEMA rates each hazard from Very Low to Very High against other US counties.",
+   "source": "FEMA National Risk Index (December 2025)"
+  },
+  {
+   "id": "heating_degree_days",
+   "category": "climate",
+   "label": "Heating degree days a year",
+   "value": "4,795 degree days",
+   "comparison": null,
+   "detail": "How much heating homes need: the yearly sum of degrees the daily mean temperature falls below 65 F, averaged over 2016-2025. Modelled weather for one point at the county's center, not a weather station; hills and valleys in the county can differ.",
+   "source": "Open-Meteo historical weather (ERA5 reanalysis), 2016-2025"
+  },
+  {
+   "id": "cooling_degree_days",
+   "category": "climate",
+   "label": "Cooling degree days a year",
+   "value": "682 degree days",
+   "comparison": null,
+   "detail": "How much cooling homes need: the yearly sum of degrees the daily mean temperature rises above 65 F, averaged over 2016-2025. Modelled weather for one point at the county's center, not a weather station; hills and valleys in the county can differ.",
+   "source": "Open-Meteo historical weather (ERA5 reanalysis), 2016-2025"
+  },
+  {
+   "id": "hot_days",
+   "category": "climate",
+   "label": "Days at 90 F or hotter a year",
+   "value": "1 day a year",
+   "comparison": null,
+   "detail": "Averaged over 2016-2025. Modelled weather for one point at the county's center, not a weather station; hills and valleys in the county can differ.",
+   "source": "Open-Meteo historical weather (ERA5 reanalysis), 2016-2025"
+  },
+  {
+   "id": "precipitation",
+   "category": "climate",
+   "label": "Rain and snow (as water) a year",
+   "value": "45 inches a year",
+   "comparison": null,
+   "detail": "Averaged over 2016-2025. Modelled weather for one point at the county's center, not a weather station; hills and valleys in the county can differ.",
+   "source": "Open-Meteo historical weather (ERA5 reanalysis), 2016-2025"
+  },
+  {
+   "id": "snowfall",
+   "category": "climate",
+   "label": "Snowfall a year",
+   "value": "15 inches a year",
+   "comparison": null,
+   "detail": "Averaged over 2016-2025. Modelled weather for one point at the county's center, not a weather station; hills and valleys in the county can differ.",
+   "source": "Open-Meteo historical weather (ERA5 reanalysis), 2016-2025"
+  },
+  {
+   "id": "wind_speed_100m",
+   "category": "climate",
+   "label": "Average wind speed at 100 m (turbine height)",
+   "value": "6.1 m/s",
+   "comparison": null,
+   "detail": "Average over 2025. A screening figure only: wind projects need on-site measurement. Modelled weather for one point at the county's center, not a weather station; hills and valleys in the county can differ.",
+   "source": "Open-Meteo historical weather (ERA5 reanalysis), 2016-2025"
+  },
+  {
+   "id": "electricity_price",
+   "category": "energy",
+   "label": "Household electricity price",
+   "value": "15.1 cents per kWh",
+   "comparison": "US: 16.5 cents per kWh",
+   "detail": "State average for WV; not published by county.",
+   "source": "EIA residential sales data, 2024 (state average)"
+  },
+  {
+   "id": "electricity_bill",
+   "category": "energy",
+   "label": "Average household electricity bill",
+   "value": "$155 a month",
+   "comparison": "US: $142 a month",
+   "detail": "State average for WV; not published by county.",
+   "source": "EIA residential sales data, 2024 (state average)"
+  },
+  {
+   "id": "grid_carbon",
+   "category": "energy",
+   "label": "Carbon intensity of electricity generated in the state",
+   "value": "1,954 pounds of CO2 per MWh",
+   "comparison": "US: 767 pounds of CO2 per MWh",
+   "detail": "State average for WV; not published by county.",
+   "source": "EPA eGRID2023 (state average)"
+  },
+  {
+   "id": "electric_heat",
+   "category": "energy",
+   "label": "Homes heated with electricity",
+   "value": "67.4%",
+   "comparison": "US: 41.3%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "delivered_fuel_heat",
+   "category": "energy",
+   "label": "Homes heated with fuel oil or propane",
+   "value": "6.4%",
+   "comparison": "US: 8.8%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "sites_brownfield",
+   "category": "land",
+   "label": "Brownfields",
+   "value": "8 sites; 95 acres across the 8 with a recorded size",
+   "comparison": null,
+   "detail": "Screened by EPA for renewable energy potential.",
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "sites_landfill",
+   "category": "land",
+   "label": "Landfills (EPA RE-Powering list)",
+   "value": "1 site; 38 acres across the 1 with a recorded size",
+   "comparison": null,
+   "detail": "Screened by EPA for renewable energy potential.",
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "sites_mine_land",
+   "category": "land",
+   "label": "Abandoned mine lands",
+   "value": "67 sites; 6,465 acres across the 67 with a recorded size",
+   "comparison": null,
+   "detail": "Screened by EPA for renewable energy potential.",
+   "source": "EPA RE-Powering (2022 dataset)"
+  },
+  {
+   "id": "housing_units",
+   "category": "buildings",
+   "label": "Homes",
+   "value": "29,345 housing units",
+   "comparison": null,
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "housing_pre1980",
+   "category": "buildings",
+   "label": "Homes built before 1980",
+   "value": "59.8%",
+   "comparison": "US: 49.7%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "vacant_housing",
+   "category": "buildings",
+   "label": "Homes that are vacant",
+   "value": "17.5%",
+   "comparison": "US: 10.1%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "mobile_homes",
+   "category": "buildings",
+   "label": "Mobile and manufactured homes",
+   "value": "20.2%",
+   "comparison": "US: 5.6%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "renter_households",
+   "category": "buildings",
+   "label": "Households that rent",
+   "value": "27.1%",
+   "comparison": "US: 34.8%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "unemployment",
+   "category": "workforce",
+   "label": "Unemployment rate",
+   "value": "2.7%",
+   "comparison": "US: 5.2%",
+   "detail": "Share of the civilian labor force that is out of work and looking for it.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "trades_workers",
+   "category": "workforce",
+   "label": "Workers in construction, maintenance and natural resource jobs",
+   "value": "10.8%",
+   "comparison": "US: 8.5%",
+   "detail": "Construction, extraction, installation, maintenance and repair, farming, fishing and forestry occupations, as a share of employed residents.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "production_transport_workers",
+   "category": "workforce",
+   "label": "Workers in production, transportation and material moving jobs",
+   "value": "16.6%",
+   "comparison": "US: 12.9%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "bachelors_or_higher",
+   "category": "workforce",
+   "label": "Adults with a bachelor's degree or higher",
+   "value": "22.9%",
+   "comparison": "US: 35.7%",
+   "detail": "Share of residents aged 25 and over.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "less_than_high_school",
+   "category": "workforce",
+   "label": "Adults without a high school diploma",
+   "value": "11.4%",
+   "comparison": "US: 10.4%",
+   "detail": "Share of residents aged 25 and over.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "population",
+   "category": "economy",
+   "label": "Population",
+   "value": "58,563 residents",
+   "comparison": null,
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "median_household_income",
+   "category": "economy",
+   "label": "Median household income",
+   "value": "$53,210",
+   "comparison": "US: $80,734",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "poverty_rate",
+   "category": "economy",
+   "label": "Residents below the poverty line",
+   "value": "16.5%",
+   "comparison": "US: 12.5%",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "agriculture_mining_jobs",
+   "category": "economy",
+   "label": "Jobs in agriculture, forestry, fishing and mining",
+   "value": "2.6%",
+   "comparison": "US: 1.6%",
+   "detail": "Share of employed residents, by the industry they work in.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "construction_jobs",
+   "category": "economy",
+   "label": "Jobs in construction",
+   "value": "6.3%",
+   "comparison": "US: 6.9%",
+   "detail": "Share of employed residents, by the industry they work in.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "manufacturing_jobs",
+   "category": "economy",
+   "label": "Jobs in manufacturing",
+   "value": "7.8%",
+   "comparison": "US: 9.9%",
+   "detail": "Share of employed residents, by the industry they work in.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "transport_utilities_jobs",
+   "category": "economy",
+   "label": "Jobs in transportation, warehousing and utilities",
+   "value": "6.7%",
+   "comparison": "US: 5.9%",
+   "detail": "Share of employed residents, by the industry they work in.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "median_age",
+   "category": "community",
+   "label": "Median age",
+   "value": "43.5 years",
+   "comparison": "US: 38.9 years",
+   "detail": null,
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "no_broadband",
+   "category": "community",
+   "label": "Households without a broadband subscription",
+   "value": "13.5%",
+   "comparison": "US: 9.0%",
+   "detail": "Households with no internet subscription, or only dial-up or another service the Census does not count as broadband. Cellular data plans count as broadband.",
+   "source": "ACS 2020-2024"
+  },
+  {
+   "id": "svi_overall",
+   "category": "community",
+   "label": "Social vulnerability, overall",
+   "value": "73rd percentile",
+   "comparison": null,
+   "detail": "Percentile among all US counties: higher means more vulnerable. How hard it may be for residents to prepare for, cope with and recover from a disaster. Based on ACS 2018-2022 figures.",
+   "source": "CDC/ATSDR Social Vulnerability Index 2022"
+  },
+  {
+   "id": "svi_socioeconomic",
+   "category": "community",
+   "label": "Social vulnerability: income and jobs",
+   "value": "59th percentile",
+   "comparison": null,
+   "detail": "Percentile among all US counties: higher means more vulnerable. Poverty, unemployment, housing cost burden, schooling and health insurance. Based on ACS 2018-2022 figures.",
+   "source": "CDC/ATSDR Social Vulnerability Index 2022"
+  },
+  {
+   "id": "svi_household",
+   "category": "community",
+   "label": "Social vulnerability: household make-up",
+   "value": "79th percentile",
+   "comparison": null,
+   "detail": "Percentile among all US counties: higher means more vulnerable. Older and younger residents, disability, single parents and limited English. Based on ACS 2018-2022 figures.",
+   "source": "CDC/ATSDR Social Vulnerability Index 2022"
+  },
+  {
+   "id": "svi_housing_transport",
+   "category": "community",
+   "label": "Social vulnerability: housing and transportation",
+   "value": "88th percentile",
+   "comparison": null,
+   "detail": "Percentile among all US counties: higher means more vulnerable. Apartment buildings, mobile homes, crowding, households without a car and group quarters. Based on ACS 2018-2022 figures.",
+   "source": "CDC/ATSDR Social Vulnerability Index 2022"
+  },
+  {
+   "id": "age_65_plus",
+   "category": "community",
+   "label": "Residents aged 65 and over",
+   "value": "22.3%",
+   "comparison": null,
+   "detail": "Older residents are more at risk in heat waves and power outages.",
+   "source": "CDC/ATSDR Social Vulnerability Index 2022"
+  },
+  {
+   "id": "disability",
+   "category": "community",
+   "label": "Residents with a disability",
+   "value": "23.6%",
+   "comparison": null,
+   "detail": "Share of the civilian population outside institutions.",
+   "source": "CDC/ATSDR Social Vulnerability Index 2022"
+  },
+  {
+   "id": "ev_stations",
+   "category": "infrastructure",
+   "label": "Public EV charging",
+   "value": "6 stations",
+   "comparison": null,
+   "detail": null,
+   "source": "NLR Alternative Fuel Stations"
+  },
+  {
+   "id": "landfill_gas_sites",
+   "category": "infrastructure",
+   "label": "Landfills in EPA's landfill gas database",
+   "value": "1 landfill",
+   "comparison": null,
+   "detail": "0 with an operating gas energy project; 1 that EPA lists as a candidate for one. The database does not include every landfill.",
+   "source": "EPA LMOP (September 2024)"
+  },
+  {
+   "id": "farmland",
+   "category": "agriculture",
+   "label": "Farmland",
+   "value": "60,763 acres in farms; 10,713 acres of cropland",
+   "comparison": null,
+   "detail": null,
+   "source": "USDA Census of Agriculture 2022"
+  }
+ ],
  "opportunities": [
   {
-   "id": "community_solar:repowering:170062",
-   "solution_id": "community_solar",
-   "title": "Community solar on Beeson Highwall",
-   "asset_id": "repowering:170062",
-   "need_ids": [
-    "carbon_intensive_grid",
-    "low_income",
-    "mobile_homes"
-   ],
-   "score": 100,
-   "estimates": [
-    {
-     "label": "Capacity",
-     "value": 36.7,
-     "unit": "MW",
-     "is_estimate": true,
-     "assumptions": [
-      "60% of the site's 423 acres is usable",
-      "6.9 acres per MW (EPA RE-Powering screening figure)"
-     ]
-    },
-    {
-     "label": "Annual energy",
-     "value": 48000.0,
-     "unit": "MWh per year",
-     "is_estimate": true,
-     "assumptions": [
-      "60% of the site's 423 acres is usable",
-      "6.9 acres per MW (EPA RE-Powering screening figure)",
-      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses"
-     ]
-    },
-    {
-     "label": "Household equivalent",
-     "value": 4400.0,
-     "unit": "homes",
-     "is_estimate": true,
-     "assumptions": [
-      "60% of the site's 423 acres is usable",
-      "6.9 acres per MW (EPA RE-Powering screening figure)",
-      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses",
-      "Average US home buys 10,791 kWh a year (EIA, 2022)"
-     ]
-    }
-   ],
-   "funding": [
-    {
-     "program_id": "elective_pay_48e_45y",
-     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
-    },
-    {
-     "program_id": "energy_community_bonus",
-     "name": "Energy community bonus",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.eesi.org/briefings/view/121225tax"
-    },
-    {
-     "program_id": "usda_reap",
-     "name": "USDA Rural Energy for America Program (REAP)",
-     "agency": "USDA",
-     "status": "uncertain",
-     "deadline": null,
-     "key_terms": "Grant awards were halted in March 2026 and the funding notice rescinded in April. A rewritten rule took effect 2026-10-16. Applicants are farms and rural small businesses, not governments. Check for an open notice.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://opengrants.io/usda-rural-development-grants-2026-whats-open-now/"
-    }
-   ]
-  },
-  {
-   "id": "wind_on_reclaimed_land:repowering:170203",
-   "solution_id": "wind_on_reclaimed_land",
-   "title": "Wind energy on Widemouth Creek High",
-   "asset_id": "repowering:170203",
-   "need_ids": [
-    "carbon_intensive_grid"
-   ],
-   "score": 100,
-   "estimates": [
-    {
-     "label": "Capacity",
-     "value": 4.97,
-     "unit": "MW",
-     "is_estimate": true,
-     "assumptions": [
-      "EPA RE-Powering screening estimate for the whole site: about 80 acres per MW",
-      "EPA screened the site for wind speed and size only; no wind study was done"
-     ]
-    }
-   ],
-   "funding": [
-    {
-     "program_id": "elective_pay_48e_45y",
-     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
-    },
-    {
-     "program_id": "energy_community_bonus",
-     "name": "Energy community bonus",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.eesi.org/briefings/view/121225tax"
-    }
-   ]
-  },
-  {
-   "id": "community_solar:repowering:170203",
-   "solution_id": "community_solar",
-   "title": "Community solar on Widemouth Creek High",
-   "asset_id": "repowering:170203",
-   "need_ids": [
-    "carbon_intensive_grid",
-    "low_income",
-    "mobile_homes"
-   ],
-   "score": 100,
-   "estimates": [
-    {
-     "label": "Capacity",
-     "value": 34.5,
-     "unit": "MW",
-     "is_estimate": true,
-     "assumptions": [
-      "60% of the site's 397 acres is usable",
-      "6.9 acres per MW (EPA RE-Powering screening figure)"
-     ]
-    },
-    {
-     "label": "Annual energy",
-     "value": 45200.0,
-     "unit": "MWh per year",
-     "is_estimate": true,
-     "assumptions": [
-      "60% of the site's 397 acres is usable",
-      "6.9 acres per MW (EPA RE-Powering screening figure)",
-      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses"
-     ]
-    },
-    {
-     "label": "Household equivalent",
-     "value": 4200.0,
-     "unit": "homes",
-     "is_estimate": true,
-     "assumptions": [
-      "60% of the site's 397 acres is usable",
-      "6.9 acres per MW (EPA RE-Powering screening figure)",
-      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses",
-      "Average US home buys 10,791 kWh a year (EIA, 2022)"
-     ]
-    }
-   ],
-   "funding": [
-    {
-     "program_id": "elective_pay_48e_45y",
-     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
-    },
-    {
-     "program_id": "energy_community_bonus",
-     "name": "Energy community bonus",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.eesi.org/briefings/view/121225tax"
-    },
-    {
-     "program_id": "usda_reap",
-     "name": "USDA Rural Energy for America Program (REAP)",
-     "agency": "USDA",
-     "status": "uncertain",
-     "deadline": null,
-     "key_terms": "Grant awards were halted in March 2026 and the funding notice rescinded in April. A rewritten rule took effect 2026-10-16. Applicants are farms and rural small businesses, not governments. Check for an open notice.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://opengrants.io/usda-rural-development-grants-2026-whats-open-now/"
-    }
-   ]
-  },
-  {
-   "id": "wind_on_reclaimed_land:repowering:170003",
-   "solution_id": "wind_on_reclaimed_land",
-   "title": "Wind energy on Church Hollow High",
-   "asset_id": "repowering:170003",
-   "need_ids": [
-    "carbon_intensive_grid"
-   ],
-   "score": 100,
-   "estimates": [
-    {
-     "label": "Capacity",
-     "value": 4.67,
-     "unit": "MW",
-     "is_estimate": true,
-     "assumptions": [
-      "EPA RE-Powering screening estimate for the whole site: about 80 acres per MW",
-      "EPA screened the site for wind speed and size only; no wind study was done"
-     ]
-    }
-   ],
-   "funding": [
-    {
-     "program_id": "elective_pay_48e_45y",
-     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
-    },
-    {
-     "program_id": "energy_community_bonus",
-     "name": "Energy community bonus",
-     "agency": "IRS",
-     "status": "open_with_deadlines",
-     "deadline": "2027-12-31",
-     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
-     "verified_on": "2026-11-13",
-     "source_url": "https://www.eesi.org/briefings/view/121225tax"
-    }
-   ]
-  },
-  {
-   "id": "landfill_gas_energy:lmop:2215",
+   "id": "ai:1",
    "solution_id": "landfill_gas_energy",
-   "title": "Landfill gas-to-energy at Mercer County Landfill",
-   "asset_id": "lmop:2215",
+   "title": "Capture Landfill Gas for Energy",
+   "summary": "Capture gas from the open Mercer County Landfill to generate local energy and reduce emissions from the power grid.",
+   "rationale": "The county has 1 landfill listed as an EPA candidate for a gas energy project with 2,130,000 tons of waste in place, and the state grid carbon intensity is 1,954 pounds of CO2 per MWh.",
+   "first_steps": [
+    "Contact the EPA Landfill Methane Outreach Program for technical assistance.",
+    "Assess the gas flow and energy potential at the Mercer County Landfill.",
+    "Meet with local utility providers to discuss interconnectivity."
+   ],
    "need_ids": [
+    "carbon_intensive_grid",
     "landfill_gas_uncaptured"
    ],
-   "score": 75,
+   "asset_ids": [
+    "lmop:2215"
+   ],
+   "factor_ids": [
+    "grid_carbon",
+    "landfill_gas_sites"
+   ],
+   "score": 94,
    "estimates": [
     {
      "label": "Landfill gas generated",
@@ -1945,41 +2119,181 @@
      ]
     }
    ],
-   "funding": []
+   "funding": [],
+   "generated_by": "gemini"
+  },
+  {
+   "id": "ai:2",
+   "solution_id": "community_solar",
+   "title": "Build Community Solar on Reclaimed Land",
+   "summary": "Construct a community solar array on brownfield land to supply cleaner power and reduce electricity costs for low-income households.",
+   "rationale": "The county receives 1,306 kWh a year per kW of panels, median household income is $53,210, and construction and maintenance workers make up 10.8% of employed residents to build the project.",
+   "first_steps": [
+    "Review the Bluefield Area Transit Properties brownfield site for solar installation.",
+    "Partner with local utilities to design a low-income solar subscription model.",
+    "Engage local construction workers for site preparation and panel setup."
+   ],
+   "need_ids": [
+    "carbon_intensive_grid",
+    "low_income"
+   ],
+   "asset_ids": [
+    "repowering:29835"
+   ],
+   "factor_ids": [
+    "solar_resource",
+    "grid_carbon",
+    "median_household_income",
+    "trades_workers"
+   ],
+   "score": 92,
+   "estimates": [
+    {
+     "label": "Capacity",
+     "value": 7.25,
+     "unit": "MW",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 83.4 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)"
+     ]
+    },
+    {
+     "label": "Annual energy",
+     "value": 9490.0,
+     "unit": "MWh per year",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 83.4 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)",
+      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses"
+     ]
+    },
+    {
+     "label": "Household equivalent",
+     "value": 880.0,
+     "unit": "homes",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 83.4 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)",
+      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses",
+      "Average US home buys 10,791 kWh a year (EIA, 2022)"
+     ]
+    }
+   ],
+   "funding": [
+    {
+     "program_id": "epa_brownfields_fy27",
+     "name": "EPA Brownfields Assessment, Cleanup and Revolving Loan Fund Grants (FY 2027)",
+     "agency": "EPA",
+     "status": "open",
+     "deadline": "2027-01-21",
+     "key_terms": "Cleanup grants capped at $500,000; 20% cost share for Cleanup and RLF. No Multipurpose grants this round.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.epa.gov/brownfields/multipurpose-assessment-rlf-and-cleanup-marc-grant-application-resources"
+    },
+    {
+     "program_id": "elective_pay_48e_45y",
+     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
+    },
+    {
+     "program_id": "energy_community_bonus",
+     "name": "Energy community bonus",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.eesi.org/briefings/view/121225tax"
+    },
+    {
+     "program_id": "usda_reap",
+     "name": "USDA Rural Energy for America Program (REAP)",
+     "agency": "USDA",
+     "status": "uncertain",
+     "deadline": null,
+     "key_terms": "Grant awards were halted in March 2026 and the funding notice rescinded in April. A rewritten rule took effect 2026-10-16. Applicants are farms and rural small businesses, not governments. Check for an open notice.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://opengrants.io/usda-rural-development-grants-2026-whats-open-now/"
+    }
+   ],
+   "generated_by": "gemini"
+  },
+  {
+   "id": "ai:3",
+   "solution_id": null,
+   "title": "Upgrade Energy Efficiency in Old and Mobile Homes",
+   "summary": "Launch a county-wide weatherization program focused on insulation and heating upgrades for older homes and mobile homes.",
+   "rationale": "Homes experience 4,795 heating degree days a year, 59.8% of homes were built before 1980, 20.2% are mobile homes, 13.5% of households lack broadband, and 23.6% of residents have a disability requiring accessible outreach.",
+   "first_steps": [
+    "Mobilize the 10.8% of residents working in construction, maintenance, and natural resource jobs.",
+    "Establish offline sign-up locations and paper notices to reach households without broadband.",
+    "Prioritize mobile home parks and pre-1980 housing for initial audits."
+   ],
+   "need_ids": [
+    "low_income",
+    "mobile_homes",
+    "old_housing"
+   ],
+   "asset_ids": [],
+   "factor_ids": [
+    "heating_degree_days",
+    "housing_pre1980",
+    "mobile_homes",
+    "trades_workers",
+    "no_broadband",
+    "disability"
+   ],
+   "score": 63,
+   "estimates": [],
+   "funding": [],
+   "generated_by": "gemini"
+  },
+  {
+   "id": "ai:4",
+   "solution_id": null,
+   "title": "Expand Public Electric Vehicle Charging Stations",
+   "summary": "Install additional public electric vehicle charging stations across the county to close the charging gap and support commuters.",
+   "rationale": "The county has only 6 public charging stations or 1.0 per 10,000 residents, and 81.9% of residents drive alone to work while 16.6% work in production, transportation, and material moving jobs.",
+   "first_steps": [
+    "Identify high-traffic commuter corridors and public parking lots for new chargers.",
+    "Apply best practices for accessible charger placement for drivers.",
+    "Coordinate with local transportation and utility workers for installation."
+   ],
+   "need_ids": [
+    "ev_charging_gap",
+    "drive_alone"
+   ],
+   "asset_ids": [],
+   "factor_ids": [
+    "ev_stations",
+    "production_transport_workers"
+   ],
+   "score": 42,
+   "estimates": [],
+   "funding": [],
+   "generated_by": "gemini"
   }
  ],
  "narrative": {
-  "summary": "Mercer County, WV has 8 flagged needs. The most severe are carbon-intensive electricity, few or no public EV chargers and low household income. 5 opportunities were matched to these needs. The highest-ranked is \"Community solar on Beeson Highwall\".",
-  "opportunity_notes": [
-   {
-    "opportunity_id": "community_solar:repowering:170062",
-    "text": "Addresses carbon-intensive electricity, low household income and mobile and manufactured homes. Rough estimates: capacity 36.7 MW; annual energy 48,000 MWh per year; household equivalent 4,400 homes. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
-   },
-   {
-    "opportunity_id": "wind_on_reclaimed_land:repowering:170203",
-    "text": "Addresses carbon-intensive electricity. Rough estimates: capacity 4.97 MW. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
-   },
-   {
-    "opportunity_id": "community_solar:repowering:170203",
-    "text": "Addresses carbon-intensive electricity, low household income and mobile and manufactured homes. Rough estimates: capacity 34.5 MW; annual energy 45,200 MWh per year; household equivalent 4,200 homes. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
-   },
-   {
-    "opportunity_id": "wind_on_reclaimed_land:repowering:170003",
-    "text": "Addresses carbon-intensive electricity. Rough estimates: capacity 4.67 MW. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
-   },
-   {
-    "opportunity_id": "landfill_gas_energy:lmop:2215",
-    "text": "Addresses landfill with no gas energy project. Rough estimates: landfill gas generated 0.724 million cubic feet per day; waste in place 2,130,000 tons. No program in the funding table matched."
-   }
-  ],
+  "summary": "Mercer County faces high carbon-intensive electricity, uncaptured landfill gas, low household income, and a high share of mobile homes and old housing. To meet these needs, the county can leverage its local solar resource, workers in construction and maintenance, and existing sites such as the Mercer County Landfill and brownfields to deploy community solar, landfill gas energy, and targeted housing upgrades.",
+  "opportunity_notes": [],
   "caveats": [
+   "The opportunities were written by Gemini from the needs, factors and sites in this report. Each was checked to use only this report's needs, sites and numbers. Feasibility and cost were not checked.",
    "Figures marked as estimates are rough. The assumptions behind each one are listed with it.",
    "A listed funding program is a lead to check, not a finding that the county or project is eligible. Confirm status and deadlines with the agency.",
    "EPA's landfill database does not include every landfill.",
    "Electricity bill and grid carbon figures are state averages, not county figures.",
-   "Some data could not be loaded (OpenStreetMap public buildings), so needs or sites may be missing from this report."
+   "Some data could not be loaded (Geoapify public buildings and Urban heat and tree canopy (Google Earth Engine)), so needs or sites may be missing from this report."
   ],
-  "generated_by": "template"
+  "generated_by": "gemini"
  },
  "source_status": [
   {
@@ -2013,10 +2327,10 @@
    "message": "1 landfill(s) in the EPA file have no coordinates and are not mapped"
   },
   {
-   "source": "overpass",
+   "source": "geoapify",
    "ok": false,
    "cached": false,
-   "message": "Overpass is busy or rate-limiting; try again shortly"
+   "message": "GEOAPIFY_API_KEY is not set"
   },
   {
    "source": "ev_stations",
@@ -2055,10 +2369,28 @@
    "message": null
   },
   {
-   "source": "gemini",
+   "source": "earthengine",
    "ok": false,
    "cached": false,
-   "message": "GEMINI_API_KEY is not set; template narrative used"
+   "message": "EE_PROJECT is not set"
+  },
+  {
+   "source": "svi",
+   "ok": true,
+   "cached": false,
+   "message": null
+  },
+  {
+   "source": "climate",
+   "ok": true,
+   "cached": true,
+   "message": null
+  },
+  {
+   "source": "gemini",
+   "ok": true,
+   "cached": false,
+   "message": null
   }
  ]
 }

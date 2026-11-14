@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from app import narrative, pipeline, suggestions
+from app import factors, narrative, opportunities, pipeline
 from app.sources import (
     SourceError,
     afdc,
@@ -47,6 +47,7 @@ def sources(monkeypatch):
         population=20_000,
         median_household_income=55_000.0,  # ratio 1.45 -> high
         pre1980_housing_share=0.70,  # ratio 1.4 -> high
+        construction_industry_share=0.09,
     )
     monkeypatch.setattr(census, "fetch_county", returning(county))
     monkeypatch.setattr(census, "fetch_national", returning(make_metrics(population=330_000_000)))
@@ -272,15 +273,45 @@ def test_full_report(sources, settings):
     assert gas.estimates[0].label == "Landfill gas collected"
 
     asset_ids = {a.id for a in report.assets}
-    assert all(o.asset_id in asset_ids for o in report.opportunities)
+    assert all(set(o.asset_ids) <= asset_ids for o in report.opportunities)
 
-    # With no Gemini key: the template brief, and no suggested solutions.
+    # With no Gemini key: the rule matches and the template brief.
+    assert {o.generated_by for o in report.opportunities} == {"rules"}
+    assert all(o.summary is None and o.factor_ids == [] for o in report.opportunities)
     assert report.narrative.generated_by == "template"
-    assert report.suggested_solutions == []
     status = {s.source: s for s in report.source_status}
-    assert all(s.ok for name, s in status.items() if not name.startswith("gemini"))
-    assert "GEMINI_API_KEY" in status["gemini_solutions"].message
+    assert all(s.ok for name, s in status.items() if name != "gemini")
+    assert "GEMINI_API_KEY" in status["gemini"].message
     assert "no coordinates" in status["lmop"].message
+
+
+def test_factors_describe_what_the_county_has(sources, settings):
+    report = analyze(settings)
+    by_id = {f.id: f for f in report.factors}
+
+    solar = by_id["solar_resource"]
+    assert (solar.category, solar.value) == ("climate", "1,200 kWh a year per kW of panels")
+    assert by_id["natural_hazards"].value == "Wildfire: Relatively High"
+    # Local talent, with the US figure beside it.
+    jobless = by_id["unemployment"]
+    assert (jobless.category, jobless.value, jobless.comparison) == (
+        "workforce",
+        "5.0%",
+        "US: 5.0%",
+    )
+    assert by_id["construction_jobs"].value == "9.0%"
+    # The housing stock and the sites, counted from what the sources returned.
+    assert by_id["housing_pre1980"].value == "70.0%"
+    assert by_id["sites_brownfield"].value == ("1 site; 69 acres across the 1 with a recorded size")
+    assert by_id["sites_contaminated_site"].value == "1 site"  # no acreage recorded
+    assert by_id["public_buildings"].value == "1 school, 1 library"
+    assert by_id["ev_stations"].value == "1 station"
+    assert "1 that EPA lists as a candidate" in by_id["landfill_gas_sites"].detail
+    # Grouped by category, in a fixed order.
+    categories = [f.category for f in report.factors]
+    assert categories == sorted(categories, key=factors.CATEGORY_ORDER.index)
+    # Nothing is listed for a source that returned nothing.
+    assert not {"electricity_price", "farmland", "tree_canopy", "non_powered_dams"} & set(by_id)
 
 
 def test_failed_sources_do_not_fail_the_request(sources, settings, monkeypatch):
@@ -361,7 +392,7 @@ def test_map_caps_keep_opportunity_assets(sources, settings, monkeypatch):
     assert "repowering:1" in shown and len(shown) == 4
 
 
-def test_gemini_suggestions_reach_the_report_and_the_map(sources, settings, monkeypatch):
+def test_gemini_writes_the_opportunities_and_code_adds_the_numbers(sources, settings, monkeypatch):
     rows = [
         {
             "site_id": i,
@@ -380,45 +411,118 @@ def test_gemini_suggestions_reach_the_report_and_the_map(sources, settings, monk
 
     async def fake_gemini(prompt, s):
         prompts.append(prompt)
-        return suggestions.ModelSuggestions(
-            solutions=[
-                {
+        return opportunities.ModelPlan(
+            summary="The county has 10 abandoned mine lands and builders to put to work.",
+            opportunities=[
+                {  # a catalogued project type at a site it can be built at
                     "title": "Mine land solar",
                     "need_ids": ["low_income"],
+                    "factor_ids": ["solar_resource", "sites_mine_land"],
                     "site_ids": ["repowering:8"],
+                    "project_type": "community_solar",
                     "what": "Offer Site 8 to a solar developer.",
                     "why_here": "The county has 10 abandoned mine lands.",
                     "first_steps": ["Check who owns the land."],
                 },
+                {  # an idea of Gemini's own: two problems that solve each other
+                    "title": "Home repair crews",
+                    "need_ids": ["old_housing", "low_income"],
+                    "factor_ids": ["unemployment", "construction_jobs", "housing_pre1980"],
+                    "site_ids": [],
+                    "project_type": "other",
+                    "what": "Train residents who are out of work to repair older homes.",
+                    "why_here": "70.0% of homes were built before 1980.",
+                    "first_steps": ["Meet local builders."],
+                },
+                {  # claims a project type, but at a site that type cannot use
+                    "title": "Gas study",
+                    "need_ids": ["landfill_gas_uncaptured"],
+                    "factor_ids": [],
+                    "site_ids": ["repowering:9"],
+                    "project_type": "landfill_gas_energy",
+                    "what": "Study gas capture with Site 9 as a staging area.",
+                    "why_here": "The landfill has no gas project.",
+                    "first_steps": ["Ask the operator."],
+                },
                 {
                     "title": "Invented",
                     "need_ids": ["low_income"],
+                    "factor_ids": [],
                     "site_ids": ["repowering:1"],  # in the county, not in the digest
+                    "project_type": "other",
                     "what": "x",
                     "why_here": "y",
                     "first_steps": ["z"],
                 },
-            ]
+            ],
         )
 
-    monkeypatch.setattr(suggestions, "_call_gemini", fake_gemini)
-    monkeypatch.setattr(narrative, "_call_gemini", raising(RuntimeError("not under test")))
-    # The map shows only the largest mine land, so the suggested one must be kept.
+    monkeypatch.setattr(opportunities, "_call_gemini", fake_gemini)
+    # The map shows only the largest mine land, so the named ones must be kept.
     keyed = settings.model_copy(update={"gemini_api_key": "k", "max_sites_per_county": 1})
 
     report = analyze(keyed)
 
-    assert [s.title for s in report.suggested_solutions] == ["Mine land solar"]
-    assert report.suggested_solutions[0].asset_ids == ["repowering:8"]
-    shown = {a.id for a in report.assets}
-    assert {"repowering:10", "repowering:8"} <= shown and "repowering:7" not in shown
-    status = {s.source: s for s in report.source_status}
-    assert status["gemini_solutions"].ok and "1 of 2" in status["gemini_solutions"].message
+    # Ranked by code, from the priority of the needs each one addresses.
+    assert [(o.id, o.title, o.score) for o in report.opportunities] == [
+        ("ai:3", "Gas study", 75),
+        ("ai:1", "Mine land solar", 64),
+        ("ai:2", "Home repair crews", 62),  # halfway between 64 and the mean of 64 and 56
+    ]
+    assert {o.generated_by for o in report.opportunities} == {"gemini"}
+    gas, solar, crews = report.opportunities
 
-    # The model was sent the digest: three mine lands and a count, not all ten.
+    # A typed opportunity gets estimates and funding leads from code.
+    assert solar.solution_id == "community_solar" and solar.asset_ids == ["repowering:8"]
+    assert solar.summary == "Offer Site 8 to a solar developer."
+    assert solar.factor_ids == ["solar_resource", "sites_mine_land"]
+    assert solar.first_steps == ["Check who owns the land."]
+    assert [e.label for e in solar.estimates] == [
+        "Capacity",
+        "Annual energy",
+        "Household equivalent",
+    ]
+    assert solar.funding and all(e.is_estimate for e in solar.estimates)
+
+    # An idea of Gemini's own gets neither: there is no project type to size.
+    assert crews.solution_id is None and crews.asset_ids == []
+    assert crews.need_ids == ["low_income", "old_housing"]  # in priority order
+    assert crews.factor_ids == ["unemployment", "construction_jobs", "housing_pre1980"]
+    assert crews.estimates == [] and crews.funding == []
+    # A project type claimed at a site that cannot host it is not trusted.
+    assert gas.solution_id is None and gas.asset_ids == ["repowering:9"]
+    assert gas.estimates == [] and gas.funding == []
+
+    shown = {a.id for a in report.assets}
+    assert {"repowering:10", "repowering:9", "repowering:8"} <= shown
+    assert "repowering:7" not in shown
+    status = {s.source: s for s in report.source_status}
+    assert status["gemini"].ok and "1 of 4" in status["gemini"].message
+
+    # The brief: Gemini's summary, caveats by code.
+    assert report.narrative.generated_by == "gemini"
+    assert report.narrative.summary.startswith("The county has 10 abandoned mine lands")
+    assert report.narrative.caveats[0] == narrative.AI_CAVEAT
+
+    # One call. The model was sent the needs, the factors and a digest of the
+    # sites: three mine lands and a count, not all ten.
     assert len(prompts) == 1
     assert '"count": 10' in prompts[0]
     assert "repowering:8" in prompts[0] and "repowering:7" not in prompts[0]
+    assert '"factor_id": "construction_jobs"' in prompts[0]
+    assert '"need_id": "old_housing"' in prompts[0]
+
+
+def test_rule_matches_are_served_when_gemini_fails(sources, settings, monkeypatch):
+    monkeypatch.setattr(opportunities, "_call_gemini", raising(RuntimeError("quota")))
+    report = analyze(settings.model_copy(update={"gemini_api_key": "k"}))
+
+    assert report.opportunities and {o.generated_by for o in report.opportunities} == {"rules"}
+    assert report.opportunities[0].solution_id == "landfill_gas_energy"
+    assert report.narrative.generated_by == "template"
+    status = next(s for s in report.source_status if s.source == "gemini")
+    assert not status.ok and "RuntimeError" in status.message
+    assert report.factors  # the factors do not depend on Gemini
 
 
 def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, monkeypatch):
@@ -495,7 +599,7 @@ def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, m
     by_solution = {o.solution_id: o for o in report.opportunities}
     hydro = by_solution["small_hydro"]
     assert hydro.title == "Hydropower at Mill Pond Dam"
-    assert hydro.asset_id == "dam:ZZ00001"
+    assert hydro.asset_ids == ["dam:ZZ00001"]
     assert [e.label for e in hydro.estimates] == [
         "Capacity",
         "Annual energy",
@@ -504,13 +608,23 @@ def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, m
     assert [f.program_id for f in hydro.funding] == ["elective_pay_48e_45y_hydro"]
 
     digester = by_solution["farm_digester"]
-    assert digester.asset_id is None and digester.estimates == []
+    assert digester.asset_ids == [] and digester.estimates == []
     assert [(f.program_id, f.status) for f in digester.funding] == [("usda_reap", "uncertain")]
 
     # Opportunities that name a site still point at an asset on the map.
     shown = {a.id for a in report.assets}
-    assert all(o.asset_id in shown for o in report.opportunities if o.asset_id)
+    assert all(set(o.asset_ids) <= shown for o in report.opportunities)
     assert any("state averages" in c for c in report.narrative.caveats)
+
+    # The same sources feed the factors.
+    by_factor = {f.id: f for f in report.factors}
+    price = by_factor["electricity_price"]
+    assert (price.value, price.comparison) == ("15.1 cents per kWh", "US: 16.5 cents per kWh")
+    assert by_factor["grid_carbon"].value == "1,900 pounds of CO2 per MWh"
+    assert by_factor["farmland"].value == "120,000 acres in farms; 80,000 acres of cropland"
+    assert by_factor["large_livestock_farms"].value == "3 dairy farms with 500 or more cows"
+    dams_factor = by_factor["non_powered_dams"]
+    assert dams_factor.value == "1 dam" and "2.5 MW" in dams_factor.detail
 
 
 def test_earth_engine_needs_flow_into_the_report(sources, settings, monkeypatch):
@@ -539,16 +653,84 @@ def test_earth_engine_failure_keeps_the_rest_of_the_report(sources, settings, mo
     assert report.needs and not {"urban_heat", "low_tree_canopy"} & {n.id for n in report.needs}
 
 
-def test_profile_combines_acs_and_climate(sources, settings, monkeypatch):
+def test_profile_sources_become_factors(sources, settings, monkeypatch):
+    """Census workforce figures, the weather history, the vulnerability index
+    and the land cover all land in the one factor list."""
     monkeypatch.setattr(
-        census, "fetch_county", returning(make_metrics(trades_occupation_share=0.15))
+        census,
+        "fetch_county",
+        returning(make_metrics(trades_occupation_share=0.15, no_broadband_share=0.22)),
+    )
+    monkeypatch.setattr(
+        census,
+        "fetch_national",
+        returning(make_metrics(population=330_000_000, trades_occupation_share=0.085)),
+    )
+    monkeypatch.setattr(
+        svi, "svi_for_county", lambda data_dir, fips: {"svi_overall": 0.7248, "age65_pct": 21.4}
+    )
+    monkeypatch.setattr(
+        earthengine,
+        "fetch_county_metrics",
+        returning({"forest_share": 0.61, "elevation_min_m": 200.0, "elevation_max_m": 608.0}),
     )
     report = analyze(settings)
-    facts = {f.id: f for f in report.profile}
-    assert facts["trades_workers"].category == "workforce"
-    assert facts["heating_degree_days"].value == 6500.0
-    assert facts["wind_speed_100m"].unit == "m_per_s"
-    assert facts["heating_degree_days"].national_value is None
+    by_id = {f.id: f for f in report.factors}
+    assert len(by_id) == len(report.factors)  # no id is used twice
+
+    trades = by_id["trades_workers"]
+    assert (trades.category, trades.value, trades.comparison) == ("workforce", "15.0%", "US: 8.5%")
+    assert "Construction, extraction" in trades.detail
+    assert by_id["no_broadband"].category == "community"
+    assert by_id["no_broadband"].comparison is None  # no national figure given
+
+    degree_days = by_id["heating_degree_days"]
+    assert (degree_days.category, degree_days.value) == ("climate", "6,500 degree days")
+    assert degree_days.comparison is None and "Open-Meteo" in degree_days.source
+    assert by_id["wind_speed_100m"].value == "6.2 m/s"
+
+    assert by_id["svi_overall"].value == "72nd percentile"
+    assert (by_id["age_65_plus"].category, by_id["age_65_plus"].value) == ("community", "21.4%")
+
+    # profile.py's "geography" is the factors' "land".
+    assert (by_id["forest"].category, by_id["forest"].value) == ("land", "61.0%")
+    assert by_id["elevation_range"].value == "1,339 feet"
+
+    categories = [f.category for f in report.factors]
+    assert categories == sorted(categories, key=factors.CATEGORY_ORDER.index)
+
+
+def test_profile_factors_reach_gemini_and_can_be_cited(sources, settings, monkeypatch):
+    prompts = []
+
+    async def fake(prompt, settings):
+        prompts.append(prompt)
+        return opportunities.ModelPlan(
+            summary="The county can heat its old homes for less.",
+            opportunities=[
+                opportunities._ModelOpportunity(
+                    title="Cold-climate heat pumps",
+                    need_ids=["old_housing"],
+                    factor_ids=["heating_degree_days", "housing_pre1980"],
+                    site_ids=[],
+                    project_type="other",
+                    what="Help owners of old homes switch to cold-climate heat pumps.",
+                    why_here="Homes here need 6,500 degree days of heating a year.",
+                    first_steps=["Survey heating fuels in old homes."],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(opportunities, "_call_gemini", fake)
+    report = analyze(settings.model_copy(update={"gemini_api_key": "test-key"}))
+
+    assert '"factor_id": "heating_degree_days"' in prompts[0]
+    assert '"value": "6,500 degree days"' in prompts[0]
+    assert '"factor_id": "wind_speed_100m"' in prompts[0]
+    [only] = report.opportunities
+    # The 6,500 in why_here is in the digest, so the opportunity is kept.
+    assert only.generated_by == "gemini"
+    assert only.factor_ids == ["heating_degree_days", "housing_pre1980"]
 
 
 def test_climate_failure_keeps_the_report(sources, settings, monkeypatch):
@@ -558,5 +740,5 @@ def test_climate_failure_keeps_the_report(sources, settings, monkeypatch):
     report = analyze(settings)
     status = {s.source: s for s in report.source_status}
     assert status["climate"].ok is False
-    assert not [f for f in report.profile if f.category == "climate"]
+    assert not {"heating_degree_days", "wind_speed_100m"} & {f.id for f in report.factors}
     assert report.needs  # everything else still there
