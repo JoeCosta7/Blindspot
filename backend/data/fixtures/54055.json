@@ -2,14 +2,64 @@
  "fips": "54055",
  "name": "Mercer County",
  "state": "WV",
- "population": null,
+ "population": 58563,
  "context": {
-  "median_household_income": null,
-  "poverty_rate": null,
-  "unemployment_rate": null,
-  "electric_heat_share": null
+  "median_household_income": 53210.0,
+  "poverty_rate": 0.16485132910727418,
+  "unemployment_rate": 0.026528739467756735,
+  "electric_heat_share": 0.6741661162483488,
+  "state_electricity_price_cents_kwh": 15.07,
+  "state_grid_co2_lb_per_mwh": 1954.4
  },
  "needs": [
+  {
+   "id": "carbon_intensive_grid",
+   "label": "Carbon-intensive electricity",
+   "theme": "energy",
+   "value": 1954.4,
+   "national_value": 767.2,
+   "unit": "lb_co2_per_mwh",
+   "severity": 100,
+   "level": "high",
+   "source": "EPA eGRID2023 (state average)",
+   "detail": "State average for WV: carbon dioxide per megawatt-hour generated in the state. Power crosses state lines, so this is not exactly what the county's homes use."
+  },
+  {
+   "id": "ev_charging_gap",
+   "label": "Few or no public EV chargers",
+   "theme": "transportation",
+   "value": 1.0245376773730854,
+   "national_value": 2.5149400309472787,
+   "unit": "per_10k_residents",
+   "severity": 100,
+   "level": "high",
+   "source": "NLR Alternative Fuel Stations",
+   "detail": "6 public charging stations in the county."
+  },
+  {
+   "id": "low_income",
+   "label": "Low household income",
+   "theme": "equity",
+   "value": 53210.0,
+   "national_value": 80734.0,
+   "unit": "usd",
+   "severity": 100,
+   "level": "high",
+   "source": "ACS 2020-2024",
+   "detail": null
+  },
+  {
+   "id": "mobile_homes",
+   "label": "Mobile and manufactured homes",
+   "theme": "energy",
+   "value": 0.20153348100187427,
+   "national_value": 0.055939517589784424,
+   "unit": "share",
+   "severity": 100,
+   "level": "high",
+   "source": "ACS 2020-2024",
+   "detail": null
+  },
   {
    "id": "landfill_gas_uncaptured",
    "label": "Landfill with no gas energy project",
@@ -23,6 +73,18 @@
    "detail": "EPA candidate landfill: Mercer County Landfill."
   },
   {
+   "id": "old_housing",
+   "label": "Housing built before 1980",
+   "theme": "energy",
+   "value": 0.5982961322201397,
+   "national_value": 0.49652532591555765,
+   "unit": "share",
+   "severity": 41,
+   "level": "elevated",
+   "source": "ACS 2020-2024",
+   "detail": null
+  },
+  {
    "id": "hazard_risk",
    "label": "High natural hazard risk",
    "theme": "resilience",
@@ -33,6 +95,18 @@
    "level": "elevated",
    "source": "FEMA National Risk Index (December 2025)",
    "detail": "Inland flooding: Relatively Moderate"
+  },
+  {
+   "id": "drive_alone",
+   "label": "Drive-alone commuting",
+   "theme": "transportation",
+   "value": 0.8188952610926653,
+   "national_value": 0.687856966335113,
+   "unit": "share",
+   "severity": 38,
+   "level": "elevated",
+   "source": "ACS 2020-2024",
+   "detail": null
   }
  ],
  "assets": [
@@ -49,6 +123,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 61.23,
+    "epa_wind_mw": null,
     "transmission_miles": 2.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170062"
    },
@@ -67,6 +142,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 57.58,
+    "epa_wind_mw": 4.97,
     "transmission_miles": 1.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170203"
    },
@@ -85,6 +161,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 55.71,
+    "epa_wind_mw": null,
     "transmission_miles": 2.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170063"
    },
@@ -103,6 +180,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 54.16,
+    "epa_wind_mw": 4.67,
     "transmission_miles": 0.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170003"
    },
@@ -121,6 +199,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 46.77,
+    "epa_wind_mw": null,
     "transmission_miles": 4.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170625"
    },
@@ -139,6 +218,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 43.89,
+    "epa_wind_mw": null,
     "transmission_miles": 0.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170243"
    },
@@ -157,6 +237,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 39.55,
+    "epa_wind_mw": 3.41,
     "transmission_miles": 1.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170007"
    },
@@ -175,6 +256,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 34.43,
+    "epa_wind_mw": null,
     "transmission_miles": 2.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170010"
    },
@@ -193,6 +275,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 33.26,
+    "epa_wind_mw": 2.87,
     "transmission_miles": 1.7,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170000"
    },
@@ -211,6 +294,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 31.36,
+    "epa_wind_mw": 2.7,
     "transmission_miles": 1.8,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170002"
    },
@@ -229,6 +313,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 31.09,
+    "epa_wind_mw": 2.68,
     "transmission_miles": 0.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170214"
    },
@@ -247,6 +332,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 30.29,
+    "epa_wind_mw": 2.61,
     "transmission_miles": 0.7,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170073"
    },
@@ -265,6 +351,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 25.91,
+    "epa_wind_mw": 2.23,
     "transmission_miles": 0.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169997"
    },
@@ -283,6 +370,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 24.22,
+    "epa_wind_mw": null,
     "transmission_miles": 2.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170015"
    },
@@ -301,6 +389,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 23.47,
+    "epa_wind_mw": 2.02,
     "transmission_miles": 0.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169885"
    },
@@ -319,6 +408,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 21.53,
+    "epa_wind_mw": 1.86,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169884"
    },
@@ -337,6 +427,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 19.57,
+    "epa_wind_mw": null,
     "transmission_miles": 2.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170014"
    },
@@ -355,6 +446,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 18.69,
+    "epa_wind_mw": null,
     "transmission_miles": 0.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170247"
    },
@@ -373,6 +465,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 18.65,
+    "epa_wind_mw": 1.61,
     "transmission_miles": 1.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170008"
    },
@@ -391,6 +484,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 17.95,
+    "epa_wind_mw": 1.55,
     "transmission_miles": 0.6,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170071"
    },
@@ -409,6 +503,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 16.83,
+    "epa_wind_mw": 1.45,
     "transmission_miles": 1.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170060"
    },
@@ -427,6 +522,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 16.83,
+    "epa_wind_mw": 1.45,
     "transmission_miles": 1.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170075"
    },
@@ -445,6 +541,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 16.05,
+    "epa_wind_mw": 1.38,
     "transmission_miles": 1.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170067"
    },
@@ -463,6 +560,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 15.31,
+    "epa_wind_mw": null,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170068"
    },
@@ -481,6 +579,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 14.96,
+    "epa_wind_mw": 1.29,
     "transmission_miles": 1.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169996"
    },
@@ -499,6 +598,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 12.09,
+    "epa_wind_mw": 1.04,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:29835"
    },
@@ -517,6 +617,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 11.93,
+    "epa_wind_mw": 1.03,
     "transmission_miles": 0.6,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170245"
    },
@@ -535,6 +636,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 11.5,
+    "epa_wind_mw": 0.99,
     "transmission_miles": 1.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170011"
    },
@@ -553,6 +655,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 10.67,
+    "epa_wind_mw": 0.92,
     "transmission_miles": 1.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170212"
    },
@@ -571,6 +674,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 10.52,
+    "epa_wind_mw": null,
     "transmission_miles": 1.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170064"
    },
@@ -589,6 +693,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 9.47,
+    "epa_wind_mw": null,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170202"
    },
@@ -607,6 +712,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 9.36,
+    "epa_wind_mw": 0.81,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168018"
    },
@@ -625,6 +731,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 9.12,
+    "epa_wind_mw": null,
     "transmission_miles": 1.6,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170074"
    },
@@ -643,6 +750,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 7.87,
+    "epa_wind_mw": null,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170248"
    },
@@ -661,6 +769,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 7.17,
+    "epa_wind_mw": null,
     "transmission_miles": 0.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170069"
    },
@@ -679,6 +788,7 @@
     "pv_scale": "utility",
     "wind_scale": "community",
     "epa_pv_mw": 5.93,
+    "epa_wind_mw": 0.51,
     "transmission_miles": 0.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170242"
    },
@@ -697,6 +807,7 @@
     "pv_scale": "utility",
     "wind_scale": null,
     "epa_pv_mw": 5.81,
+    "epa_wind_mw": null,
     "transmission_miles": 3.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170004"
    },
@@ -715,6 +826,7 @@
     "pv_scale": "utility",
     "wind_scale": "facility",
     "epa_pv_mw": 5.54,
+    "epa_wind_mw": null,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:44335"
    },
@@ -733,6 +845,7 @@
     "pv_scale": "utility",
     "wind_scale": "facility",
     "epa_pv_mw": 5.45,
+    "epa_wind_mw": null,
     "transmission_miles": 1.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170012"
    },
@@ -751,6 +864,7 @@
     "pv_scale": "utility",
     "wind_scale": "facility",
     "epa_pv_mw": 5.09,
+    "epa_wind_mw": null,
     "transmission_miles": 0.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170210"
    },
@@ -769,6 +883,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 4.89,
+    "epa_wind_mw": null,
     "transmission_miles": 0.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169994"
    },
@@ -787,6 +902,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 4.24,
+    "epa_wind_mw": null,
     "transmission_miles": 1.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170016"
    },
@@ -805,6 +921,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 4.18,
+    "epa_wind_mw": null,
     "transmission_miles": 1.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170013"
    },
@@ -823,6 +940,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 4.01,
+    "epa_wind_mw": null,
     "transmission_miles": 0.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169995"
    },
@@ -841,6 +959,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 3.35,
+    "epa_wind_mw": null,
     "transmission_miles": 1.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170204"
    },
@@ -859,6 +978,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 3.25,
+    "epa_wind_mw": null,
     "transmission_miles": 1.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170006"
    },
@@ -877,6 +997,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 2.65,
+    "epa_wind_mw": null,
     "transmission_miles": 4.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168028"
    },
@@ -895,6 +1016,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 2.56,
+    "epa_wind_mw": null,
     "transmission_miles": 1.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169928"
    },
@@ -913,6 +1035,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 2.53,
+    "epa_wind_mw": null,
     "transmission_miles": 2.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170066"
    },
@@ -931,6 +1054,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 2.49,
+    "epa_wind_mw": null,
     "transmission_miles": 0.8,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170213"
    },
@@ -949,6 +1073,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 2.12,
+    "epa_wind_mw": null,
     "transmission_miles": 1.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170009"
    },
@@ -967,6 +1092,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 2.02,
+    "epa_wind_mw": null,
     "transmission_miles": 0.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170249"
    },
@@ -985,6 +1111,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 2.01,
+    "epa_wind_mw": null,
     "transmission_miles": 1.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170076"
    },
@@ -1003,6 +1130,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 1.93,
+    "epa_wind_mw": null,
     "transmission_miles": 3.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:172879"
    },
@@ -1021,6 +1149,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.88,
+    "epa_wind_mw": null,
     "transmission_miles": 0.8,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170005"
    },
@@ -1039,6 +1168,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.84,
+    "epa_wind_mw": null,
     "transmission_miles": 0.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170244"
    },
@@ -1057,6 +1187,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.67,
+    "epa_wind_mw": null,
     "transmission_miles": 0.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170072"
    },
@@ -1075,6 +1206,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 1.39,
+    "epa_wind_mw": null,
     "transmission_miles": 3.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170017"
    },
@@ -1093,6 +1225,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.36,
+    "epa_wind_mw": null,
     "transmission_miles": 0.6,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170252"
    },
@@ -1111,6 +1244,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.32,
+    "epa_wind_mw": null,
     "transmission_miles": 1.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169999"
    },
@@ -1129,6 +1263,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 1.15,
+    "epa_wind_mw": null,
     "transmission_miles": 3.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168027"
    },
@@ -1147,6 +1282,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.15,
+    "epa_wind_mw": null,
     "transmission_miles": 0.1,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170246"
    },
@@ -1165,6 +1301,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.15,
+    "epa_wind_mw": null,
     "transmission_miles": 4.7,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170626"
    },
@@ -1183,6 +1320,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 1.06,
+    "epa_wind_mw": null,
     "transmission_miles": 2.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170001"
    },
@@ -1201,6 +1339,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.64,
+    "epa_wind_mw": null,
     "transmission_miles": 0.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:5218"
    },
@@ -1219,6 +1358,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.48,
+    "epa_wind_mw": null,
     "transmission_miles": 0.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170241"
    },
@@ -1237,6 +1377,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 0.43,
+    "epa_wind_mw": null,
     "transmission_miles": 3.0,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:12087"
    },
@@ -1255,6 +1396,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 0.43,
+    "epa_wind_mw": null,
     "transmission_miles": 2.5,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:13292"
    },
@@ -1273,6 +1415,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.43,
+    "epa_wind_mw": null,
     "transmission_miles": 0.4,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:168031"
    },
@@ -1291,6 +1434,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.27,
+    "epa_wind_mw": null,
     "transmission_miles": 2.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170065"
    },
@@ -1309,6 +1453,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.24,
+    "epa_wind_mw": null,
     "transmission_miles": 1.2,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:169998"
    },
@@ -1327,6 +1472,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.22,
+    "epa_wind_mw": null,
     "transmission_miles": 0.3,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:170251"
    },
@@ -1345,6 +1491,7 @@
     "pv_scale": "distributed",
     "wind_scale": "facility",
     "epa_pv_mw": 0.08,
+    "epa_wind_mw": null,
     "transmission_miles": 0.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:29771"
    },
@@ -1363,6 +1510,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 0.06,
+    "epa_wind_mw": null,
     "transmission_miles": 0.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:6398"
    },
@@ -1381,6 +1529,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 0.04,
+    "epa_wind_mw": null,
     "transmission_miles": 0.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:26525"
    },
@@ -1399,6 +1548,7 @@
     "pv_scale": "distributed",
     "wind_scale": null,
     "epa_pv_mw": 0.01,
+    "epa_wind_mw": null,
     "transmission_miles": 0.9,
     "profile_url": "https://cimc.epa.gov/ords/cimc/f?p=CIMC:REPOWER:::::P33_REF:9567"
    },
@@ -1511,12 +1661,261 @@
   "ev_station": 6
  },
  "missing_asset_types": [
-  "contaminated_site"
+  "contaminated_site",
+  "non_powered_dam"
  ],
  "resources": {
-  "solar_kwh_per_kw_year": 1306.0
+  "solar_kwh_per_kw_year": 1306.0,
+  "land_in_farms_acres": 60763.0,
+  "cropland_acres": 10713.0
  },
  "opportunities": [
+  {
+   "id": "community_solar:repowering:170062",
+   "solution_id": "community_solar",
+   "title": "Community solar on Beeson Highwall",
+   "asset_id": "repowering:170062",
+   "need_ids": [
+    "carbon_intensive_grid",
+    "low_income",
+    "mobile_homes"
+   ],
+   "score": 100,
+   "estimates": [
+    {
+     "label": "Capacity",
+     "value": 36.7,
+     "unit": "MW",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 423 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)"
+     ]
+    },
+    {
+     "label": "Annual energy",
+     "value": 48000.0,
+     "unit": "MWh per year",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 423 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)",
+      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses"
+     ]
+    },
+    {
+     "label": "Household equivalent",
+     "value": 4400.0,
+     "unit": "homes",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 423 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)",
+      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses",
+      "Average US home buys 10,791 kWh a year (EIA, 2022)"
+     ]
+    }
+   ],
+   "funding": [
+    {
+     "program_id": "elective_pay_48e_45y",
+     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
+    },
+    {
+     "program_id": "energy_community_bonus",
+     "name": "Energy community bonus",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.eesi.org/briefings/view/121225tax"
+    },
+    {
+     "program_id": "usda_reap",
+     "name": "USDA Rural Energy for America Program (REAP)",
+     "agency": "USDA",
+     "status": "uncertain",
+     "deadline": null,
+     "key_terms": "Grant awards were halted in March 2026 and the funding notice rescinded in April. A rewritten rule took effect 2026-10-16. Applicants are farms and rural small businesses, not governments. Check for an open notice.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://opengrants.io/usda-rural-development-grants-2026-whats-open-now/"
+    }
+   ]
+  },
+  {
+   "id": "wind_on_reclaimed_land:repowering:170203",
+   "solution_id": "wind_on_reclaimed_land",
+   "title": "Wind energy on Widemouth Creek High",
+   "asset_id": "repowering:170203",
+   "need_ids": [
+    "carbon_intensive_grid"
+   ],
+   "score": 100,
+   "estimates": [
+    {
+     "label": "Capacity",
+     "value": 4.97,
+     "unit": "MW",
+     "is_estimate": true,
+     "assumptions": [
+      "EPA RE-Powering screening estimate for the whole site: about 80 acres per MW",
+      "EPA screened the site for wind speed and size only; no wind study was done"
+     ]
+    }
+   ],
+   "funding": [
+    {
+     "program_id": "elective_pay_48e_45y",
+     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
+    },
+    {
+     "program_id": "energy_community_bonus",
+     "name": "Energy community bonus",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.eesi.org/briefings/view/121225tax"
+    }
+   ]
+  },
+  {
+   "id": "community_solar:repowering:170203",
+   "solution_id": "community_solar",
+   "title": "Community solar on Widemouth Creek High",
+   "asset_id": "repowering:170203",
+   "need_ids": [
+    "carbon_intensive_grid",
+    "low_income",
+    "mobile_homes"
+   ],
+   "score": 100,
+   "estimates": [
+    {
+     "label": "Capacity",
+     "value": 34.5,
+     "unit": "MW",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 397 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)"
+     ]
+    },
+    {
+     "label": "Annual energy",
+     "value": 45200.0,
+     "unit": "MWh per year",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 397 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)",
+      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses"
+     ]
+    },
+    {
+     "label": "Household equivalent",
+     "value": 4200.0,
+     "unit": "homes",
+     "is_estimate": true,
+     "assumptions": [
+      "60% of the site's 397 acres is usable",
+      "6.9 acres per MW (EPA RE-Powering screening figure)",
+      "NLR PVWatts typical-year output at the site: fixed tilt 20°, facing south, 14% system losses",
+      "Average US home buys 10,791 kWh a year (EIA, 2022)"
+     ]
+    }
+   ],
+   "funding": [
+    {
+     "program_id": "elective_pay_48e_45y",
+     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
+    },
+    {
+     "program_id": "energy_community_bonus",
+     "name": "Energy community bonus",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.eesi.org/briefings/view/121225tax"
+    },
+    {
+     "program_id": "usda_reap",
+     "name": "USDA Rural Energy for America Program (REAP)",
+     "agency": "USDA",
+     "status": "uncertain",
+     "deadline": null,
+     "key_terms": "Grant awards were halted in March 2026 and the funding notice rescinded in April. A rewritten rule took effect 2026-10-16. Applicants are farms and rural small businesses, not governments. Check for an open notice.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://opengrants.io/usda-rural-development-grants-2026-whats-open-now/"
+    }
+   ]
+  },
+  {
+   "id": "wind_on_reclaimed_land:repowering:170003",
+   "solution_id": "wind_on_reclaimed_land",
+   "title": "Wind energy on Church Hollow High",
+   "asset_id": "repowering:170003",
+   "need_ids": [
+    "carbon_intensive_grid"
+   ],
+   "score": 100,
+   "estimates": [
+    {
+     "label": "Capacity",
+     "value": 4.67,
+     "unit": "MW",
+     "is_estimate": true,
+     "assumptions": [
+      "EPA RE-Powering screening estimate for the whole site: about 80 acres per MW",
+      "EPA screened the site for wind speed and size only; no wind study was done"
+     ]
+    }
+   ],
+   "funding": [
+    {
+     "program_id": "elective_pay_48e_45y",
+     "name": "Elective (direct) pay for clean electricity credits (48E / 45Y)",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "Still available to governments, schools and nonprofits. Wind and solar had to start construction by 2026-07-04 or must be in service by 2027-12-31. Storage has later deadlines. Foreign-entity sourcing rules apply.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.claconnect.com/en/resources/articles/25/how-government-can-still-use-energy-credits"
+    },
+    {
+     "program_id": "energy_community_bonus",
+     "name": "Energy community bonus",
+     "agency": "IRS",
+     "status": "open_with_deadlines",
+     "deadline": "2027-12-31",
+     "key_terms": "A 10-point adder on the clean electricity credits, not a grant. Only applies if the base credit does. Whether a site qualifies depends on its location, which this tool does not check.",
+     "verified_on": "2026-11-13",
+     "source_url": "https://www.eesi.org/briefings/view/121225tax"
+    }
+   ]
+  },
   {
    "id": "landfill_gas_energy:lmop:2215",
    "solution_id": "landfill_gas_energy",
@@ -1550,8 +1949,24 @@
   }
  ],
  "narrative": {
-  "summary": "Mercer County, WV has 2 flagged needs. The most severe are landfill with no gas energy project and high natural hazard risk. 1 opportunity was matched to a local site: \"Landfill gas-to-energy at Mercer County Landfill\".",
+  "summary": "Mercer County, WV has 8 flagged needs. The most severe are carbon-intensive electricity, few or no public EV chargers and low household income. 5 opportunities were matched to these needs. The highest-ranked is \"Community solar on Beeson Highwall\".",
   "opportunity_notes": [
+   {
+    "opportunity_id": "community_solar:repowering:170062",
+    "text": "Addresses carbon-intensive electricity, low household income and mobile and manufactured homes. Rough estimates: capacity 36.7 MW; annual energy 48,000 MWh per year; household equivalent 4,400 homes. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
+   },
+   {
+    "opportunity_id": "wind_on_reclaimed_land:repowering:170203",
+    "text": "Addresses carbon-intensive electricity. Rough estimates: capacity 4.97 MW. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
+   },
+   {
+    "opportunity_id": "community_solar:repowering:170203",
+    "text": "Addresses carbon-intensive electricity, low household income and mobile and manufactured homes. Rough estimates: capacity 34.5 MW; annual energy 45,200 MWh per year; household equivalent 4,200 homes. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
+   },
+   {
+    "opportunity_id": "wind_on_reclaimed_land:repowering:170003",
+    "text": "Addresses carbon-intensive electricity. Rough estimates: capacity 4.67 MW. Funding lead to check: Elective (direct) pay for clean electricity credits (48E / 45Y) (open, with deadlines, deadline 2027-12-31)."
+   },
    {
     "opportunity_id": "landfill_gas_energy:lmop:2215",
     "text": "Addresses landfill with no gas energy project. Rough estimates: landfill gas generated 0.724 million cubic feet per day; waste in place 2,130,000 tons. No program in the funding table matched."
@@ -1559,23 +1974,25 @@
   ],
   "caveats": [
    "Figures marked as estimates are rough. The assumptions behind each one are listed with it.",
+   "A listed funding program is a lead to check, not a finding that the county or project is eligible. Confirm status and deadlines with the agency.",
    "EPA's landfill database does not include every landfill.",
-   "Some data could not be loaded (Census ACS (county), Census ACS (national baseline) and OpenStreetMap public buildings), so needs or sites may be missing from this report."
+   "Electricity bill and grid carbon figures are state averages, not county figures.",
+   "Some data could not be loaded (OpenStreetMap public buildings), so needs or sites may be missing from this report."
   ],
   "generated_by": "template"
  },
  "source_status": [
   {
    "source": "census",
-   "ok": false,
-   "cached": false,
-   "message": "CENSUS_API_KEY is not set (the Census API rejects keyless calls)"
+   "ok": true,
+   "cached": true,
+   "message": null
   },
   {
    "source": "census_national",
-   "ok": false,
-   "cached": false,
-   "message": "CENSUS_API_KEY is not set (the Census API rejects keyless calls)"
+   "ok": true,
+   "cached": true,
+   "message": null
   },
   {
    "source": "nri",
@@ -1599,7 +2016,7 @@
    "source": "overpass",
    "ok": false,
    "cached": false,
-   "message": "Timed out after 15 s"
+   "message": "Overpass is busy or rate-limiting; try again shortly"
   },
   {
    "source": "ev_stations",
@@ -1617,6 +2034,24 @@
    "source": "pvwatts",
    "ok": true,
    "cached": true,
+   "message": null
+  },
+  {
+   "source": "state_energy",
+   "ok": true,
+   "cached": false,
+   "message": null
+  },
+  {
+   "source": "dams",
+   "ok": true,
+   "cached": false,
+   "message": null
+  },
+  {
+   "source": "farms",
+   "ok": true,
+   "cached": false,
    "message": null
   },
   {

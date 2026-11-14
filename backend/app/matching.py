@@ -26,11 +26,21 @@ MISSING_DATA_FACTOR = 0.7
 _PV_SCALE_RANK = {"utility": 0, "distributed": 1, "off_grid": 2}
 
 
+# Kinds ranked by one size attribute, largest first.
+_SIZE_ATTRIBUTE = {
+    "landfill": "waste_in_place_tons",
+    "dam": "capacity_mw",
+    "wind_land": "epa_wind_mw",
+}
+
+
 class Solution(BaseModel):
     id: str
     name: str
     title_template: str
-    asset_kind: Literal["land", "building", "landfill"]
+    # "county" solutions have no host site: they produce one county-wide
+    # opportunity whenever a trigger need is flagged.
+    asset_kind: Literal["land", "building", "landfill", "dam", "wind_land", "county"]
     hosts: list[str]
     host_requires: str | None = None
     triggers: list[str]
@@ -39,16 +49,18 @@ class Solution(BaseModel):
 @dataclass(frozen=True)
 class Match:
     solution: Solution
-    asset: Asset
+    asset: Asset | None  # None for a county-wide solution
     needs: list[Need]
     score: int
 
     @property
     def id(self) -> str:
-        return f"{self.solution.id}:{self.asset.id}"
+        return f"{self.solution.id}:{self.asset.id if self.asset else 'county'}"
 
     @property
     def title(self) -> str:
+        if self.asset is None:
+            return self.solution.title_template
         return self.solution.title_template.format(asset=self.asset.name)
 
 
@@ -72,6 +84,7 @@ def pick_assets(
 
     Land: sites EPA screened as suitable for solar first, then largest acreage.
     Landfills: largest waste in place.
+    Dams: largest modelled capacity. Wind land: largest EPA wind estimate.
     Buildings: preferred host type first, then nearest the county's geographic
     center (a stand-in for a population center, which we do not have).
     """
@@ -91,11 +104,12 @@ def pick_assets(
                 a.name,
             )
 
-    elif solution.asset_kind == "landfill":
+    elif solution.asset_kind in _SIZE_ATTRIBUTE:
+        attribute = _SIZE_ATTRIBUTE[solution.asset_kind]
 
         def key(a: Asset) -> tuple:
-            waste = a.attributes.get("waste_in_place_tons")
-            return (-(float(waste) if isinstance(waste, (int, float)) else 0.0), a.name)
+            size = a.attributes.get(attribute)
+            return (-(float(size) if isinstance(size, (int, float)) else 0.0), a.name)
 
     else:
         lon, lat = centroid
@@ -129,9 +143,13 @@ def match_opportunities(
         if not matched:
             continue
         mean_severity = sum(n.severity for n in matched) / len(matched)
-        picked = pick_assets(solution, assets, centroid, assets_per_solution)
+        picked: list[Asset | None]
+        if solution.asset_kind == "county":
+            picked = [None]
+        else:
+            picked = list(pick_assets(solution, assets, centroid, assets_per_solution))
         for rank, asset in enumerate(picked):
-            has_data = has_estimate_inputs(solution.asset_kind, asset.attributes)
+            has_data = has_estimate_inputs(solution.asset_kind, asset.attributes if asset else {})
             factor = 1.0 if has_data else MISSING_DATA_FACTOR
             score = round(mean_severity * factor)
             match = Match(solution=solution, asset=asset, needs=matched, score=score)

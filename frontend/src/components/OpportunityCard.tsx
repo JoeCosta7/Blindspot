@@ -27,6 +27,17 @@ function EstimateRow({ estimate }: { estimate: Estimate }) {
   );
 }
 
+/** Who owns the dam decides whether the county can act on it at all. */
+function DamFacts({ asset }: { asset: Asset }) {
+  const { owner_type, waterway } = asset.attributes;
+  const facts = [
+    typeof waterway === "string" ? `On ${waterway}` : null,
+    typeof owner_type === "string" ? `Owner type: ${owner_type}` : null,
+  ].filter((fact): fact is string => fact !== null);
+  if (facts.length === 0) return null;
+  return <p className="muted">{facts.join(" · ")}</p>;
+}
+
 interface Props {
   rank: number;
   opportunity: Opportunity;
@@ -53,6 +64,12 @@ export function OpportunityCard({ rank, opportunity, asset, needs, note, onShowO
           <span className="legend-dot" style={{ background: ASSET_STYLES[asset.type].color }} />
           {ASSET_STYLES[asset.type].label} · Show on map
         </button>
+      )}
+      {asset?.type === "non_powered_dam" && <DamFacts asset={asset} />}
+      {opportunity.asset_id === null && (
+        <p className="muted">
+          County-wide: the data gives a count of farms, not their locations, so no site is named.
+        </p>
       )}
 
       {note && <p className="note">{note}</p>}

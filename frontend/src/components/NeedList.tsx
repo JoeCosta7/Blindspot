@@ -1,5 +1,8 @@
 import { formatNeedValue, THEME_LABELS } from "../format";
-import type { Need } from "../types";
+import type { Need, NeedId } from "../types";
+
+/** Needs measured for the whole state, because no county figure is published. */
+const STATE_LEVEL: ReadonlySet<NeedId> = new Set(["high_electricity_cost", "carbon_intensive_grid"]);
 
 /** County and national figures as two bars on a shared scale. */
 function Comparison({ need }: { need: Need }) {
@@ -13,7 +16,7 @@ function Comparison({ need }: { need: Need }) {
   const width = (value: number) => `${Math.max((value / max) * 100, 2)}%`;
   return (
     <dl className="comparison">
-      <dt>This county</dt>
+      <dt>{STATE_LEVEL.has(need.id) ? "State average" : "This county"}</dt>
       <dd>
         <span className="bar-track">
           <span className="bar bar-county" style={{ width: width(need.value) }} />

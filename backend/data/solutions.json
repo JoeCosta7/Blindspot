@@ -5,7 +5,7 @@
     "title_template": "Community solar on {asset}",
     "asset_kind": "land",
     "hosts": ["brownfield", "landfill", "mine_land", "contaminated_site"],
-    "triggers": ["low_income", "renters", "mobile_homes"]
+    "triggers": ["low_income", "renters", "mobile_homes", "high_electricity_cost", "carbon_intensive_grid"]
   },
   {
     "id": "resilience_hub",
@@ -21,7 +21,7 @@
     "title_template": "Weatherization and heat-pump sign-up clinic at {asset}",
     "asset_kind": "building",
     "hosts": ["library", "school"],
-    "triggers": ["old_housing", "delivered_fuel_heat", "mobile_homes"]
+    "triggers": ["old_housing", "delivered_fuel_heat", "mobile_homes", "high_electricity_cost"]
   },
   {
     "id": "public_ev_charging",
@@ -39,5 +39,30 @@
     "hosts": ["lmop_landfill"],
     "host_requires": "is_candidate",
     "triggers": ["landfill_gas_uncaptured"]
+  },
+  {
+    "id": "small_hydro",
+    "name": "Hydropower at an existing dam",
+    "title_template": "Hydropower at {asset}",
+    "asset_kind": "dam",
+    "hosts": ["non_powered_dam"],
+    "triggers": ["carbon_intensive_grid", "high_electricity_cost"]
+  },
+  {
+    "id": "wind_on_reclaimed_land",
+    "name": "Wind on reclaimed land",
+    "title_template": "Wind energy on {asset}",
+    "asset_kind": "wind_land",
+    "hosts": ["mine_land", "landfill", "brownfield", "contaminated_site"],
+    "host_requires": "epa_wind_mw",
+    "triggers": ["carbon_intensive_grid", "high_electricity_cost"]
+  },
+  {
+    "id": "farm_digester",
+    "name": "Manure digesters at large livestock farms",
+    "title_template": "Manure digesters at the county's large livestock farms",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": ["unmanaged_farm_waste"]
   }
 ]

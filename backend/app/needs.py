@@ -8,7 +8,7 @@ from typing import Any
 
 from app.config import Settings
 from app.models import Need, NeedLevel
-from app.sources import afdc, lmop, nri
+from app.sources import afdc, farms, lmop, nri, state_energy
 from app.sources.census import AcsMetrics
 
 
@@ -208,4 +208,123 @@ def hazard_need(ratings: dict[str, Any] | None, settings: Settings) -> Need | No
         level="high" if severity >= settings.severity_high else "elevated",
         source=nri.source_label(ratings.get("nri_version")),
         detail="; ".join(f"{hazard}: {rating}" for _, hazard, rating in flagged),
+    )
+
+
+def electricity_cost_need(energy: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Average residential monthly electric bill in the county's state against
+    the US average, scored like an ACS need. EIA does not publish it by county."""
+    if not energy:
+        return None
+    bill = energy["state"].get("residential_monthly_bill_usd")
+    baseline = energy["national"].get("residential_monthly_bill_usd")
+    if not bill or not baseline:
+        return None
+    severity, level = score_ratio(bill / baseline, settings)
+    if level is None:
+        return None
+    price = energy["state"].get("residential_price_cents_kwh")
+    us_price = energy["national"].get("residential_price_cents_kwh")
+    detail = f"State average for {energy['state_abbr']}; EIA does not publish county figures."
+    if price and us_price:
+        detail += f" The state's price is {price} cents per kWh, against {us_price} nationally."
+    return Need(
+        id="high_electricity_cost",
+        label="High household electricity bills",
+        theme="energy",
+        value=float(bill),
+        national_value=float(baseline),
+        unit="usd_per_month",
+        severity=severity,
+        level=level,
+        source=state_energy.bill_source_label(energy["electricity_year"]),
+        detail=detail,
+    )
+
+
+def grid_carbon_need(energy: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """CO2 per MWh generated in the county's state against the US rate, scored
+    like an ACS need."""
+    if not energy:
+        return None
+    rate = energy["state"].get("grid_co2_lb_per_mwh")
+    baseline = energy["national"].get("grid_co2_lb_per_mwh")
+    if not rate or not baseline:
+        return None
+    severity, level = score_ratio(rate / baseline, settings)
+    if level is None:
+        return None
+    return Need(
+        id="carbon_intensive_grid",
+        label="Carbon-intensive electricity",
+        theme="energy",
+        value=float(rate),
+        national_value=float(baseline),
+        unit="lb_co2_per_mwh",
+        severity=severity,
+        level=level,
+        source=state_energy.grid_source_label(energy["grid_year"]),
+        detail=(
+            f"State average for {energy['state_abbr']}: carbon dioxide per megawatt-hour "
+            "generated in the state. Power crosses state lines, so this is not exactly what "
+            "the county's homes use."
+        ),
+    )
+
+
+def _count_phrase(count: int, singular: str, plural: str) -> str:
+    return f"{count:,} {singular if count == 1 else plural}"
+
+
+def farm_waste_need(farm_row: dict[str, Any] | None, settings: Settings) -> Need | None:
+    """Large livestock farms with fewer operating manure digesters than farms.
+
+    EPA AgSTAR's screening size for a digester is 500 or more dairy cows or
+    2,000 or more hogs (https://www.epa.gov/agstar/agstar-market-opportunities-report).
+    The farm census publishes a 500-cow class by county but only a 1,000-hog
+    class, so: `high` when the county has a 500-cow dairy and no operating
+    digester; `elevated` when it has only 1,000-hog farms, or has some
+    digesters but fewer than large farms.
+    """
+    if not farm_row:
+        return None
+    dairies = int(farm_row.get("dairy_farms_500_plus") or 0)
+    hog_farms = int(farm_row.get("hog_farms_1000_plus") or 0)
+    digesters = int(farm_row.get("digesters_operational") or 0)
+    building = int(farm_row.get("digesters_under_construction") or 0)
+    large = dairies + hog_farms
+    if large == 0 or digesters >= large:
+        return None
+    high = dairies > 0 and digesters == 0
+
+    found = []
+    if dairies:
+        found.append(_count_phrase(dairies, "dairy farm", "dairy farms") + " with 500 or more cows")
+    if hog_farms:
+        found.append(_count_phrase(hog_farms, "hog farm", "hog farms") + " with 1,000 or more hogs")
+    detail = f"{' and '.join(found)} ({farms.CENSUS_LABEL}). "
+    if digesters:
+        detail += (
+            f"EPA lists {_count_phrase(digesters, 'operating digester', 'operating digesters')}"
+        )
+    else:
+        detail += "EPA lists no operating manure digester"
+    detail += (
+        f" in the county, and {building} under construction." if building else " in the county."
+    )
+    detail += " EPA's screening size for a digester is 500 cows or 2,000 hogs"
+    if hog_farms:
+        detail += "; the census has no 2,000-hog class by county"
+    detail += "."
+    return Need(
+        id="unmanaged_farm_waste",
+        label="Large livestock farms without manure digesters",
+        theme="waste",
+        value=float(large),
+        national_value=None,
+        unit="count",
+        severity=settings.severity_high if high else settings.severity_elevated,
+        level="high" if high else "elevated",
+        source=farms.SOURCE_LABEL,
+        detail=detail,
     )

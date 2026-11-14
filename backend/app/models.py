@@ -37,10 +37,15 @@ NeedId = Literal[
     "ev_charging_gap",
     "landfill_gas_uncaptured",
     "hazard_risk",
+    "high_electricity_cost",  # state average, EIA
+    "carbon_intensive_grid",  # state average, EPA eGRID
+    "unmanaged_farm_waste",  # large livestock farms without digesters
 ]
 NeedTheme = Literal["equity", "energy", "transportation", "waste", "resilience"]
 NeedLevel = Literal["elevated", "high"]
-NeedUnit = Literal["share", "usd", "per_10k_residents", "count", "rating"]
+NeedUnit = Literal[
+    "share", "usd", "per_10k_residents", "count", "rating", "usd_per_month", "lb_co2_per_mwh"
+]
 
 AssetType = Literal[
     "brownfield",  # EPA or state brownfields program site
@@ -52,6 +57,7 @@ AssetType = Literal[
     "library",
     "college",
     "ev_station",
+    "non_powered_dam",  # dam in ORNL's hydropower potential assessment
 ]
 
 FundingStatus = Literal["open", "open_with_deadlines", "paused", "uncertain", "unverified"]
@@ -87,6 +93,9 @@ class Asset(BaseModel):
 
 class Resources(BaseModel):
     solar_kwh_per_kw_year: float | None = None
+    # USDA Census of Agriculture 2022. Null where the census withholds it.
+    land_in_farms_acres: float | None = None
+    cropland_acres: float | None = None
 
 
 class Estimate(BaseModel):
@@ -113,7 +122,9 @@ class Opportunity(BaseModel):
     id: str
     solution_id: str
     title: str
-    asset_id: str
+    # Null for a county-wide opportunity with no single site, such as farm
+    # digesters: the farm census gives counts, not locations.
+    asset_id: str | None
     need_ids: list[NeedId]
     score: int = Field(ge=0, le=100)
     estimates: list[Estimate]
@@ -146,6 +157,9 @@ class CountyContext(BaseModel):
     poverty_rate: float | None = None
     unemployment_rate: float | None = None
     electric_heat_share: float | None = None
+    # State averages; not published by county.
+    state_electricity_price_cents_kwh: float | None = None
+    state_grid_co2_lb_per_mwh: float | None = None
 
 
 class CountyReport(BaseModel):

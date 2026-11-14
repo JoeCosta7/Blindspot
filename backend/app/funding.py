@@ -47,10 +47,11 @@ def load_programs(path: Path) -> tuple[FundingProgram, ...]:
 def match_funding(
     programs: tuple[FundingProgram, ...] | list[FundingProgram],
     solution_id: str,
-    asset_type: str,
+    asset_type: str | None,
 ) -> list[FundingMatch]:
     """A program matches when the solution is eligible and, if the program
-    restricts asset types, the asset's type is one of them."""
+    restricts asset types, the asset's type is one of them. A county-wide
+    opportunity has no asset type and so never matches a restricted program."""
     matched = [
         p
         for p in programs

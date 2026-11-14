@@ -4,6 +4,7 @@ import {
   ASSET_TYPE_ORDER,
   formatAcres,
   formatDollars,
+  formatNumber,
   formatShare,
   formatWhole,
   sourceName,
@@ -19,6 +20,9 @@ const LOADING_SOURCES = [
   "FEMA National Risk Index",
   "EPA RE-Powering sites",
   "EPA landfill database",
+  "EIA and EPA eGRID: state electricity bills and grid carbon",
+  "ORNL: dams without hydropower",
+  "USDA farm census and EPA digester database",
   "OpenStreetMap: schools, libraries, colleges",
   "NLR: EV charging stations",
   "NLR PVWatts: solar yield",
@@ -68,6 +72,18 @@ function ContextStats({ report }: { report: CountyReport }) {
       "Solar yield",
       report.resources.solar_kwh_per_kw_year !== null
         ? `${formatWhole(report.resources.solar_kwh_per_kw_year)} kWh per kW a year`
+        : null,
+    ],
+    [
+      "Electricity price (state average)",
+      context.state_electricity_price_cents_kwh !== null
+        ? `${context.state_electricity_price_cents_kwh.toFixed(1)} cents per kWh`
+        : null,
+    ],
+    [
+      "Land in farms",
+      report.resources.land_in_farms_acres !== null
+        ? formatAcres(report.resources.land_in_farms_acres)
         : null,
     ],
   ];
@@ -146,6 +162,12 @@ function AssetList({
                   {asset.attributes.is_candidate === true && (
                     <span className="muted"> · EPA candidate for a gas project</span>
                   )}
+                  {typeof asset.attributes.capacity_mw === "number" && (
+                    <span className="muted">
+                      {" "}
+                      · {formatNumber(asset.attributes.capacity_mw)} MW modelled by ORNL
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -163,7 +185,8 @@ function AssetList({
       )}
       <p className="muted">
         EPA's landfill gas database does not list every US landfill. The RE-Powering dataset does
-        not record whether a landfill is open or closed.
+        not record whether a landfill is open or closed. The dam list covers only the 2,616 dams
+        in the lower 48 states that ORNL assessed for hydropower.
       </p>
     </div>
   );
@@ -240,7 +263,9 @@ function CountyView({
                 key={opportunity.id}
                 rank={i + 1}
                 opportunity={opportunity}
-                asset={assetsById.get(opportunity.asset_id)}
+                asset={
+                  opportunity.asset_id !== null ? assetsById.get(opportunity.asset_id) : undefined
+                }
                 needs={report.needs}
                 note={notes.get(opportunity.id)}
                 onShowOnMap={onShowOnMap}

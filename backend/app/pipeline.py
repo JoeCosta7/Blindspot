@@ -30,7 +30,19 @@ from app.models import (
     Resources,
     SourceStatus,
 )
-from app.sources import SourceError, afdc, census, lmop, nri, overpass, pvwatts, repowering
+from app.sources import (
+    SourceError,
+    afdc,
+    census,
+    dams,
+    farms,
+    lmop,
+    nri,
+    overpass,
+    pvwatts,
+    repowering,
+    state_energy,
+)
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +57,9 @@ SOURCE_NAMES = {
     "ev_stations": "EV charging stations",
     "ev_national_count": "National EV station count",
     "pvwatts": "PVWatts solar yield",
+    "state_energy": "State electricity bills and grid carbon (EIA, EPA eGRID)",
+    "dams": "ORNL non-powered dams",
+    "farms": "USDA farm census and EPA digester database",
     "gemini": "Gemini narrative",
 }
 
@@ -117,6 +132,7 @@ def repowering_assets(rows: list[dict[str, Any]]) -> list[Asset]:
                 "pv_scale": row.get("pv_scale"),
                 "wind_scale": row.get("wind_scale"),
                 "epa_pv_mw": _rounded(row.get("epa_pv_mw"), 2),
+                "epa_wind_mw": _rounded(row.get("epa_wind_mw"), 2),
                 "transmission_miles": _rounded(row.get("transmission_miles"), 1),
                 "profile_url": row.get("profile_url"),
             },
@@ -151,6 +167,30 @@ def lmop_assets(rows: list[dict[str, Any]]) -> list[Asset]:
         )
         for row in rows
         if row.get("lat") is not None and row.get("lon") is not None
+    ]
+
+
+def dam_assets(rows: list[dict[str, Any]]) -> list[Asset]:
+    return [
+        Asset(
+            id=f"dam:{row['dam_id']}",
+            type="non_powered_dam",
+            name=_display_name(row.get("name"), "Unnamed dam"),
+            lat=row["lat"],
+            lon=row["lon"],
+            attributes={
+                "capacity_mw": row.get("capacity_mw"),
+                "generation_mwh_yr": row.get("generation_mwh_yr"),
+                "capacity_factor": row.get("capacity_factor"),
+                "head_ft": row.get("head_ft"),
+                "waterway": _display_name(row.get("waterway"), "") or None,
+                "owner_type": row.get("owner_type"),
+                "city": _display_name(row.get("city"), "") or None,
+                "input_data": row.get("input_data"),
+            },
+            source=dams.SOURCE_LABEL,
+        )
+        for row in rows
     ]
 
 
@@ -246,6 +286,13 @@ async def analyze_county(
             lambda: pvwatts.fetch_yield(client, settings, county.centroid_lat, county.centroid_lon),
             timeout,
         ),
+        _run(
+            "state_energy",
+            _local(lambda: state_energy.for_state(data_dir, county.state)),
+            timeout,
+        ),
+        _run("dams", _local(lambda: dams.dams_for_county(data_dir, county.fips)), timeout),
+        _run("farms", _local(lambda: farms.farms_for_county(data_dir, county.fips)), timeout),
     )
     (
         (acs, _),
@@ -257,6 +304,9 @@ async def analyze_county(
         (station_rows, _),
         (national_stations, _),
         (centroid_yield, _),
+        (energy, _),
+        (dam_rows, _),
+        (farm_row, _),
     ) = results
     statuses: list[SourceStatus] = [status for _, status in results]
     ok = {status.source: status.ok for status in statuses}
@@ -273,7 +323,9 @@ async def analyze_county(
     buildings = building_assets(county, building_rows or [])
     buildings.sort(key=lambda a: matching.distance(a, *centroid))
     stations = ev_assets(county, station_rows or [])
-    all_assets = sites + landfills + buildings + stations
+    dam_sites = dam_assets(dam_rows or [])
+    dam_sites.sort(key=lambda a: -(a.attributes.get("capacity_mw") or 0.0))  # type: ignore[operator]
+    all_assets = sites + landfills + buildings + stations + dam_sites
 
     # --- needs ----------------------------------------------------------------
     flagged: list[Need] = []
@@ -293,6 +345,13 @@ async def analyze_county(
     hazard = needs.hazard_need(nri_row, settings)
     if hazard:
         flagged.append(hazard)
+    for extra in (
+        needs.electricity_cost_need(energy, settings),
+        needs.grid_carbon_need(energy, settings),
+        needs.farm_waste_need(farm_row, settings),
+    ):
+        if extra:
+            flagged.append(extra)
     flagged.sort(key=lambda n: (-n.severity, n.id))
 
     # --- matching -------------------------------------------------------------
@@ -309,7 +368,11 @@ async def analyze_county(
     # --- site-specific solar yield for the top sites ----------------------------
     solar_assets: dict[str, Asset] = {}
     for match in matches:
-        if match.solution.id in SOLAR_SOLUTIONS and len(solar_assets) < settings.max_pvwatts_sites:
+        if (
+            match.asset is not None
+            and match.solution.id in SOLAR_SOLUTIONS
+            and len(solar_assets) < settings.max_pvwatts_sites
+        ):
             solar_assets.setdefault(match.asset.id, match.asset)
     site_results = await asyncio.gather(
         *(
@@ -332,10 +395,12 @@ async def analyze_county(
     opportunities: list[Opportunity] = []
     for match in matches:
         asset = match.asset
-        site_yield = site_yields.get(asset.id)
+        site_yield = site_yields.get(asset.id) if asset else None
         solar_yield = site_yield if site_yield is not None else centroid_yield
         figures: list[Estimate]
-        if match.solution.id == "community_solar":
+        if asset is None:
+            figures = []  # county-wide: no site to size
+        elif match.solution.id == "community_solar":
             acres = asset.attributes.get("acres")
             figures = estimates.solar_on_land(
                 float(acres) if isinstance(acres, (int, float)) else None,
@@ -346,6 +411,10 @@ async def analyze_county(
             figures = estimates.resilience_hub(solar_yield, site_yield is not None)
         elif match.solution.id == "landfill_gas_energy":
             figures = estimates.landfill_gas(asset.attributes)
+        elif match.solution.id == "small_hydro":
+            figures = estimates.hydro_at_dam(asset.attributes)
+        elif match.solution.id == "wind_on_reclaimed_land":
+            figures = estimates.wind_on_land(asset.attributes)
         else:
             figures = []
         opportunities.append(
@@ -353,11 +422,13 @@ async def analyze_county(
                 id=match.id,
                 solution_id=match.solution.id,
                 title=match.title,
-                asset_id=asset.id,
+                asset_id=asset.id if asset else None,
                 need_ids=[n.id for n in match.needs],
                 score=match.score,
                 estimates=figures,
-                funding=funding.match_funding(programs, match.solution.id, asset.type),
+                funding=funding.match_funding(
+                    programs, match.solution.id, asset.type if asset else None
+                ),
             )
         )
 
@@ -368,15 +439,17 @@ async def analyze_county(
         ("lmop", ("lmop_landfill",)),
         ("overpass", BUILDING_TYPES),
         ("ev_stations", ("ev_station",)),
+        ("dams", ("non_powered_dam",)),
     ]
     missing = [t for source, types in searched if ok[source] for t in types if counts[t] == 0]
-    used = {o.asset_id for o in opportunities}
+    used = {o.asset_id for o in opportunities if o.asset_id}
     shown_assets = _cap_for_map(
         [
             (sites, settings.max_sites_per_county),
             (landfills, len(landfills)),
             (buildings, settings.max_buildings_per_county),
             (stations, settings.max_ev_markers_per_county),
+            (dam_sites, len(dam_sites)),
         ],
         used,
     )
@@ -397,13 +470,21 @@ async def analyze_county(
             poverty_rate=acs.poverty_rate if acs else None,
             unemployment_rate=acs.unemployment_rate if acs else None,
             electric_heat_share=acs.electric_heat_share if acs else None,
+            state_electricity_price_cents_kwh=(
+                energy["state"].get("residential_price_cents_kwh") if energy else None
+            ),
+            state_grid_co2_lb_per_mwh=(
+                energy["state"].get("grid_co2_lb_per_mwh") if energy else None
+            ),
         ),
         needs=flagged,
         assets=shown_assets,
         asset_counts=dict(counts),
         missing_asset_types=missing,  # type: ignore[arg-type]
         resources=Resources(
-            solar_kwh_per_kw_year=round(centroid_yield) if centroid_yield else None
+            solar_kwh_per_kw_year=round(centroid_yield) if centroid_yield else None,
+            land_in_farms_acres=farm_row.get("land_in_farms_acres") if farm_row else None,
+            cropland_acres=farm_row.get("cropland_acres") if farm_row else None,
         ),
         opportunities=opportunities,
         narrative=brief,

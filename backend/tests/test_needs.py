@@ -115,3 +115,77 @@ def test_hazard_need_levels_and_detail(settings):
 
     assert needs.hazard_need({"wildfire_rating": "Relatively Low"}, settings) is None
     assert needs.hazard_need(None, settings) is None
+
+
+# --- stretch needs --------------------------------------------------------------
+
+
+def energy(bill=142.0, co2=767.0, **state):
+    return {
+        "state_abbr": "ZZ",
+        "state": {
+            "residential_monthly_bill_usd": bill,
+            "residential_price_cents_kwh": 15.0,
+            "grid_co2_lb_per_mwh": co2,
+            **state,
+        },
+        "national": {
+            "residential_monthly_bill_usd": 142.0,
+            "residential_price_cents_kwh": 16.5,
+            "grid_co2_lb_per_mwh": 767.0,
+        },
+        "electricity_year": 2024,
+        "grid_year": 2023,
+    }
+
+
+def test_electricity_cost_need_uses_the_state_bill(settings):
+    assert needs.electricity_cost_need(None, settings) is None
+    assert needs.electricity_cost_need(energy(bill=150.0), settings) is None  # ratio 1.06
+
+    need = needs.electricity_cost_need(energy(bill=177.5), settings)  # ratio 1.25
+    assert (need.id, need.level, need.severity) == ("high_electricity_cost", "high", 50)
+    assert (need.value, need.national_value, need.unit) == (177.5, 142.0, "usd_per_month")
+    assert "State average for ZZ" in need.detail and "2024" in need.source
+
+    no_bill = energy(residential_monthly_bill_usd=None)
+    assert needs.electricity_cost_need(no_bill, settings) is None
+
+
+def test_grid_carbon_need_uses_the_state_rate(settings):
+    assert needs.grid_carbon_need(energy(co2=800.0), settings) is None
+    need = needs.grid_carbon_need(energy(co2=1954.4), settings)
+    assert (need.id, need.level, need.severity) == ("carbon_intensive_grid", "high", 100)
+    assert need.unit == "lb_co2_per_mwh" and "eGRID2023" in need.source
+    # Puerto Rico has an eGRID rate but no EIA bill: only this need can fire.
+    assert needs.grid_carbon_need(energy(co2=None), settings) is None
+
+
+def farm(dairies=0, hogs=0, digesters=0, building=0):
+    return {
+        "dairy_farms_500_plus": dairies,
+        "hog_farms_1000_plus": hogs,
+        "digesters_operational": digesters,
+        "digesters_under_construction": building,
+    }
+
+
+def test_farm_waste_need_levels(settings):
+    assert needs.farm_waste_need(None, settings) is None
+    assert needs.farm_waste_need(farm(), settings) is None
+    assert needs.farm_waste_need(farm(dairies=2, digesters=2), settings) is None
+
+    high = needs.farm_waste_need(farm(dairies=22, hogs=3), settings)
+    assert (high.level, high.severity, high.value) == ("high", 75, 25.0)
+    assert "22 dairy farms with 500 or more cows" in high.detail
+    assert "3 hog farms with 1,000 or more hogs" in high.detail
+    assert "no operating manure digester" in high.detail
+
+    # EPA's hog threshold is 2,000 head; the census only has a 1,000 class.
+    hogs_only = needs.farm_waste_need(farm(hogs=1), settings)
+    assert (hogs_only.level, hogs_only.severity) == ("elevated", 40)
+    assert "1 hog farm with" in hogs_only.detail and "no 2,000-hog class" in hogs_only.detail
+
+    some = needs.farm_waste_need(farm(dairies=5, digesters=2, building=1), settings)
+    assert some.level == "elevated"
+    assert "2 operating digesters" in some.detail and "1 under construction" in some.detail

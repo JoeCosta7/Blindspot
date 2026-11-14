@@ -18,11 +18,21 @@ export type NeedId =
   | "drive_alone"
   | "ev_charging_gap"
   | "landfill_gas_uncaptured"
-  | "hazard_risk";
+  | "hazard_risk"
+  | "high_electricity_cost"
+  | "carbon_intensive_grid"
+  | "unmanaged_farm_waste";
 
 export type NeedTheme = "equity" | "energy" | "transportation" | "waste" | "resilience";
 export type NeedLevel = "elevated" | "high";
-export type NeedUnit = "share" | "usd" | "per_10k_residents" | "count" | "rating";
+export type NeedUnit =
+  | "share"
+  | "usd"
+  | "per_10k_residents"
+  | "count"
+  | "rating"
+  | "usd_per_month"
+  | "lb_co2_per_mwh";
 
 export type AssetType =
   | "brownfield"
@@ -33,7 +43,8 @@ export type AssetType =
   | "school"
   | "library"
   | "college"
-  | "ev_station";
+  | "ev_station"
+  | "non_powered_dam";
 
 export type FundingStatus =
   | "open"
@@ -71,6 +82,9 @@ export interface Asset {
 
 export interface Resources {
   solar_kwh_per_kw_year: number | null;
+  /** USDA Census of Agriculture 2022. Null where the census withholds it. */
+  land_in_farms_acres: number | null;
+  cropland_acres: number | null;
 }
 
 export interface Estimate {
@@ -96,7 +110,8 @@ export interface Opportunity {
   id: string;
   solution_id: string;
   title: string;
-  asset_id: string;
+  /** Null for a county-wide opportunity with no single site. */
+  asset_id: string | null;
   need_ids: NeedId[];
   score: number;
   estimates: Estimate[];
@@ -128,6 +143,9 @@ export interface CountyContext {
   poverty_rate: number | null;
   unemployment_rate: number | null;
   electric_heat_share: number | null;
+  /** State averages; not published by county. */
+  state_electricity_price_cents_kwh: number | null;
+  state_grid_co2_lb_per_mwh: number | null;
 }
 
 export interface CountyReport {

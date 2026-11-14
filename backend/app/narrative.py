@@ -73,6 +73,10 @@ def format_need_value(value: float | None, unit: str) -> str | None:
         return f"{value:.1f} per 10,000 residents"
     if unit == "count":
         return f"{value:,.0f}"
+    if unit == "usd_per_month":
+        return f"${value:,.0f} a month"
+    if unit == "lb_co2_per_mwh":
+        return f"{value:,.0f} pounds of CO2 per MWh"
     return None
 
 
@@ -190,6 +194,10 @@ def standard_caveats(payload: dict[str, Any], failed_sources: list[str]) -> list
         )
     if any("landfill" in o["title"].lower() for o in opportunities):
         caveats.append("EPA's landfill database does not include every landfill.")
+    if any("state average" in (n.get("detail") or "").lower() for n in payload["needs"]):
+        caveats.append(
+            "Electricity bill and grid carbon figures are state averages, not county figures."
+        )
     if failed_sources:
         caveats.append(failed_sources_caveat(failed_sources))
     return caveats
@@ -217,15 +225,15 @@ def template_narrative(payload: dict[str, Any], failed_sources: list[str]) -> Na
         if opportunities:
             if len(opportunities) == 1:
                 summary += (
-                    f' 1 opportunity was matched to a local site: "{opportunities[0]["title"]}".'
+                    f' 1 opportunity was matched to these needs: "{opportunities[0]["title"]}".'
                 )
             else:
                 summary += (
-                    f" {len(opportunities)} opportunities were matched to specific local sites. "
+                    f" {len(opportunities)} opportunities were matched to these needs. "
                     f'The highest-ranked is "{opportunities[0]["title"]}".'
                 )
         else:
-            summary += " No local site could be matched to these needs from the data that loaded."
+            summary += " No opportunity could be matched to these needs from the data that loaded."
 
     notes = []
     for o in opportunities:

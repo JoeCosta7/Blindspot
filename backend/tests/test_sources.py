@@ -262,3 +262,26 @@ def test_overpass_sends_user_agent_and_reports_busy(settings):
         path.unlink()
     with pytest.raises(SourceError, match="busy"):
         asyncio.run(run(lambda r: httpx.Response(429)))
+
+
+# --- state energy file -----------------------------------------------------------
+
+
+def test_state_energy_lookup(tmp_path):
+    from app.sources import state_energy
+
+    with pytest.raises(SourceError, match="prep_data.py energy"):
+        state_energy.for_state(tmp_path, "WV")
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "state_energy.json").write_text(
+        '{"electricity_year": 2024, "grid_year": 2023, "states": {'
+        '"WV": {"residential_monthly_bill_usd": 154.76, "grid_co2_lb_per_mwh": 1954.4},'
+        '"US": {"residential_monthly_bill_usd": 142.26, "grid_co2_lb_per_mwh": 767.2}}}'
+    )
+    found = state_energy.for_state(data_dir, "WV")
+    assert found["state"]["grid_co2_lb_per_mwh"] == 1954.4
+    assert found["national"]["residential_monthly_bill_usd"] == 142.26
+    assert (found["electricity_year"], found["grid_year"]) == (2024, 2023)
+    assert state_energy.for_state(data_dir, "ZZ") is None

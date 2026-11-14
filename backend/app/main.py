@@ -27,7 +27,15 @@ from app.pipeline import analyze_county
 
 log = logging.getLogger(__name__)
 
-DATA_FILES = ("counties.geojson", "repowering.parquet", "lmop.parquet", "nri_counties.parquet")
+DATA_FILES = (
+    "counties.geojson",
+    "repowering.parquet",
+    "lmop.parquet",
+    "nri_counties.parquet",
+    "state_energy.json",
+    "dams.parquet",
+    "farms.parquet",
+)
 
 
 def load_county_index(settings: Settings) -> CountyIndex:

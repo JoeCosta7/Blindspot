@@ -5,7 +5,19 @@ import asyncio
 import pytest
 
 from app import pipeline
-from app.sources import SourceError, afdc, census, lmop, nri, overpass, pvwatts, repowering
+from app.sources import (
+    SourceError,
+    afdc,
+    census,
+    dams,
+    farms,
+    lmop,
+    nri,
+    overpass,
+    pvwatts,
+    repowering,
+    state_energy,
+)
 from tests.conftest import make_county, make_metrics
 
 COUNTY = make_county("99001", 0, 0, 1, 1)
@@ -171,6 +183,10 @@ def sources(monkeypatch):
             "wildfire_rating": "Relatively High",
         },
     )
+    # The stretch sources find nothing unless a test says otherwise.
+    monkeypatch.setattr(state_energy, "for_state", lambda data_dir, state: None)
+    monkeypatch.setattr(dams, "dams_for_county", lambda data_dir, fips: [])
+    monkeypatch.setattr(farms, "farms_for_county", lambda data_dir, fips: None)
 
 
 def analyze(settings):
@@ -207,7 +223,12 @@ def test_full_report(sources, settings):
         "school": 1,
         "ev_station": 1,
     }
-    assert set(report.missing_asset_types) == {"landfill", "mine_land", "college"}
+    assert set(report.missing_asset_types) == {
+        "landfill",
+        "mine_land",
+        "college",
+        "non_powered_dam",
+    }
 
     by_id = {o.id: o for o in report.opportunities}
     assert len(report.opportunities) <= settings.max_opportunities
@@ -306,3 +327,95 @@ def test_map_caps_keep_opportunity_assets(sources, settings, monkeypatch):
     assert report.asset_counts["brownfield"] == 10
     assert shown[:3] == ["repowering:10", "repowering:9", "repowering:8"]  # largest first
     assert "repowering:1" in shown and len(shown) == 4
+
+
+def test_stretch_sources_add_needs_assets_and_opportunities(sources, settings, monkeypatch):
+    monkeypatch.setattr(
+        state_energy,
+        "for_state",
+        lambda data_dir, state: {
+            "state_abbr": state,
+            "state": {
+                "residential_monthly_bill_usd": 180.0,
+                "residential_price_cents_kwh": 15.07,
+                "grid_co2_lb_per_mwh": 1900.0,
+            },
+            "national": {
+                "residential_monthly_bill_usd": 144.0,
+                "residential_price_cents_kwh": 16.48,
+                "grid_co2_lb_per_mwh": 760.0,
+            },
+            "electricity_year": 2024,
+            "grid_year": 2023,
+        },
+    )
+    monkeypatch.setattr(
+        dams,
+        "dams_for_county",
+        lambda data_dir, fips: [
+            {
+                "dam_id": "ZZ00001",
+                "name": "MILL POND DAM",
+                "lat": 0.7,
+                "lon": 0.7,
+                "capacity_mw": 2.5,
+                "generation_mwh_yr": 9000.0,
+                "capacity_factor": 0.41,
+                "head_ft": 30.0,
+                "waterway": "MILL RIVER",
+                "owner_type": "Local Government",
+                "city": None,
+                "input_data": "Modeled Flow, Estimated Head",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        farms,
+        "farms_for_county",
+        lambda data_dir, fips: {
+            "land_in_farms_acres": 120_000,
+            "cropland_acres": 80_000,
+            "dairy_farms_500_plus": 3,
+            "hog_farms_1000_plus": 0,
+            "digesters_operational": 0,
+            "digesters_under_construction": 0,
+        },
+    )
+    # Room for every solution, so the assertions do not depend on ranking.
+    report = analyze(settings.model_copy(update={"max_opportunities": 20}))
+
+    needs_by_id = {n.id: n for n in report.needs}
+    bill = needs_by_id["high_electricity_cost"]
+    assert (bill.value, bill.national_value, bill.level, bill.severity) == (
+        180.0,
+        144.0,
+        "high",
+        50,
+    )
+    assert needs_by_id["carbon_intensive_grid"].severity == 100
+    assert needs_by_id["unmanaged_farm_waste"].level == "high"
+
+    assert report.asset_counts["non_powered_dam"] == 1
+    assert "non_powered_dam" not in report.missing_asset_types
+    assert report.context.state_electricity_price_cents_kwh == 15.07
+    assert report.resources.land_in_farms_acres == 120_000
+
+    by_solution = {o.solution_id: o for o in report.opportunities}
+    hydro = by_solution["small_hydro"]
+    assert hydro.title == "Hydropower at Mill Pond Dam"
+    assert hydro.asset_id == "dam:ZZ00001"
+    assert [e.label for e in hydro.estimates] == [
+        "Capacity",
+        "Annual energy",
+        "Household equivalent",
+    ]
+    assert [f.program_id for f in hydro.funding] == ["elective_pay_48e_45y_hydro"]
+
+    digester = by_solution["farm_digester"]
+    assert digester.asset_id is None and digester.estimates == []
+    assert [(f.program_id, f.status) for f in digester.funding] == [("usda_reap", "uncertain")]
+
+    # Opportunities that name a site still point at an asset on the map.
+    shown = {a.id for a in report.assets}
+    assert all(o.asset_id in shown for o in report.opportunities if o.asset_id)
+    assert any("state averages" in c for c in report.narrative.caveats)

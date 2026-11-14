@@ -32,6 +32,12 @@ USABLE_FRACTION = 0.6
 # Revenue, and Average Price report, Table 5.a.
 HOUSEHOLD_KWH_PER_YEAR = 10_791
 
+# EPA's wind screening figure. The dataset's attribute sheet says "approximately
+# 80 MW per acre", which is a slip: every sized site in the file has 80 acres
+# per MW, capped at 1,600 MW. Read 2026-11-14.
+WIND_ACRES_PER_MW = 80
+WIND_MAX_SITE_MW = 1600.0
+
 # Illustrative rooftop array for a resilience hub. Not derived from the
 # building: we have no roof area data.
 RESILIENCE_HUB_KW = 100.0
@@ -160,9 +166,74 @@ def landfill_gas(attributes: dict[str, Any]) -> list[Estimate]:
     return estimates
 
 
+def _household_estimate(annual_kwh: float, basis: list[str]) -> Estimate:
+    return Estimate(
+        label="Household equivalent",
+        value=round_sig(annual_kwh / HOUSEHOLD_KWH_PER_YEAR, 2),
+        unit="homes",
+        assumptions=[
+            *basis,
+            f"Average US home buys {HOUSEHOLD_KWH_PER_YEAR:,} kWh a year (EIA, 2022)",
+        ],
+    )
+
+
+def hydro_at_dam(attributes: dict[str, Any]) -> list[Estimate]:
+    """ORNL's modelled capacity and generation for the dam. Only the household
+    figure is computed here."""
+    capacity = attributes.get("capacity_mw")
+    generation = attributes.get("generation_mwh_yr")
+    if not capacity:
+        return []
+    basis = [
+        "ORNL HydroSource model result from 1980-2015 river flow; not an engineering design",
+    ]
+    inputs = attributes.get("input_data")
+    if inputs:
+        basis.append(f"ORNL inputs for this dam: {str(inputs).lower()}")
+    estimates = [
+        Estimate(label="Capacity", value=round_sig(float(capacity)), unit="MW", assumptions=basis)
+    ]
+    if generation:
+        estimates.append(
+            Estimate(
+                label="Annual energy",
+                value=round_sig(float(generation)),
+                unit="MWh per year",
+                assumptions=basis,
+            )
+        )
+        estimates.append(_household_estimate(float(generation) * 1000, basis))
+    return estimates
+
+
+def wind_on_land(attributes: dict[str, Any]) -> list[Estimate]:
+    """EPA's own screening capacity for the site. No energy figure: we have no
+    wind resource source to turn capacity into output."""
+    capacity = attributes.get("epa_wind_mw")
+    if not capacity:
+        return []
+    basis = [
+        f"EPA RE-Powering screening estimate for the whole site: about "
+        f"{WIND_ACRES_PER_MW} acres per MW",
+        "EPA screened the site for wind speed and size only; no wind study was done",
+    ]
+    if float(capacity) >= WIND_MAX_SITE_MW:
+        basis.append(f"Capped at {WIND_MAX_SITE_MW:,.0f} MW, EPA's screening maximum")
+    return [
+        Estimate(label="Capacity", value=round_sig(float(capacity)), unit="MW", assumptions=basis)
+    ]
+
+
 def has_estimate_inputs(asset_kind: str, attributes: dict[str, Any]) -> bool:
     """Whether the asset carries the data its estimate needs. Used as the
     asset factor in matching."""
+    if asset_kind == "dam":
+        return bool(attributes.get("capacity_mw"))
+    if asset_kind == "wind_land":
+        return bool(attributes.get("epa_wind_mw"))
+    if asset_kind == "county":
+        return False  # no site, so nothing to size
     if asset_kind == "land":
         acres = attributes.get("acres")
         return acres is not None and acres > 0

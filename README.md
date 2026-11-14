@@ -21,7 +21,7 @@ You need three keys before anything useful runs:
 cd backend && python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env                 # then fill in the keys
-python scripts/prep_data.py          # once: ~90 MB download, about 90 seconds
+python scripts/prep_data.py          # once: ~420 MB download, about two minutes
 uvicorn app.main:app --reload --port 8000
 
 # frontend
@@ -37,27 +37,76 @@ to `backend/data/fixtures/`, and `http://localhost:5173/?fixture=1` serves them.
 
 ## Status
 
-Working and tested (85 backend tests; frontend builds in strict mode):
+Working and tested (95 backend tests; frontend builds in strict mode):
 
-- `prep_data.py` builds all four national files from the real sources.
+- `prep_data.py` builds all seven national files from the real sources.
 - `POST /api/analyze` for a county or a box, with every source under a 15 s
   timeout, cached on disk, and reported in `source_status` on failure.
 - Needs, matching, estimates, funding and the template narrative.
 - Results panel, county search, loading and error states, fixture mode.
 
-Written but not yet run against the real service:
+Run against the real services on 2026-11-14: Census ACS (three counties),
+PVWatts, the station API, and the map (county highlight, markers and legend
+seen in a headless browser).
 
-- **The map** (`MapView.tsx`, `boxSelect.ts`): no Mapbox token was available.
-  It type-checks; clicking, hover, markers and box select are untested.
-- **Census**: no key was available. Parsing and formulas are unit-tested
-  against the documented response shape, not a live call.
+Not yet run against the real service:
+
+- **Map interaction**: clicking a county, hover, popups and box select have
+  not been driven. Selection so far has gone through the search box.
 - **Gemini**: no key. The call, number validation, caching and fallback are
   tested with a fake model.
+- **Overpass**: every call so far has timed out or been refused as busy, so no
+  report has had real public buildings in it.
 
-`backend/data/fixtures/54055.json` (Mercer County, WV) is a real report, but a
-partial one: it was saved with no Census key and while Overpass was at
-capacity, so it has two needs and one opportunity. Regenerate it once the keys
-are in place.
+`backend/data/fixtures/54055.json` (Mercer County, WV) is a real report with
+Census data, saved on 2026-11-14 while Overpass was busy: it has no public
+buildings, so no resilience hub, clinic or charging opportunity. Regenerate
+it when Overpass answers.
+
+## Stretch sources
+
+Added on 2026-11-14. Each file was opened before its columns were mapped.
+
+| Source | File and year | What it adds |
+|---|---|---|
+| EIA electric sales data | Table 5A, 2024 | Need `high_electricity_cost`: the state's average residential monthly bill against the US average. |
+| EPA eGRID | eGRID2023 rev 2 | Need `carbon_intensive_grid`: CO2 per MWh generated in the state against the US rate. |
+| ORNL HydroSource | Non-powered dam assessment, 2025 | Asset `non_powered_dam` (2,616 dams, lower 48) and solution `small_hydro`. Capacity and energy are ORNL's model results. |
+| USDA Census of Agriculture | NASS bulk file, 2022 | Farmland acres, and counts of dairies with 500 or more cows and hog farms with 1,000 or more hogs. |
+| EPA AgSTAR | Digester database | Operating manure digesters per county. With the census counts it drives need `unmanaged_farm_waste` and solution `farm_digester`. |
+| EPA RE-Powering (already loaded) | 2022 dataset | Solution `wind_on_reclaimed_land` from EPA's per-site wind estimate, and distance to a transmission line in the map popup. |
+
+Things to know about them:
+
+- **Bills and grid carbon are state averages.** Neither agency publishes a
+  county figure. The panel labels the bar "State average". The eGRID rate is
+  for power generated in the state, not power used there.
+- **Farm digesters have no map point.** The census gives counts, not farm
+  locations, so that opportunity is county-wide and `asset_id` is null.
+- **Hog threshold.** EPA's screening size is 500 cows or 2,000 hogs. The census
+  has no 2,000-hog class by county, so a county with only 1,000-hog farms is
+  `elevated`, not `high`.
+- **Dams.** Many of the largest are federal locks and dams. The card shows the
+  owner type; the tool does not check whether the owner would allow a project.
+- **Wind.** EPA's attribute sheet says "80 MW per acre"; the data is 80 acres
+  per MW. There is no energy figure, because we have no wind resource source.
+- **AgSTAR county names.** Nine misspelled names are corrected in
+  `prep_data.py`. One Texas project names a county that does not exist and is
+  left out.
+- **Connecticut has no farm data.** The 2022 census used counties the state
+  has since replaced.
+- **Funding.** Hydropower has its own tax-credit entry with no deadline,
+  because the plan says only that its deadlines are later. REAP now also
+  lists `farm_digester`; its status is still `uncertain`.
+
+Not added:
+
+- **Earth Engine** (forest residue, open land, paved lots, tree canopy,
+  surface heat): it needs a Google Cloud project and credentials.
+- **Streams, impaired waters, crop and forest biomass**: no source was found
+  that gives a county figure without a large download or an invented formula.
+- **OSM transmission lines**: Overpass is not answering; the RE-Powering
+  distance column is used instead.
 
 ## What verification found
 
@@ -77,8 +126,9 @@ Items the original project plan marked VERIFY, checked on 2026-11-13:
 | Overpass | Needs a `User-Agent` header (406 without). The public server was at capacity during testing. |
 | `google-genai` config | `response_mime_type` and `response_schema` exist in SDK 3.3.0. |
 
-Still unverified: the 60% usable-land assumption, FEMA and state funding
-programs, and every stretch data source.
+Still unverified: the 60% usable-land assumption, and FEMA and state funding
+programs. EIA's Table 5A gives 863 kWh a month for 2024 (10,359 a year);
+`estimates.py` still uses the 2022 FAQ figure.
 
 ## Where the code departs from the original plan
 
@@ -93,9 +143,9 @@ programs, and every stretch data source.
   station count and ACS national population) instead of a hard-coded constant.
   Set `EV_BENCHMARK_PER_10K` to pin it.
 - **Contract additions** in `models.py`: `Need.detail`, `asset_counts`,
-  `missing_asset_types`, extra `context` fields, and `agency` and `key_terms`
-  on funding matches.
-- **Funding table.** Six entries, all from section 11. Public EV charging and
+  `missing_asset_types`, extra `context` and `resources` fields, and `agency`
+  and `key_terms` on funding matches. `Opportunity.asset_id` can be null.
+- **Funding table.** Seven entries, all from section 11. Public EV charging and
   landfill gas have no program yet, and no state programs are entered.
 - `sources/_parquet.py` and `frontend/src/format.ts` are small shared helpers
   not in the original layout.
@@ -108,3 +158,7 @@ programs, and every stretch data source.
   exceed the 15 s timeout on a cold cache.
 - Counties with thousands of sites show the 150 largest on the map; the counts
   in the panel are exact.
+- The RE-Powering file lists some sites twice under the same name, so the same
+  opportunity can appear twice (seen in Lincoln County, MO).
+- Eight solutions now compete for six places, so a county with many flagged
+  needs can lose a lower-scoring solution from the list.

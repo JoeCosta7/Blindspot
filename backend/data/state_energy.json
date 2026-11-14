@@ -1,0 +1,321 @@
+{
+ "electricity_year": 2024,
+ "grid_year": 2023,
+ "states": {
+  "AK": {
+   "grid_co2_lb_per_mwh": 809.8,
+   "residential_monthly_bill_usd": 143.54,
+   "residential_monthly_kwh": 578,
+   "residential_price_cents_kwh": 24.82
+  },
+  "AL": {
+   "grid_co2_lb_per_mwh": 711.0,
+   "residential_monthly_bill_usd": 173.5,
+   "residential_monthly_kwh": 1143,
+   "residential_price_cents_kwh": 15.18
+  },
+  "AR": {
+   "grid_co2_lb_per_mwh": 993.4,
+   "residential_monthly_bill_usd": 129.13,
+   "residential_monthly_kwh": 1048,
+   "residential_price_cents_kwh": 12.32
+  },
+  "AZ": {
+   "grid_co2_lb_per_mwh": 686.7,
+   "residential_monthly_bill_usd": 160.24,
+   "residential_monthly_kwh": 1075,
+   "residential_price_cents_kwh": 14.91
+  },
+  "CA": {
+   "grid_co2_lb_per_mwh": 393.5,
+   "residential_monthly_bill_usd": 160.86,
+   "residential_monthly_kwh": 503,
+   "residential_price_cents_kwh": 31.97
+  },
+  "CO": {
+   "grid_co2_lb_per_mwh": 1085.0,
+   "residential_monthly_bill_usd": 100.57,
+   "residential_monthly_kwh": 674,
+   "residential_price_cents_kwh": 14.92
+  },
+  "CT": {
+   "grid_co2_lb_per_mwh": 538.3,
+   "residential_monthly_bill_usd": 199.66,
+   "residential_monthly_kwh": 695,
+   "residential_price_cents_kwh": 28.75
+  },
+  "DC": {
+   "grid_co2_lb_per_mwh": 394.1,
+   "residential_monthly_bill_usd": 113.23,
+   "residential_monthly_kwh": 639,
+   "residential_price_cents_kwh": 17.71
+  },
+  "DE": {
+   "grid_co2_lb_per_mwh": 703.2,
+   "residential_monthly_bill_usd": 150.87,
+   "residential_monthly_kwh": 911,
+   "residential_price_cents_kwh": 16.57
+  },
+  "FL": {
+   "grid_co2_lb_per_mwh": 786.6,
+   "residential_monthly_bill_usd": 156.09,
+   "residential_monthly_kwh": 1104,
+   "residential_price_cents_kwh": 14.14
+  },
+  "GA": {
+   "grid_co2_lb_per_mwh": 713.8,
+   "residential_monthly_bill_usd": 151.25,
+   "residential_monthly_kwh": 1074,
+   "residential_price_cents_kwh": 14.08
+  },
+  "HI": {
+   "grid_co2_lb_per_mwh": 1385.1,
+   "residential_monthly_bill_usd": 212.12,
+   "residential_monthly_kwh": 495,
+   "residential_price_cents_kwh": 42.86
+  },
+  "IA": {
+   "grid_co2_lb_per_mwh": 630.2,
+   "residential_monthly_bill_usd": 111.54,
+   "residential_monthly_kwh": 832,
+   "residential_price_cents_kwh": 13.4
+  },
+  "ID": {
+   "grid_co2_lb_per_mwh": 313.3,
+   "residential_monthly_bill_usd": 108.73,
+   "residential_monthly_kwh": 944,
+   "residential_price_cents_kwh": 11.52
+  },
+  "IL": {
+   "grid_co2_lb_per_mwh": 471.7,
+   "residential_monthly_bill_usd": 109.99,
+   "residential_monthly_kwh": 693,
+   "residential_price_cents_kwh": 15.87
+  },
+  "IN": {
+   "grid_co2_lb_per_mwh": 1457.2,
+   "residential_monthly_bill_usd": 133.06,
+   "residential_monthly_kwh": 901,
+   "residential_price_cents_kwh": 14.77
+  },
+  "KS": {
+   "grid_co2_lb_per_mwh": 728.2,
+   "residential_monthly_bill_usd": 123.9,
+   "residential_monthly_kwh": 876,
+   "residential_price_cents_kwh": 14.15
+  },
+  "KY": {
+   "grid_co2_lb_per_mwh": 1735.0,
+   "residential_monthly_bill_usd": 133.81,
+   "residential_monthly_kwh": 1047,
+   "residential_price_cents_kwh": 12.79
+  },
+  "LA": {
+   "grid_co2_lb_per_mwh": 761.4,
+   "residential_monthly_bill_usd": 140.96,
+   "residential_monthly_kwh": 1202,
+   "residential_price_cents_kwh": 11.73
+  },
+  "MA": {
+   "grid_co2_lb_per_mwh": 822.4,
+   "residential_monthly_bill_usd": 167.2,
+   "residential_monthly_kwh": 570,
+   "residential_price_cents_kwh": 29.35
+  },
+  "MD": {
+   "grid_co2_lb_per_mwh": 520.0,
+   "residential_monthly_bill_usd": 165.87,
+   "residential_monthly_kwh": 929,
+   "residential_price_cents_kwh": 17.86
+  },
+  "ME": {
+   "grid_co2_lb_per_mwh": 311.8,
+   "residential_monthly_bill_usd": 133.6,
+   "residential_monthly_kwh": 550,
+   "residential_price_cents_kwh": 24.29
+  },
+  "MI": {
+   "grid_co2_lb_per_mwh": 793.2,
+   "residential_monthly_bill_usd": 119.31,
+   "residential_monthly_kwh": 618,
+   "residential_price_cents_kwh": 19.3
+  },
+  "MN": {
+   "grid_co2_lb_per_mwh": 747.5,
+   "residential_monthly_bill_usd": 110.06,
+   "residential_monthly_kwh": 712,
+   "residential_price_cents_kwh": 15.45
+  },
+  "MO": {
+   "grid_co2_lb_per_mwh": 1444.1,
+   "residential_monthly_bill_usd": 129.18,
+   "residential_monthly_kwh": 1001,
+   "residential_price_cents_kwh": 12.91
+  },
+  "MS": {
+   "grid_co2_lb_per_mwh": 826.3,
+   "residential_monthly_bill_usd": 154.83,
+   "residential_monthly_kwh": 1156,
+   "residential_price_cents_kwh": 13.39
+  },
+  "MT": {
+   "grid_co2_lb_per_mwh": 1056.2,
+   "residential_monthly_bill_usd": 107.91,
+   "residential_monthly_kwh": 852,
+   "residential_price_cents_kwh": 12.66
+  },
+  "NC": {
+   "grid_co2_lb_per_mwh": 624.0,
+   "residential_monthly_bill_usd": 143.5,
+   "residential_monthly_kwh": 1015,
+   "residential_price_cents_kwh": 14.13
+  },
+  "ND": {
+   "grid_co2_lb_per_mwh": 1288.4,
+   "residential_monthly_bill_usd": 118.38,
+   "residential_monthly_kwh": 1029,
+   "residential_price_cents_kwh": 11.51
+  },
+  "NE": {
+   "grid_co2_lb_per_mwh": 1018.2,
+   "residential_monthly_bill_usd": 110.28,
+   "residential_monthly_kwh": 956,
+   "residential_price_cents_kwh": 11.53
+  },
+  "NH": {
+   "grid_co2_lb_per_mwh": 272.9,
+   "residential_monthly_bill_usd": 144.87,
+   "residential_monthly_kwh": 619,
+   "residential_price_cents_kwh": 23.4
+  },
+  "NJ": {
+   "grid_co2_lb_per_mwh": 468.3,
+   "residential_monthly_bill_usd": 128.13,
+   "residential_monthly_kwh": 662,
+   "residential_price_cents_kwh": 19.34
+  },
+  "NM": {
+   "grid_co2_lb_per_mwh": 770.2,
+   "residential_monthly_bill_usd": 92.88,
+   "residential_monthly_kwh": 654,
+   "residential_price_cents_kwh": 14.2
+  },
+  "NV": {
+   "grid_co2_lb_per_mwh": 642.4,
+   "residential_monthly_bill_usd": 139.39,
+   "residential_monthly_kwh": 930,
+   "residential_price_cents_kwh": 15.0
+  },
+  "NY": {
+   "grid_co2_lb_per_mwh": 465.1,
+   "residential_monthly_bill_usd": 139.53,
+   "residential_monthly_kwh": 571,
+   "residential_price_cents_kwh": 24.43
+  },
+  "OH": {
+   "grid_co2_lb_per_mwh": 1063.8,
+   "residential_monthly_bill_usd": 135.16,
+   "residential_monthly_kwh": 846,
+   "residential_price_cents_kwh": 15.99
+  },
+  "OK": {
+   "grid_co2_lb_per_mwh": 647.2,
+   "residential_monthly_bill_usd": 132.05,
+   "residential_monthly_kwh": 1079,
+   "residential_price_cents_kwh": 12.24
+  },
+  "OR": {
+   "grid_co2_lb_per_mwh": 364.2,
+   "residential_monthly_bill_usd": 129.62,
+   "residential_monthly_kwh": 882,
+   "residential_price_cents_kwh": 14.7
+  },
+  "PA": {
+   "grid_co2_lb_per_mwh": 645.8,
+   "residential_monthly_bill_usd": 145.17,
+   "residential_monthly_kwh": 817,
+   "residential_price_cents_kwh": 17.77
+  },
+  "PR": {
+   "grid_co2_lb_per_mwh": 1543.1
+  },
+  "RI": {
+   "grid_co2_lb_per_mwh": 839.1,
+   "residential_monthly_bill_usd": 162.4,
+   "residential_monthly_kwh": 567,
+   "residential_price_cents_kwh": 28.65
+  },
+  "SC": {
+   "grid_co2_lb_per_mwh": 557.2,
+   "residential_monthly_bill_usd": 149.51,
+   "residential_monthly_kwh": 1050,
+   "residential_price_cents_kwh": 14.23
+  },
+  "SD": {
+   "grid_co2_lb_per_mwh": 334.0,
+   "residential_monthly_bill_usd": 127.81,
+   "residential_monthly_kwh": 994,
+   "residential_price_cents_kwh": 12.86
+  },
+  "TN": {
+   "grid_co2_lb_per_mwh": 657.3,
+   "residential_monthly_bill_usd": 143.32,
+   "residential_monthly_kwh": 1154,
+   "residential_price_cents_kwh": 12.42
+  },
+  "TX": {
+   "grid_co2_lb_per_mwh": 768.3,
+   "residential_monthly_bill_usd": 163.72,
+   "residential_monthly_kwh": 1096,
+   "residential_price_cents_kwh": 14.94
+  },
+  "US": {
+   "grid_co2_lb_per_mwh": 767.2,
+   "residential_monthly_bill_usd": 142.26,
+   "residential_monthly_kwh": 863,
+   "residential_price_cents_kwh": 16.48
+  },
+  "UT": {
+   "grid_co2_lb_per_mwh": 1413.0,
+   "residential_monthly_bill_usd": 94.57,
+   "residential_monthly_kwh": 774,
+   "residential_price_cents_kwh": 12.22
+  },
+  "VA": {
+   "grid_co2_lb_per_mwh": 536.9,
+   "residential_monthly_bill_usd": 148.77,
+   "residential_monthly_kwh": 1032,
+   "residential_price_cents_kwh": 14.41
+  },
+  "VT": {
+   "grid_co2_lb_per_mwh": 43.0,
+   "residential_monthly_bill_usd": 125.66,
+   "residential_monthly_kwh": 574,
+   "residential_price_cents_kwh": 21.9
+  },
+  "WA": {
+   "grid_co2_lb_per_mwh": 265.1,
+   "residential_monthly_bill_usd": 113.68,
+   "residential_monthly_kwh": 955,
+   "residential_price_cents_kwh": 11.9
+  },
+  "WI": {
+   "grid_co2_lb_per_mwh": 1157.0,
+   "residential_monthly_bill_usd": 110.87,
+   "residential_monthly_kwh": 645,
+   "residential_price_cents_kwh": 17.18
+  },
+  "WV": {
+   "grid_co2_lb_per_mwh": 1954.4,
+   "residential_monthly_bill_usd": 154.76,
+   "residential_monthly_kwh": 1027,
+   "residential_price_cents_kwh": 15.07
+  },
+  "WY": {
+   "grid_co2_lb_per_mwh": 1820.3,
+   "residential_monthly_bill_usd": 107.65,
+   "residential_monthly_kwh": 863,
+   "residential_price_cents_kwh": 12.47
+  }
+ }
+}

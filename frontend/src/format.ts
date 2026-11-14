@@ -42,6 +42,10 @@ export function formatNeedValue(value: number | null, unit: NeedUnit): string | 
       return `${value.toFixed(1)} per 10,000 residents`;
     case "count":
       return formatWhole(value);
+    case "usd_per_month":
+      return `${formatDollars(value)} a month`;
+    case "lb_co2_per_mwh":
+      return `${formatWhole(value)} lb CO2 per MWh`;
     case "rating":
       return null;
   }
@@ -92,6 +96,11 @@ export const ASSET_STYLES: Record<AssetType, AssetStyle> = {
   library: { label: "Library", plural: "Libraries", color: "#0891b2" },
   college: { label: "College", plural: "Colleges", color: "#4f46e5" },
   ev_station: { label: "EV charging station", plural: "EV charging stations", color: "#16a34a" },
+  non_powered_dam: {
+    label: "Dam without hydropower",
+    plural: "Dams without hydropower (ORNL)",
+    color: "#0f766e",
+  },
 };
 
 export const ASSET_TYPE_ORDER = Object.keys(ASSET_STYLES) as AssetType[];
@@ -122,6 +131,9 @@ export const SOURCE_NAMES: Record<string, string> = {
   ev_stations: "EV charging stations",
   ev_national_count: "National EV station count",
   pvwatts: "PVWatts solar yield",
+  state_energy: "State electricity bills and grid carbon (EIA, EPA eGRID)",
+  dams: "ORNL non-powered dams",
+  farms: "USDA farm census and EPA digester database",
   gemini: "Gemini narrative",
 };
 

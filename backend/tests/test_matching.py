@@ -11,6 +11,14 @@ DATA = BACKEND_DIR / "data"
 SOLUTIONS = matching.load_solutions(DATA / "solutions.json")
 PROGRAMS = funding.load_programs(DATA / "funding_programs.json")
 CENTRE = (0.5, 0.5)
+MVP_SOLUTIONS = {
+    "community_solar",
+    "resilience_hub",
+    "weatherization_clinic",
+    "public_ev_charging",
+    "landfill_gas_energy",
+}
+STRETCH_SOLUTIONS = {"small_hydro", "wind_on_reclaimed_land", "farm_digester"}
 
 
 def run(needs, assets, **kwargs):
@@ -31,17 +39,14 @@ def test_solutions_table_is_consistent_with_the_contract():
         "school",
         "library",
         "college",
+        "non_powered_dam",
     }
-    assert {s.id for s in SOLUTIONS} == {
-        "community_solar",
-        "resilience_hub",
-        "weatherization_clinic",
-        "public_ev_charging",
-        "landfill_gas_energy",
-    }
+    assert {s.id for s in SOLUTIONS} == {*MVP_SOLUTIONS, *STRETCH_SOLUTIONS}
     for solution in SOLUTIONS:
         assert set(solution.triggers) <= need_ids, solution.id
         assert set(solution.hosts) <= asset_types, solution.id
+        # Only a county-wide solution may have no host.
+        assert bool(solution.hosts) == (solution.asset_kind != "county"), solution.id
 
 
 def test_funding_table_refers_only_to_known_solutions():
@@ -163,14 +168,76 @@ def test_second_sites_do_not_crowd_out_a_lower_scoring_solution():
     ]
     matches = run(needs, assets)
 
-    # Nine candidates for six places: all five solutions appear, plus the
-    # best second site, and the list is still ordered by score.
-    assert {m.solution.id for m in matches} == {s.id for s in SOLUTIONS}
+    # Nine candidates for six places: all five triggered solutions appear,
+    # plus the best second site, and the list is still ordered by score.
+    assert {m.solution.id for m in matches} == MVP_SOLUTIONS
     assert [m.score for m in matches] == [100, 100, 90, 85, 85, 50]
     assert matches[-1].solution.id == "landfill_gas_energy"
 
 
+def test_dam_and_wind_hosts_are_ranked_by_size():
+    needs = [make_need("carbon_intensive_grid", 80)]
+    assets = [
+        make_asset("dam:small", "non_powered_dam", capacity_mw=0.2),
+        make_asset("dam:big", "non_powered_dam", capacity_mw=4.0),
+        make_asset("mine", "mine_land", acres=4000.0, epa_wind_mw=50.0),
+        make_asset("mine2", "mine_land", acres=9000.0),  # EPA gave no wind estimate
+    ]
+    matches = run(needs, assets, assets_per_solution=1)
+    by_solution = {m.solution.id: m for m in matches}
+
+    assert by_solution["small_hydro"].asset.id == "dam:big"
+    assert by_solution["wind_on_reclaimed_land"].asset.id == "mine"
+    assert by_solution["small_hydro"].score == 80
+    # Community solar is also triggered and takes the larger site.
+    assert by_solution["community_solar"].asset.id == "mine2"
+
+
+def test_wind_needs_a_site_epa_sized_for_wind():
+    needs = [make_need("high_electricity_cost", 60)]
+    assets = [make_asset("lf", "landfill", acres=500.0, wind_scale="facility")]
+    assert "wind_on_reclaimed_land" not in {m.solution.id for m in run(needs, assets)}
+
+
+def test_county_wide_solution_has_no_asset():
+    (match,) = run([make_need("unmanaged_farm_waste", 75)], [])
+    assert match.solution.id == "farm_digester"
+    assert match.asset is None
+    assert match.id == "farm_digester:county"
+    assert match.title == "Manure digesters at the county's large livestock farms"
+    assert match.score == 52  # 75 * 0.7: there is no site to size
+    assert [f.program_id for f in funding.match_funding(PROGRAMS, "farm_digester", None)] == [
+        "usda_reap"
+    ]
+
+
 # --- estimates ------------------------------------------------------------------
+
+
+def test_hydro_estimates_come_from_the_ornl_figures():
+    figures = estimates.hydro_at_dam(
+        {
+            "capacity_mw": 6.058,
+            "generation_mwh_yr": 20450.149,
+            "input_data": "Gage Flow, Historical Head",
+        }
+    )
+    by_label = {e.label: e for e in figures}
+    assert by_label["Capacity"].value == pytest.approx(6.06)
+    assert by_label["Annual energy"].value == pytest.approx(20500.0)
+    assert by_label["Household equivalent"].value == pytest.approx(1900.0)  # 20,450 MWh / 10,791
+    assert all(e.is_estimate and e.assumptions for e in figures)
+    assert any("not an engineering design" in a for a in by_label["Capacity"].assumptions)
+    assert estimates.hydro_at_dam({"capacity_mw": None}) == []
+
+
+def test_wind_estimate_is_epas_figure_only():
+    (capacity,) = estimates.wind_on_land({"epa_wind_mw": 50.0, "acres": 4000.0})
+    assert (capacity.label, capacity.value, capacity.unit) == ("Capacity", 50.0, "MW")
+    assert any("80 acres per MW" in a for a in capacity.assumptions)
+    capped = estimates.wind_on_land({"epa_wind_mw": 1600.0})[0]
+    assert any("Capped at 1,600 MW" in a for a in capped.assumptions)
+    assert estimates.wind_on_land({"epa_wind_mw": None}) == []
 
 
 def test_solar_on_land_formula_and_labels():

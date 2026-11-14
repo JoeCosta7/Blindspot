@@ -1,20 +1,23 @@
-"""One-time download and conversion of the four national files.
+"""One-time download and conversion of the national files.
 
     python scripts/prep_data.py                 # everything
     python scripts/prep_data.py counties nri    # only some steps
 
 Raw downloads go to data/raw/ (git-ignored) and are reused on the next run.
 Outputs: data/counties.geojson, repowering.parquet, lmop.parquet,
-nri_counties.parquet.
+nri_counties.parquet, and the stretch files state_energy.json, dams.parquet
+and farms.parquet. The `farms` step downloads about 310 MB.
 
 Every column mapping below was written after opening the real file on
-2026-11-13. Each step prints the columns it found and stops if an expected one
-is missing, so a changed file fails loudly here instead of at request time.
+2026-11-13 or 2026-11-14. Each step prints the columns it found and stops if an
+expected one is missing, so a changed file fails loudly here instead of at
+request time.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -49,6 +52,35 @@ NRI_SERVICE_URL = (
     "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/"
     "National_Risk_Index_Counties/FeatureServer/0/query"
 )
+
+# --- stretch sources, all read on 2026-11-14 ---------------------------------
+
+# EIA "Electric Sales, Revenue, and Average Price", Table 5A: residential
+# average monthly bill by state. Linked from
+# https://www.eia.gov/electricity/sales_revenue_price/ (data for 2024).
+# The older https://www.eia.gov/electricity/data/state/avgprice_annual.xlsx
+# stops at 2020, so it is not used.
+EIA_BILL_URL = "https://www.eia.gov/electricity/sales_revenue_price/xls/table_5A.xlsx"
+
+# EPA eGRID2023 (rev 2), linked from https://www.epa.gov/egrid/detailed-data.
+EGRID_URL = "https://www.epa.gov/system/files/documents/2025-06/egrid2023_data_rev2.xlsx"
+
+# ORNL HydroSource, "Technical Potential for Hydropower Capacity at Nonpowered
+# Dams" (Hansen et al., 2025): 2,616 dams in the lower 48 states.
+# https://hydrosource.ornl.gov/data/datasets/hydropower-capacity-us-npd/
+NPD_URL = (
+    "https://hydrosource.s3.us-east-2.amazonaws.com/files/data/datasets/"
+    "hydropower-capacity-us-npd/TechPotentialNPDs.csv"
+)
+
+# USDA NASS Quick Stats bulk file for the 2022 Census of Agriculture, linked
+# from https://www.nass.usda.gov/datasets. No key needed (the Quick Stats API
+# does need one). About 310 MB compressed.
+NASS_CENSUS_URL = "https://www.nass.usda.gov/sites/default/files/datasets/qs.census2022.txt.gz"
+
+# EPA AgSTAR livestock anaerobic digester database, linked from
+# https://www.epa.gov/agstar/livestock-anaerobic-digester-database
+AGSTAR_URL = "https://www.epa.gov/sites/default/files/2020-10/agstar-livestock-ad-database.xlsx"
 
 # ACS 5-year has no data for these island areas, so they are left out.
 EXCLUDED_STATES = {"AS", "GU", "MP", "VI"}
@@ -501,9 +533,301 @@ def prep_nri() -> None:
     print(f"  wrote {dest.name}: {len(out)} counties")
 
 
+# --- state electricity bills and grid carbon ---------------------------------
+
+EIA_BILL_COLUMNS = [
+    "State",
+    "Number of Customers",
+    "Average Monthly Consumption (kWh)",
+    "Average Price (cents/kWh)",
+    "Average Monthly Bill (Dollar and cents)",
+]
+
+
+def state_abbreviations() -> dict[str, str]:
+    """State name -> postal abbreviation, from the county boundary file."""
+    src = download(COUNTIES_URL, RAW_DIR / "cb_2025_us_county_5m.zip")
+    table = gpd.read_file(f"zip://{src}", ignore_geometry=True)
+    require_columns(table, ["STATE_NAME", "STUSPS"], "counties")
+    return dict(zip(table["STATE_NAME"], table["STUSPS"], strict=True))
+
+
+def prep_energy() -> None:
+    print("[energy]")
+    abbreviations = state_abbreviations()
+
+    # EIA: row 0 is the title with the data year, row 2 the header.
+    src = download(EIA_BILL_URL, RAW_DIR / "eia_table_5A.xlsx")
+    raw = pd.read_excel(src, header=None)
+    title = str(raw.iat[0, 0])
+    year_match = re.match(r"\s*(\d{4}) Average Monthly Bill", title)
+    if not year_match:
+        sys.exit(f"EIA table 5A: unexpected title {title!r}")
+    bill_year = int(year_match.group(1))
+    bills = raw.iloc[3:].copy()
+    bills.columns = [str(c).strip() for c in raw.iloc[2]]
+    print(f"  EIA columns: {list(bills.columns)} ({title.strip()})")
+    require_columns(bills, EIA_BILL_COLUMNS, "EIA table 5A")
+    names = bills["State"].astype("string").str.strip()
+    bills["abbr"] = names.map(abbreviations).mask(names.eq("U.S. Total"), "US")
+    bills = bills[bills["abbr"].notna()]  # drops the Census division subtotals
+
+    # eGRID: sheets are named ST<yy> and US<yy>; row 0 is descriptions, row 1 codes.
+    src = download(EGRID_URL, RAW_DIR / "egrid2023_data_rev2.xlsx")
+    sheets = pd.ExcelFile(src).sheet_names
+    state_sheet = next((n for n in sheets if re.fullmatch(r"ST\d\d", n)), None)
+    us_sheet = next((n for n in sheets if re.fullmatch(r"US\d\d", n)), None)
+    if not state_sheet or not us_sheet:
+        sys.exit(f"eGRID: state or US sheet not found in {sheets}")
+    grid = pd.read_excel(src, sheet_name=state_sheet, header=1)
+    grid_us = pd.read_excel(src, sheet_name=us_sheet, header=1)
+    print(f"  eGRID {state_sheet}: {len(grid)} rows; {us_sheet}: {len(grid_us)} row")
+    require_columns(grid, ["YEAR", "PSTATABB", "STCO2RTA"], "eGRID state sheet")
+    require_columns(grid_us, ["YEAR", "USCO2RTA"], "eGRID US sheet")
+    grid_year = int(grid_us["YEAR"].iloc[0])
+
+    states: dict[str, dict[str, float | None]] = {}
+    for row in bills.itertuples(index=False):
+        states[row.abbr] = {
+            "residential_monthly_bill_usd": round(float(row[4]), 2),
+            "residential_price_cents_kwh": round(float(row[3]), 2),
+            "residential_monthly_kwh": round(float(row[2])),
+        }
+    for abbr, rate in zip(grid["PSTATABB"], grid["STCO2RTA"], strict=True):
+        states.setdefault(str(abbr), {})["grid_co2_lb_per_mwh"] = round(float(rate), 1)
+    us_rate = float(grid_us["USCO2RTA"].iloc[0])
+    states.setdefault("US", {})["grid_co2_lb_per_mwh"] = round(us_rate, 1)
+
+    with_bill = sum("residential_monthly_bill_usd" in v for v in states.values())
+    with_grid = sum("grid_co2_lb_per_mwh" in v for v in states.values())
+    if with_bill < 52 or "residential_monthly_bill_usd" not in states.get("US", {}):
+        sys.exit(f"EIA table 5A: expected 50 states, DC and the US total; matched {with_bill}")
+
+    dest = DATA_DIR / "state_energy.json"
+    dest.write_text(
+        json.dumps(
+            {"electricity_year": bill_year, "grid_year": grid_year, "states": states},
+            indent=1,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    print(
+        f"  wrote {dest.name}: {with_bill} areas with {bill_year} bills, "
+        f"{with_grid} with {grid_year} CO2 rates; US: {states['US']}"
+    )
+
+
+# --- non-powered dams --------------------------------------------------------
+
+NPD_COLUMNS = [
+    "nididfull",
+    "lat",
+    "long",
+    "dam_name",
+    "owner_type",
+    "prps",
+    "city",
+    "state_abbr",
+    "waterway",
+    "inputdata",
+    "cap_mw",
+    "gen_mwh_yr",
+    "cf_yr",
+    "head_ft_yr",
+]
+
+
+def prep_dams(counties: gpd.GeoDataFrame) -> None:
+    print("[dams]")
+    src = download(NPD_URL, RAW_DIR / "TechPotentialNPDs.csv")
+    df = pd.read_csv(src)
+    print(f"  columns: {list(df.columns)[:20]} ... ({len(df.columns)} in all)")
+    require_columns(df, NPD_COLUMNS, "ORNL non-powered dams")
+
+    out = pd.DataFrame(
+        {
+            "dam_id": df["nididfull"].astype("string").str.strip(),
+            "name": df["dam_name"].astype("string").str.strip(),
+            "owner_type": df["owner_type"].astype("string").str.strip(),
+            "purposes": df["prps"].astype("string").str.strip(),
+            "waterway": df["waterway"].astype("string").str.strip(),
+            "city": df["city"].astype("string").str.strip(),
+            "state": df["state_abbr"].astype("string").str.strip(),
+            "lat": pd.to_numeric(df["lat"], errors="coerce"),
+            "lon": pd.to_numeric(df["long"], errors="coerce"),
+            "capacity_mw": pd.to_numeric(df["cap_mw"], errors="coerce"),
+            "generation_mwh_yr": pd.to_numeric(df["gen_mwh_yr"], errors="coerce"),
+            "capacity_factor": pd.to_numeric(df["cf_yr"], errors="coerce"),
+            "head_ft": pd.to_numeric(df["head_ft_yr"], errors="coerce").round(1),
+            "input_data": df["inputdata"].astype("string").str.strip(),
+        }
+    )
+    out["county_fips"] = assign_county_fips(out, counties)
+    dropped = int(out["county_fips"].isna().sum())
+    out = out[out["county_fips"].notna()].reset_index(drop=True)
+
+    dest = DATA_DIR / "dams.parquet"
+    out.to_parquet(dest, index=False)
+    print(
+        f"  wrote {dest.name}: {len(out)} dams in {out['county_fips'].nunique()} counties, "
+        f"{out['capacity_mw'].sum():,.0f} MW in all ({dropped} dropped: outside every county)"
+    )
+
+
+# --- farms: Census of Agriculture and AgSTAR digesters ------------------------
+
+NASS_COLUMNS = [
+    "SHORT_DESC",
+    "DOMAIN_DESC",
+    "DOMAINCAT_DESC",
+    "AGG_LEVEL_DESC",
+    "STATE_FIPS_CODE",
+    "COUNTY_ANSI",
+    "YEAR",
+    "VALUE",
+]
+
+# (SHORT_DESC, DOMAINCAT_DESC) -> our column. Read from the file itself. At
+# county level the largest published herd classes are 500 or more milk cows
+# and 1,000 or more hogs.
+NASS_ITEMS = {
+    ("FARM OPERATIONS - ACRES OPERATED", "NOT SPECIFIED"): "land_in_farms_acres",
+    ("AG LAND, CROPLAND - ACRES", "NOT SPECIFIED"): "cropland_acres",
+    (
+        "CATTLE, COWS, MILK - OPERATIONS WITH INVENTORY",
+        "INVENTORY OF MILK COWS: (500 OR MORE HEAD)",
+    ): "dairy_farms_500_plus",
+    (
+        "HOGS - OPERATIONS WITH INVENTORY",
+        "INVENTORY OF HOGS: (1,000 OR MORE HEAD)",
+    ): "hog_farms_1000_plus",
+}
+
+AGSTAR_COLUMNS = ["Project Name", "County", "State", "Status"]
+
+# Misspelled county names in the AgSTAR file as downloaded on 2026-11-14. Only
+# the spelling is corrected: the project stays in the county EPA names, even
+# where the listed city suggests a neighbouring one.
+AGSTAR_COUNTY_SPELLING = {
+    ("IL", "caroll"): "carroll",
+    ("NY", "niagra"): "niagara",
+    ("NY", "rensselear"): "rensselaer",
+    ("PA", "schuykill"): "schuylkill",
+    ("SC", "darlingon"): "darlington",
+    ("VT", "frankin"): "franklin",
+    ("WI", "mantiowoc"): "manitowoc",
+    ("WI", "oronto"): "oconto",
+    ("WI", "saintcroix"): "stcroix",
+}
+
+
+def agstar_county_key(state: object, county: object) -> tuple[str, str]:
+    key = (str(state).strip(), county_key(county))
+    return key[0], AGSTAR_COUNTY_SPELLING.get(key, key[1])
+
+
+def read_nass_counties(src: Path) -> pd.DataFrame:
+    """One row per county with the NASS_ITEMS columns. Streams the file: it is
+    several GB uncompressed."""
+    header = pd.read_csv(src, sep="\t", nrows=0)
+    print(f"  NASS columns: {list(header.columns)}")
+    require_columns(header, NASS_COLUMNS, "NASS census file")
+    wanted_descs = {short for short, _ in NASS_ITEMS}
+    kept = []
+    reader = pd.read_csv(
+        src, sep="\t", usecols=NASS_COLUMNS, dtype="string", chunksize=500_000, quoting=3
+    )
+    for chunk in reader:
+        chunk = chunk[chunk["AGG_LEVEL_DESC"].eq("COUNTY") & chunk["SHORT_DESC"].isin(wanted_descs)]
+        if len(chunk):
+            kept.append(chunk)
+    rows = pd.concat(kept, ignore_index=True)
+    keys = list(zip(rows["SHORT_DESC"], rows["DOMAINCAT_DESC"], strict=True))
+    rows["item"] = [NASS_ITEMS.get(key) for key in keys]
+    rows = rows[rows["item"].notna() & rows["COUNTY_ANSI"].notna()]
+    years = sorted(rows["YEAR"].unique())
+    if years != ["2022"]:
+        sys.exit(f"NASS census file: expected only 2022 rows, found {years}")
+    rows["county_fips"] = rows["STATE_FIPS_CODE"].str.zfill(2) + rows["COUNTY_ANSI"].str.zfill(3)
+    # "(D)" is withheld to avoid disclosing one farm; it becomes null, not zero.
+    rows["value"] = pd.to_numeric(rows["VALUE"].str.replace(",", ""), errors="coerce")
+    if rows.duplicated(["county_fips", "item"]).any():
+        sys.exit("NASS census file: more than one row for a county and item")
+    return rows.pivot(index="county_fips", columns="item", values="value").reset_index()
+
+
+def prep_farms(counties: gpd.GeoDataFrame) -> None:
+    print("[farms]")
+    src = download(NASS_CENSUS_URL, RAW_DIR / "qs.census2022.txt.gz")
+    print("  reading the census file (a few minutes)")
+    farms = read_nass_counties(src)
+    # A herd class with no farms has no row, so a missing count is zero for a
+    # county the census covers.
+    for column in ("dairy_farms_500_plus", "hog_farms_1000_plus"):
+        farms[column] = farms[column].fillna(0).astype("int64")
+
+    src = download(AGSTAR_URL, RAW_DIR / "agstar-livestock-ad-database.xlsx")
+    digesters = clean_columns(pd.read_excel(src, sheet_name="Operational and Construction"))
+    print(f"  AgSTAR columns: {list(digesters.columns)}")
+    require_columns(digesters, AGSTAR_COLUMNS, "AgSTAR")
+    statuses = set(digesters["Status"].dropna().unique())
+    if not statuses <= {"Operational", "Construction"}:
+        sys.exit(f"AgSTAR: unrecognized status values: {sorted(statuses)}")
+    lookup = {
+        (state, county_key(name)): geoid
+        for geoid, name, state in zip(
+            counties["GEOID"], counties["NAME"], counties["STUSPS"], strict=True
+        )
+    }
+    digesters["county_fips"] = [
+        lookup.get(agstar_county_key(state, name))
+        for state, name in zip(digesters["State"], digesters["County"], strict=True)
+    ]
+    unplaced = digesters[digesters["county_fips"].isna()]
+    if len(unplaced):
+        print(f"  {len(unplaced)} AgSTAR projects not matched to a county:")
+        print(unplaced[["Project Name", "County", "State"]].to_string(index=False))
+    counts = (
+        digesters.dropna(subset=["county_fips"])
+        .groupby(["county_fips", "Status"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=["Operational", "Construction"], fill_value=0)
+        .rename(
+            columns={
+                "Operational": "digesters_operational",
+                "Construction": "digesters_under_construction",
+            }
+        )
+        .reset_index()
+    )
+
+    out = farms.merge(counts, on="county_fips", how="left")
+    for column in ("digesters_operational", "digesters_under_construction"):
+        out[column] = out[column].fillna(0).astype("int64")
+    known = set(counties["GEOID"])
+    unmatched = out[~out["county_fips"].isin(known)]
+    out = out[out["county_fips"].isin(known)].sort_values("county_fips").reset_index(drop=True)
+
+    dest = DATA_DIR / "farms.parquet"
+    out.to_parquet(dest, index=False)
+    print(
+        f"  wrote {dest.name}: {len(out)} counties; "
+        f"{int((out['dairy_farms_500_plus'] > 0).sum())} with a 500-cow dairy, "
+        f"{int((out['hog_farms_1000_plus'] > 0).sum())} with a 1,000-hog farm, "
+        f"{int((out['digesters_operational'] > 0).sum())} with an operating digester"
+    )
+    if len(unmatched):
+        print(
+            f"  {len(unmatched)} census counties are not in the 2025 boundary file "
+            f"(states: {sorted(unmatched['county_fips'].str[:2].unique())}) and were dropped"
+        )
+
+
 # --- entry point ------------------------------------------------------------
 
-STEPS = ("counties", "repowering", "lmop", "nri")
+STEPS = ("counties", "repowering", "lmop", "nri", "energy", "dams", "farms")
 
 
 def main(argv: list[str]) -> None:
@@ -514,7 +838,7 @@ def main(argv: list[str]) -> None:
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     counties = prep_counties() if "counties" in steps else None
-    if "repowering" in steps or "lmop" in steps:
+    if {"repowering", "lmop", "dams", "farms"} & set(steps):
         counties = counties if counties is not None else load_counties()
     if "repowering" in steps:
         prep_repowering(counties)
@@ -522,6 +846,12 @@ def main(argv: list[str]) -> None:
         prep_lmop(counties)
     if "nri" in steps:
         prep_nri()
+    if "energy" in steps:
+        prep_energy()
+    if "dams" in steps:
+        prep_dams(counties)
+    if "farms" in steps:
+        prep_farms(counties)
     print("done")
 
 

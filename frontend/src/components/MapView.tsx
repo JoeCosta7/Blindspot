@@ -1,7 +1,7 @@
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
-import { ASSET_STYLES, ASSET_TYPE_ORDER, formatAcres } from "../format";
+import { ASSET_STYLES, ASSET_TYPE_ORDER, formatAcres, formatNumber } from "../format";
 import type { Asset, AssetType, Bounds, CountyCollection, LonLat } from "../types";
 import { startBoxSelect } from "./boxSelect";
 
@@ -38,9 +38,27 @@ function popupContent(asset: Asset): HTMLElement {
   root.append(name, type);
 
   const facts: string[] = [];
-  const { acres, city, project_status, level2_ports, dc_fast_ports } = asset.attributes;
+  const {
+    acres,
+    city,
+    project_status,
+    level2_ports,
+    dc_fast_ports,
+    transmission_miles,
+    waterway,
+    capacity_mw,
+    owner_type,
+  } = asset.attributes;
   if (typeof city === "string") facts.push(city);
   if (typeof acres === "number") facts.push(formatAcres(acres));
+  if (typeof transmission_miles === "number") {
+    facts.push(`${formatNumber(transmission_miles)} miles to a transmission line (EPA)`);
+  }
+  if (typeof waterway === "string") facts.push(`On ${waterway}`);
+  if (typeof owner_type === "string") facts.push(`Owner: ${owner_type}`);
+  if (typeof capacity_mw === "number") {
+    facts.push(`${formatNumber(capacity_mw)} MW hydropower potential (ORNL model estimate)`);
+  }
   if (typeof project_status === "string") facts.push(`Gas project status: ${project_status}`);
   if (typeof level2_ports === "number") facts.push(`${level2_ports} Level 2 ports`);
   if (typeof dc_fast_ports === "number") facts.push(`${dc_fast_ports} fast-charge ports`);
