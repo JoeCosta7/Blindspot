@@ -72,6 +72,25 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** Whole days from today (local) to an ISO date `YYYY-MM-DD`. Past deadlines are negative. */
+export function daysUntil(iso: string, today: Date = new Date()): number | null {
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const deadline = Date.UTC(year, month - 1, day);
+  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((deadline - start) / 86_400_000);
+}
+
+/** "Due in 67 days" / "Deadline today" / "Deadline passed" for funding leads. */
+export function formatDeadlineCountdown(iso: string, today: Date = new Date()): string | null {
+  const days = daysUntil(iso, today);
+  if (days === null) return null;
+  if (days < 0) return "Deadline passed";
+  if (days === 0) return "Deadline today";
+  if (days === 1) return "Due in 1 day";
+  return `Due in ${days} days`;
+}
+
 export const THEME_LABELS: Record<NeedTheme, string> = {
   equity: "Equity",
   energy: "Energy",
@@ -174,11 +193,48 @@ export const SOURCE_NAMES: Record<string, string> = {
   waters: "EPA ATTAINS assessed waters",
   wind_turbines: "US Wind Turbine Database",
   transit: "BTS National Transit Map",
+  grants_gov: "Grants.gov live listings",
+  pvwatts_site: "PVWatts solar yield (project sites)",
   costar: "CoStar commercial property records",
   vexcel: "Vexcel aerial imagery and property records",
   matterport: "Matterport 3D scans",
   scout_gemini: "Gemini scout decisions",
 };
+
+/** Sources shown on the loading checklist, in roughly the order they start. */
+export const LOADING_SOURCE_IDS = [
+  "census",
+  "census_national",
+  "peers",
+  "nri",
+  "svi",
+  "repowering",
+  "lmop",
+  "state_energy",
+  "dams",
+  "farms",
+  "geoapify",
+  "ev_stations",
+  "ev_national_count",
+  "pvwatts",
+  "climate",
+  "earthengine",
+  "energy_burden",
+  "energy_communities",
+  "power_plants",
+  "utilities",
+  "rucc",
+  "places",
+  "air_quality",
+  "wildfire",
+  "disasters",
+  "drinking_water",
+  "waters",
+  "wind_turbines",
+  "transit",
+  "gemini",
+  "grants_gov",
+] as const;
 
 export const SCOUT_LAYER_LABELS: Record<ScoutLayer, string> = {
   vexcel: "Vexcel aerial",
