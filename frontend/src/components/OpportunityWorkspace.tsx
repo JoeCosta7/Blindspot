@@ -30,7 +30,12 @@ export function OpportunityWorkspace({
   onShowAsset,
   onBack,
 }: Props) {
-  const [ws, setWs] = useState<WorkspaceState>(() => loadWorkspace(report.fips, opportunity.id));
+  // Pursuing always opens on step 1 (Choose a site); the chosen site, ticks and
+  // edits saved from earlier visits are kept.
+  const [ws, setWs] = useState<WorkspaceState>(() => ({
+    ...loadWorkspace(report.fips, opportunity.id),
+    stage: "site",
+  }));
   useEffect(() => saveWorkspace(report.fips, opportunity.id, ws), [report.fips, opportunity.id, ws]);
   const update = (change: Partial<WorkspaceState>) => setWs((s) => ({ ...s, ...change }));
   // Report sites stay hidden until asked for, like Site Scout's.
