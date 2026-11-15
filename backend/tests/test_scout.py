@@ -551,6 +551,10 @@ def test_one_building_through_two_sources_is_one_candidate(settings):
     state.seen[first.id] = tools.Inspection(building=first)
     assert tools.admit(state, [scan]) == []
     assert state.seen["cs:1"].building.scan_id == "X"  # the record gains the scan
+    # One 3D scan is one site, even when the sources place it 500 m apart.
+    campus = Building("cs:3", "Park 4", 29.80, -95.30, "costar", scan_id="Y")
+    library = Building("mp:Y", "Warehouse", 29.8045, -95.30, "matterport", scan_id="Y")
+    assert [b.id for b in tools.admit(state, [campus, library])] == ["cs:3"]
 
 
 def test_interior_projects_search_the_scans_before_finishing(settings):
