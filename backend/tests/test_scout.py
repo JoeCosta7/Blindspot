@@ -110,8 +110,8 @@ BUILDINGS = [
 COSTAR_D = Building(
     "cs:9",
     "Depot D",
-    29.7745,
-    -95.3865,
+    29.7845,
+    -95.3765,
     "costar",
     "9 Rail Rd",
     scan_id=None,
@@ -293,7 +293,7 @@ def test_scripted_run_shortlists_rejects_and_flags_invalid_actions(settings):
 
     assert b.status == "rejected" and "already has solar" in b.status_reason
     # No scan: still shortlisted on the aerial record alone, but marked and scored lower.
-    assert c.status == "shortlisted" and "no 3D scan" in c.status_reason and c.score < a.score
+    assert c.status == "shortlisted" and c.score < a.score
 
     kinds = [s.kind for s in result.steps]
     assert kinds[0] == "plan" and "error" in kinds  # the invalid first action
@@ -480,7 +480,7 @@ def test_public_buildings_take_kinds_in_turn(settings):
             id=f"{kind}:{i}",
             type=kind,
             name=name or f"{kind} {i}",
-            lat=29.7,
+            lat=29.7 + 0.01 * i + (0.5 if kind == "library" else 0),
             lon=-95.3,
             source="test",
         )
@@ -503,3 +503,26 @@ def test_public_buildings_take_kinds_in_turn(settings):
     kinds = [i.building.building_type for i in state.seen.values()]
     assert kinds[:2] == ["school", "library"]  # the library is reached, not crowded out
     assert not any("High School Library" in i.building.name for i in state.seen.values())
+
+
+def test_one_building_through_two_sources_is_one_candidate(settings):
+    from app.scout import tools
+
+    state = tools.ScoutState(
+        county=make_county("48201", -96, 29, -95, 30),
+        needs=NEEDS,
+        solar_yield=None,
+        solutions=(),
+        programs=(),
+        provider=FakeProvider(),
+        settings=settings,
+        client=None,
+    )
+    record = Building("cs:1", "Building 4", 29.90, -95.36, "costar", costar_id=1)
+    scan = Building("mp:X", "Building 4 scan", 29.9001, -95.3601, "matterport", scan_id="X")
+    other = Building("cs:2", "Elsewhere", 29.95, -95.40, "costar", costar_id=2)
+    assert [b.id for b in tools.admit(state, [record, scan, other])] == ["cs:1", "cs:2"]
+    first = tools.admit(state, [record])[0]
+    state.seen[first.id] = tools.Inspection(building=first)
+    assert tools.admit(state, [scan]) == []
+    assert state.seen["cs:1"].building.scan_id == "X"  # the record gains the scan

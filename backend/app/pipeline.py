@@ -560,6 +560,9 @@ def _borrowed_leads(
     ]
 
 
+SCOUT_FINDS_BUILDING = {"cooling_center"}
+
+
 def can_scout(
     solution_id: str | None,
     need_ids: list[str],
@@ -570,7 +573,12 @@ def can_scout(
     county-wide, and either it is a site project (landfill, reclaimed land,
     plant, dam: scout/profiles.py) or a building-hosted project type answers
     one of its needs. Empty `scout_solutions` means no data for this county."""
-    if not asset_ids or not scout_solutions:
+    if not scout_solutions:
+        return False
+    # Building-finding projects need no report site: Site Scout finds the building.
+    if solution_id in SCOUT_FINDS_BUILDING:
+        return True
+    if not asset_ids:
         return False
     if profiles.is_site_project(solution_id):
         return True
@@ -1047,6 +1055,37 @@ async def analyze_county(
                 ),
             )
         )
+
+    # Where Site Scout has 3D scans, make sure the opportunity that uses them is
+    # offered when the county's needs call for it (Gemini may not have picked it).
+    cooling = next((s for s in solutions if s.id == "cooling_center"), None)
+    if (
+        cooling is not None
+        and county.fips in settings.scout_counties
+        and not any(o.solution_id == cooling.id for o in built)
+    ):
+        answered = [n for n in flagged if cooling.answers(n)]
+        if answered:
+            built.append(
+                Opportunity(
+                    id="cooling_center:county",
+                    solution_id=cooling.id,
+                    title=cooling.title_template,
+                    description=cooling.description,
+                    need_ids=[n.id for n in answered],
+                    score=round(matching.need_score(answered)),
+                    estimates=[],
+                    funding=funding.match_funding(
+                        programs,
+                        cooling.id,
+                        None,
+                        energy_community=energy_community,
+                        energy_community_checked=ok["energy_communities"],
+                    ),
+                    generated_by="rules",
+                    scoutable=True,
+                )
+            )
 
     population = acs.population if acs else None
     context = CountyContext(

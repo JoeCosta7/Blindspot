@@ -306,7 +306,19 @@ def rule_actions(state: ScoutState) -> AgentAction:
     if not state.seen:
         return AgentAction(thought="", tool="finish")
     left = state.settings.scout_max_roofs - state.roofs_used
-    todo = [i.building.id for i in state.seen.values() if not i.roof_checked][: min(4, left)]
+    pending = [i.building for i in state.seen.values() if not i.roof_checked]
+    if not state.land_mode:
+        # Building projects: take candidates from each source in turn, so the
+        # first source searched cannot fill every inspection slot. Land projects
+        # keep their order: the report's own sites come before look-alikes.
+        groups: dict[str, list] = {}
+        for b in pending:
+            groups.setdefault(b.found_by, []).append(b)
+        lists = list(groups.values())
+        pending = [
+            g[i] for i in range(max(map(len, lists), default=0)) for g in lists if i < len(g)
+        ]
+    todo = [b.id for b in pending][: min(4, left)]
     if todo:
         return AgentAction(thought="", tool="inspect_roof", building_ids=todo)
     for insp in state.seen.values():
@@ -459,7 +471,9 @@ async def run_scout(
         await run_tool(action, state)
         for event in _drain(state):
             yield event
-        if state.shortlisted() >= settings.scout_target_sites:
+        # Land projects stop once enough sites pass; building projects compare
+        # every inspected candidate and then keep the best.
+        if state.land_mode and state.shortlisted() >= settings.scout_target_sites:
             stopped = "target_reached"
             break
         if state.empty_searches >= 3:

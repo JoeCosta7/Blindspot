@@ -416,6 +416,38 @@
         "lead_days": 70,
         "basis": "common_practice"
       }
+    ],
+    "cooling_center": [
+      {
+        "id": "emergency_plan",
+        "phase": "support",
+        "title": "Agree the center's role with the emergency management office",
+        "detail": "When it opens, who staffs it, and what must stay powered during an outage.",
+        "who": "Emergency management",
+        "basis": "common_practice",
+        "lead_days": 60
+      },
+      {
+        "id": "walkthrough",
+        "phase": "site",
+        "title": "Walk the building with the owner, using the 3D scan to plan the layout",
+        "detail": "Seating, water, restrooms, charging and a step-free entrance.",
+        "who": "Project lead",
+        "basis": "common_practice",
+        "site_only": true,
+        "lead_days": 65,
+        "section_ids": [
+          "letter"
+        ]
+      },
+      {
+        "id": "occupancy",
+        "phase": "approve",
+        "title": "Ask the building official what occupancy limits apply",
+        "who": "Building official",
+        "basis": "common_practice",
+        "lead_days": 45
+      }
     ]
   },
   "lead_note": "lead_days: how many days before the target grant's deadline a step should be done. Our own planning assumptions for a small county, not program rules; null means after award.",

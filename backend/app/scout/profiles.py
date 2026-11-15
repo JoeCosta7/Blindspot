@@ -90,6 +90,21 @@ PAVED = Profile(
     land=True,
     imagery_text="large paved parking lot with very few trees",
 )
+INTERIOR = Profile(
+    ("search_properties", "search_public_buildings", "search_scans"),
+    ("Office", "Retail", "Hospitality", "Specialty"),
+    False,
+    "existing buildings with large, open interiors",
+    public_kinds=("library", "college"),
+    check_ids=(
+        "big_footprint",
+        "floor_area_record",
+        "has_scan",
+        "scan_vs_footprint",
+        "room_for_people",
+        "record_vs_footprint",
+    ),
+)
 DAM = Profile(
     SITE_FIRST,
     (),
@@ -116,6 +131,7 @@ PROFILES: dict[str, Profile] = {
     "landfill_composting": LANDFILL,
     "repower_fossil_plant": POWER_PLANT,
     "small_hydro": DAM,
+    "cooling_center": INTERIOR,
 }
 _PUBLIC_WORDS = (
     "school",

@@ -128,6 +128,8 @@ class InteriorRecord:
     summary: str | None
     tour_url: str | None
     image_url: str | None
+    # Every sizeable room: (label or None, floor area m², highest ceiling m).
+    room_list: tuple[tuple[str | None, float | None, float | None], ...] = ()
 
 
 @dataclass
@@ -416,7 +418,8 @@ class RealBuildingData:
             scan_id=d["id"],
             name=d["name"],
             floors=tuple((f["label"], f["area_m2"]) for f in d["floors"]),
-            rooms=tuple((r["label"], r["area_m2"]) for r in d["rooms"]),
+            rooms=tuple((r["label"], r["area_m2"]) for r in d["rooms"] if r["label"]),
+            room_list=tuple((r["label"], r["area_m2"], r.get("ceiling_m")) for r in d["rooms"]),
             total_area_m2=d["total_area_m2"],
             classification=d["classification"],
             summary=d["summary"],

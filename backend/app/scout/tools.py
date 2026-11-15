@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import httpx
@@ -29,6 +29,7 @@ from app.models import (
     LayerCheck,
     Need,
     Observation,
+    ScanRoom,
     ScoutEvent,
     ScoutStep,
     ScoutStepKind,
@@ -229,6 +230,38 @@ def _image_options(picture: SitePicture | None) -> list[ImageOption]:
 # --- searches ---------------------------------------------------------------------
 
 
+SAME_PLACE_M = 40.0
+
+
+def _same_place(a: Building, b: Building) -> bool:
+    """The same building reached through two sources (a CoStar record and its
+    scan, a school and a scan of it): within about 40 m, or the same name."""
+    dy = (a.lat - b.lat) * 111_320
+    dx = (a.lon - b.lon) * 111_320 * 0.87  # cos(30°), close enough for 40 m
+    same_name = a.name.strip().lower() == b.name.strip().lower() and len(a.name) > 3
+    return dx * dx + dy * dy < SAME_PLACE_M**2 or same_name
+
+
+def admit(state: ScoutState, found: list[Building]) -> list[Building]:
+    """New candidates only: a building already seen through another source is
+    dropped, and lends its 3D scan to the one kept if that one had none."""
+    kept: list[Building] = []
+    for b in found:
+        if b.id in state.seen:
+            continue
+        twin = next((i for i in state.seen.values() if _same_place(i.building, b)), None)
+        if twin is None:
+            twin_new = next((k for k in kept if _same_place(k, b)), None)
+            if twin_new is None:
+                kept.append(b)
+            elif b.scan_id and not twin_new.scan_id:
+                kept[kept.index(twin_new)] = replace(twin_new, scan_id=b.scan_id)
+            continue
+        if b.scan_id and not twin.building.scan_id and not twin.interior_checked:
+            twin.building = replace(twin.building, scan_id=b.scan_id)
+    return kept
+
+
 async def search_report_sites(state: ScoutState, limit: int) -> str:
     """The sites the county report found for this project (its landfills,
     brownfields, plants or dams), the opportunity's own sites first."""
@@ -251,6 +284,7 @@ async def search_report_sites(state: ScoutState, limit: int) -> str:
         )
         if len(picked) >= limit:
             break
+    picked = admit(state, picked)
     for b in picked:
         state.seen[b.id] = Inspection(building=b)
         state.seen[b.id].texts.append(_building_line(b))
@@ -338,6 +372,7 @@ async def search_public_buildings(state: ScoutState, kinds: list[str], limit: in
         )
         if len(picked) >= limit:
             break
+    picked = admit(state, picked)
     for b in picked:
         state.seen[b.id] = Inspection(building=b)
         state.seen[b.id].texts.append(_building_line(b))
@@ -399,8 +434,9 @@ async def search_properties(
 
     fresh = [b for b in buildings if b.id not in state.seen and matches(b)]
     # Buildings with a 3D scan first: a third layer, and the only way to judge an interior.
-    fresh.sort(key=lambda b: (b.scan_id is None, -(b.gross_sqft or 0), b.name))
+    fresh.sort(key=lambda b: (-(b.gross_sqft or 0), b.name))
     picked = fresh[:limit]
+    picked = admit(state, picked)
     for b in picked:
         state.seen[b.id] = Inspection(building=b)
         state.seen[b.id].texts.append(_building_line(b))
@@ -444,6 +480,7 @@ async def search_scans(state: ScoutState, keywords: list[str], limit: int) -> st
     fresh = [b for b in buildings if b.id not in state.seen and matches(b)]
     fresh.sort(key=lambda b: (-(b.rooms or 0), -(b.floors or 0), b.name))
     picked = fresh[:limit]
+    picked = admit(state, picked)
     for b in picked:
         state.seen[b.id] = Inspection(building=b)
     add_step(
@@ -493,6 +530,7 @@ async def search_imagery(state: ScoutState, text: str, near_id: str | None, limi
         state.last_result = f"search_imagery failed: {exc}"
         return state.last_result
     picked = [b for b in found if b.id not in state.seen]
+    picked = admit(state, picked)
     for b in picked:
         state.seen[b.id] = Inspection(building=b)
         state.seen[b.id].texts.append(_building_line(b))
@@ -876,9 +914,7 @@ async def evaluate_site(
             if roof.roof_shape and "flat" not in roof.roof_shape.lower():
                 dropped.append(f"{solution.id}: the roof is {roof.roof_shape}, not flat")
                 continue
-        if solution.id in INTERIOR_SOLUTIONS and interior is None:
-            dropped.append(f"{solution.id}: no scanned interior to judge")
-            continue
+        # No scan does not rule a building out; the scan's checks are skipped instead.
         if solution.id == "parking_canopy_solar" and (roof is None or not roof.hardscape_m2):
             dropped.append(f"{solution.id}: no paved area on the parcel record")
             continue
@@ -1002,6 +1038,12 @@ async def evaluate_site(
         image_options=_image_options(insp.picture),
         overlays=_overlays(roof),
         interior_summary=interior.summary if interior else None,
+        scan_rooms=[
+            ScanRoom(label=label, area_m2=area, ceiling_m=ceiling)
+            for label, area, ceiling in (interior.room_list if interior else ())
+        ][:12],
+        scan_floors=len(interior.floors) if interior else None,
+        scan_image_url=interior.image_url if interior else None,
         tour_url=interior.tour_url if interior else None,
     )
     insp.candidate = candidate

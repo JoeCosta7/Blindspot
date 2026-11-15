@@ -352,5 +352,21 @@
       "unmanaged_farm_waste"
     ],
     "description": "Help farmers plant stream buffers and cover crops that keep soil and manure out of waterways."
+  },
+  {
+    "id": "cooling_center",
+    "name": "Cooling and resilience center in an existing building",
+    "title_template": "Cooling and resilience center in an existing building",
+    "asset_kind": "county",
+    "hosts": [],
+    "triggers": [
+      "hazard_risk",
+      "urban_heat",
+      "utility_shutoff_risk"
+    ],
+    "hazards": [
+      "Heat wave"
+    ],
+    "description": "Open a large, accessible building as a cooling and charging center during heat waves and outages; Site Scout checks its interior from 3D scans where they exist."
   }
 ]

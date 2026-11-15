@@ -925,3 +925,5 @@ def test_can_scout_needs_a_site_and_a_building_project():
     assert can_scout("landfill_composting", ["landfill_gas_uncaptured"], ["lmop:1"], scout)
     assert can_scout(None, ["hazard_risk"], [], scout) is False  # county-wide
     assert can_scout(None, ["hazard_risk"], ["school:1"], ()) is False  # no data here
+    # Site Scout finds the building itself for a cooling center.
+    assert can_scout("cooling_center", ["hazard_risk"], [], scout) is True

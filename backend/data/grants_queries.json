@@ -19,7 +19,8 @@
   {
     "keyword": "mitigation",
     "solution_ids": [
-      "resilience_hub"
+      "resilience_hub",
+      "cooling_center"
     ],
     "agency_prefixes": [
       "DHS"

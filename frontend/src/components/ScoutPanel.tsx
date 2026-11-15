@@ -7,6 +7,7 @@ import type {
   SiteCandidate,
 } from "../types";
 import { EstimateRow } from "./EstimateRow";
+import { ScanRooms } from "./PhotoViewer";
 import { FundingBadge } from "./FundingBadge";
 
 const STOP_TEXT = {
@@ -195,15 +196,15 @@ export function SiteCard({
         </blockquote>
       )}
       {candidate.tour_url && (
-        <details className="scout-tour">
-          <summary>View the 3D tour</summary>
-          <iframe
-            src={candidate.tour_url}
-            title={`3D tour of ${candidate.name}`}
-            allow="xr-spatial-tracking"
-            allowFullScreen
-          />
-        </details>
+        <section className="scan-preview">
+          <div className="scan-preview-head">
+            <span className="chip chip-layer">3D scan</span>
+            <button type="button" className="link-button" onClick={() => onShowOnMap(candidate)}>
+              Walk through inside
+            </button>
+          </div>
+          <ScanRooms rooms={candidate.scan_rooms.slice(0, 4)} floors={candidate.scan_floors} />
+        </section>
       )}
 
     </article>

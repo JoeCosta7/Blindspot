@@ -177,7 +177,6 @@ def follow_the_text(spec: profiles.Profile, text: str) -> profiles.Profile:
         source_order=tuple(sources),
         public_kinds=kinds,
         property_types=types,
-        prefer_public=sources[0] == "search_public_buildings",
     )
 
 
@@ -186,12 +185,14 @@ def from_catalogue(solution_id: str | None, title: str, hosts: list[str]) -> pro
     base = profiles.profile_for(solution_id, title)
     # Only the public building kinds the project is catalogued for; none for an
     # idea of Gemini's own, so it never defaults to schools.
-    kinds = tuple(k for k in hosts if k in PUBLIC_KINDS)
+    kinds = tuple(k for k in hosts if k in PUBLIC_KINDS) or base.public_kinds
     sources = tuple(s for s in base.source_order if s != "search_public_buildings" or kinds)
     return dataclasses.replace(
         base,
         source_order=sources,
-        prefer_public=bool(sources) and sources[0] == "search_public_buildings",
+        # Whether county-owned buildings rank higher is the catalogue's policy
+        # for the project type, not a side effect of the search order.
+        prefer_public=base.prefer_public,
         public_kinds=kinds,
         chosen_by="catalogue",
     )
@@ -230,4 +231,5 @@ async def resolve(
         return fallback
     if not hit:
         cache_set(settings.cache_dir, "scout_host_spec", key, asked.model_dump())
-    return follow_the_text(spec, text)
+    # Gemini chooses where to look; the ranking policy stays the catalogue's.
+    return follow_the_text(dataclasses.replace(spec, prefer_public=fallback.prefer_public), text)
