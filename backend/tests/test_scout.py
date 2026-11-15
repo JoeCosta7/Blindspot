@@ -555,6 +555,10 @@ def test_one_building_through_two_sources_is_one_candidate(settings):
     campus = Building("cs:3", "Park 4", 29.80, -95.30, "costar", scan_id="Y")
     library = Building("mp:Y", "Warehouse", 29.8045, -95.30, "matterport", scan_id="Y")
     assert [b.id for b in tools.admit(state, [campus, library])] == ["cs:3"]
+    # A shared generic name far apart is two buildings.
+    here = Building("mp:P", "Warehouse", 29.70, -95.20, "matterport", scan_id="P")
+    there = Building("mp:Q", "Warehouse", 29.75, -95.20, "matterport", scan_id="Q")
+    assert len(tools.admit(state, [here, there])) == 2
 
 
 def test_interior_projects_search_the_scans_before_finishing(settings):

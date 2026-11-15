@@ -1094,26 +1094,35 @@ async def analyze_county(
     ):
         answered = [n for n in flagged if cooling.answers(n)]
         if answered:
-            built.append(
-                Opportunity(
-                    id="cooling_center:county",
-                    solution_id=cooling.id,
-                    title=cooling.title_template,
-                    description=cooling.description,
-                    need_ids=[n.id for n in answered],
-                    score=round(matching.need_score(answered)),
-                    estimates=[],
-                    funding=funding.match_funding(
-                        programs,
-                        cooling.id,
-                        None,
-                        energy_community=energy_community,
-                        energy_community_checked=ok["energy_communities"],
-                    ),
-                    generated_by="rules",
-                    scoutable=True,
-                )
+            cooling_opportunity = Opportunity(
+                id="cooling_center:county",
+                solution_id=cooling.id,
+                title=cooling.title_template,
+                description=cooling.description,
+                need_ids=[n.id for n in answered],
+                score=round(matching.need_score(answered)),
+                estimates=[],
+                funding=funding.match_funding(
+                    programs,
+                    cooling.id,
+                    None,
+                    energy_community=energy_community,
+                    energy_community_checked=ok["energy_communities"],
+                ),
+                generated_by="rules",
+                scoutable=True,
             )
+            # Ranked like the rest (top need addressed, then score), after any ties,
+            # rather than added at the end.
+            by_id = {n.id: n for n in flagged}
+
+            def rank(o: Opportunity) -> tuple[int, int]:
+                needs = [by_id[i] for i in o.need_ids if i in by_id]
+                return (matching.top_need_rank(needs, flagged), -o.score)
+
+            new_rank = rank(cooling_opportunity)
+            at = next((i for i, o in enumerate(built) if rank(o) > new_rank), len(built))
+            built.insert(at, cooling_opportunity)
 
     population = acs.population if acs else None
     context = CountyContext(

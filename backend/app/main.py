@@ -494,4 +494,5 @@ async def scout_oblique(name: str, direction: str, request: Request) -> FileResp
         )
     except SourceError as exc:
         raise HTTPException(502, str(exc)) from exc
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+    media = "image/png" if path.suffix == ".png" else "image/jpeg"
+    return FileResponse(path, media_type=media, headers={"Cache-Control": "max-age=86400"})

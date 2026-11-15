@@ -348,11 +348,13 @@ async def oblique_jpg(
     name: str,
 ) -> Path:
     """A side-angle photo of the area with the outlines drawn, saved as
-    <name>.jpg. The oriented endpoint needs bare colours and an explicit
-    transparent fill for outlines to render (tutorial quirk)."""
-    path = image_path(settings, name, "jpg")
-    if path.exists():
-        return path
+    <name>.jpg or <name>.png. The oriented endpoint needs bare colours and an explicit
+    transparent fill for outlines to render (tutorial quirk). With "jpeg/png"
+    Vexcel picks the format (large crops come back as PNG); either is kept, saved
+    under its own extension."""
+    cached = find_image(settings, name)
+    if cached is not None:
+        return cached
     oriented_drawings = [
         {
             **d,
@@ -380,8 +382,15 @@ async def oblique_jpg(
         },
         timeout=settings.scout_detect_timeout_s,
     )
-    if resp.status_code != 200 or not resp.content[:3] == b"\xff\xd8\xff":
+    if resp.status_code != 200:
         raise SourceError(f"Vexcel oriented/extract returned HTTP {resp.status_code}")
+    if resp.content[:3] == b"\xff\xd8\xff":
+        ext = "jpg"
+    elif resp.content[:8] == b"\x89PNG\r\n\x1a\n":
+        ext = "png"
+    else:
+        raise SourceError("Vexcel oriented/extract returned something other than an image")
+    path = image_path(settings, name, ext)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_bytes(resp.content)

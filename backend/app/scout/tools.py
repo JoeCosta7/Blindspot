@@ -239,19 +239,23 @@ def _image_options(picture: SitePicture | None) -> list[ImageOption]:
 
 
 SAME_PLACE_M = 40.0
+# Our own choice: a shared name counts only this close, so two different
+# buildings both called "Warehouse" or "Building 4" are not merged.
+SAME_NAME_M = 500.0
 
 
 def _same_place(a: Building, b: Building) -> bool:
     """The same building reached through two sources (a CoStar record and its
     scan, a school and a scan of it): the same 3D scan, within about 40 m, or
-    the same name. Sources place a big building's point differently, and CoStar
+    the same name within 500 m. Sources place a big building's point differently, and CoStar
     links several records of one campus to a single scan, so one scan is one site."""
     if a.scan_id and a.scan_id == b.scan_id:
         return True
     dy = (a.lat - b.lat) * 111_320
     dx = (a.lon - b.lon) * 111_320 * 0.87  # cos(30°), close enough for 40 m
     same_name = a.name.strip().lower() == b.name.strip().lower() and len(a.name) > 3
-    return dx * dx + dy * dy < SAME_PLACE_M**2 or same_name
+    apart = dx * dx + dy * dy
+    return apart < SAME_PLACE_M**2 or (same_name and apart < SAME_NAME_M**2)
 
 
 def admit(state: ScoutState, found: list[Building]) -> list[Building]:
