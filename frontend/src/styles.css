@@ -2182,3 +2182,97 @@ button {
   font-size: 0.8rem;
   cursor: help;
 }
+
+/* --- dated plan ------------------------------------------------------------------ */
+
+.process-view {
+  max-width: 1040px;
+}
+
+.target-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.target-bar select {
+  max-width: 420px;
+  font: inherit;
+  padding: 4px 6px;
+}
+
+.target-deadline {
+  font-weight: 600;
+}
+
+.next-step-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.due-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+  justify-self: start;
+}
+
+.due-chip.soon {
+  background: var(--elevated-bg);
+  color: var(--elevated);
+}
+
+.due-chip.late {
+  background: var(--high-bg);
+  color: var(--high);
+}
+
+.due-chip.undated {
+  background: var(--neutral-chip-bg);
+  color: var(--neutral-chip-text);
+}
+
+.coming-up h4 {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.coming-up ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.coming-up li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Drafts get room to read and edit. */
+.pack-section textarea {
+  min-height: 240px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}

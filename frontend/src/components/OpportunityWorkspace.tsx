@@ -194,6 +194,7 @@ export function OpportunityWorkspace({
             needs,
             site: chosenCandidate,
             site_asset: chosenAsset,
+            target_program_id: ws.target,
           }}
           done={ws.done}
           edits={ws.edits}
@@ -203,6 +204,7 @@ export function OpportunityWorkspace({
             })
           }
           onEdit={(id, text) => update({ edits: { ...ws.edits, [id]: text } })}
+          onTarget={(target) => update({ target })}
           onReset={(id) => {
             const { [id]: _dropped, ...rest } = ws.edits;
             update({ edits: rest });

@@ -513,6 +513,10 @@ export interface ProcessStep {
   document_ids: string[];
   /** Drafts (ProcessPlan.sections ids) this step uses. */
   section_ids: string[];
+  /** Do-by date, counted back from the target grant's deadline. */
+  due: string | null;
+  /** The do-by date has passed. */
+  late: boolean;
   source: "template" | "site_plan" | "plan";
 }
 
@@ -532,6 +536,10 @@ export interface PackSection {
 export interface ProcessPlan {
   opportunity_id: string;
   site_id: string | null;
+  /** The grant the dates count back from, and the dated leads to pick from. */
+  target: FundingMatch | null;
+  targets: FundingMatch[];
+  today: string | null;
   phases: ProcessPhase[];
   /** Lines from the site's or the opportunity's own plan, shown apart. */
   ideas: ProcessStep[];
@@ -549,4 +557,5 @@ export interface ProcessRequest {
   needs: Need[];
   site: SiteCandidate | null;
   site_asset: Asset | null;
+  target_program_id: string | null;
 }

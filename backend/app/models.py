@@ -626,6 +626,11 @@ class ProcessStep(BaseModel):
     document_ids: list[str] = Field(default_factory=list)
     # Ids of ProcessPlan.sections (drafts) this step uses, e.g. the resolution.
     section_ids: list[str] = Field(default_factory=list)
+    # Do-by date (ISO), counted back from the target grant's deadline by the
+    # step's lead time. Null when there is no dated target or no lead time.
+    due: str | None = None
+    # The do-by date has already passed: do it now.
+    late: bool = False
     source: ProcessStepSource
 
 
@@ -648,6 +653,10 @@ class PackSection(BaseModel):
 class ProcessPlan(BaseModel):
     opportunity_id: str
     site_id: str | None
+    # The grant the dates count back from, and the dated leads one could pick.
+    target: FundingMatch | None = None
+    targets: list[FundingMatch] = Field(default_factory=list)
+    today: str | None = None
     phases: list[ProcessPhase]
     # Lines from the chosen site's plan or the opportunity's own plan: shown
     # apart from the checklist because they often repeat its steps.
@@ -671,3 +680,5 @@ class ProcessRequest(BaseModel):
     # The chosen site: a Site Scout candidate, or one of the report's own sites.
     site: SiteCandidate | None = None
     site_asset: Asset | None = None
+    # The funding lead to aim for; empty means the earliest open deadline.
+    target_program_id: str | None = None

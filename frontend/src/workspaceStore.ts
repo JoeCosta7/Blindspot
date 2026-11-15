@@ -10,9 +10,11 @@ export interface WorkspaceState {
   siteId: string | null;
   done: string[];
   edits: Record<string, string>;
+  /** Funding lead the dates count back from; null = earliest deadline. */
+  target: string | null;
 }
 
-const EMPTY: WorkspaceState = { stage: "site", siteId: null, done: [], edits: {} };
+const EMPTY: WorkspaceState = { stage: "site", siteId: null, done: [], edits: {}, target: null };
 
 const key = (fips: string, opportunityId: string) => `workspace:${fips}:${opportunityId}`;
 

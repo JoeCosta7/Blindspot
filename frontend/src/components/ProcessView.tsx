@@ -9,11 +9,38 @@ interface Props {
   onToggle: (id: string) => void;
   onEdit: (id: string, text: string) => void;
   onReset: (id: string) => void;
+  onTarget: (programId: string) => void;
 }
 
 interface PlacedStep extends ProcessStep {
   phaseId: string;
   phaseTitle: string;
+}
+
+/** "Jan 12, 2027" from an ISO date, read as a calendar day (no time zone shift). */
+function formatDay(iso: string): string {
+  return new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((Date.parse(toIso) - Date.parse(fromIso)) / 86_400_000);
+}
+
+function DueChip({ step, today }: { step: ProcessStep; today: string | null }) {
+  if (!step.due) return <span className="due-chip undated">After award</span>;
+  if (step.late) return <span className="due-chip late">Overdue: do now</span>;
+  const days = today ? daysBetween(today, step.due) : null;
+  return (
+    <span className={days !== null && days <= 14 ? "due-chip soon" : "due-chip"}>
+      Do by {formatDay(step.due)}
+      {days !== null && ` · ${days} days`}
+    </span>
+  );
 }
 
 const CAVEAT_LINE =
@@ -75,7 +102,7 @@ function SectionEditor({
       <textarea
         value={text}
         onChange={(e) => onEdit(e.target.value)}
-        rows={Math.min(12, text.split("\n").length + 2)}
+        rows={Math.max(10, Math.min(28, Math.ceil(text.length / 80) + text.split("\n").length))}
       />
     </div>
   );
@@ -83,7 +110,15 @@ function SectionEditor({
 
 /** "Get it moving": one next step at the centre, its draft attached; the full
  * list, the analysis ideas and the document pack are one click away. */
-export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }: Props) {
+export function ProcessView({
+  request,
+  done,
+  edits,
+  onToggle,
+  onEdit,
+  onReset,
+  onTarget,
+}: Props) {
   const [plan, setPlan] = useState<ProcessPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -104,7 +139,7 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
     };
     // The request is rebuilt each render; refetch only when the opportunity or site changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request.opportunity.id, siteKey]);
+  }, [request.opportunity.id, siteKey, request.target_program_id]);
 
   if (error) return <div className="notice notice-warning">The plan could not be built. {error}</div>;
   if (!plan) {
@@ -118,12 +153,17 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
   const steps: PlacedStep[] = plan.phases.flatMap((p) =>
     p.steps.map((s) => ({ ...s, phaseId: p.id, phaseTitle: p.title })),
   );
-  const open = steps.filter((s) => !done.includes(s.id));
+  const byDue = (a: PlacedStep, b: PlacedStep) =>
+    Number(b.late) - Number(a.late) || (a.due ?? "9999").localeCompare(b.due ?? "9999");
+  const open = steps.filter((s) => !done.includes(s.id)).sort(byDue);
   const current =
     steps.find((s) => s.id === focusId) ??
     open.find((s) => !skipped.includes(s.id)) ??
     open[0] ??
     null;
+  // The next few after the current one, so parallel work is visible.
+  const comingUp = open.filter((s) => s.id !== current?.id && !skipped.includes(s.id)).slice(0, 3);
+  const target = plan.target;
   const docs = new Map(plan.documents.map((d) => [d.id, d]));
   const sections = new Map(plan.sections.map((s) => [s.id, s]));
   const textOf = (s: PackSection) => edits[s.id] ?? s.text;
@@ -160,6 +200,33 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
 
   return (
     <div className="workspace-body process-view">
+      <div className="target-bar">
+        {target && target.deadline ? (
+          <>
+            <span>Aiming for</span>
+            {plan.targets.length > 1 ? (
+              <select value={target.program_id} onChange={(e) => onTarget(e.target.value)}>
+                {plan.targets.map((t) => (
+                  <option key={t.program_id} value={t.program_id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <strong>{target.name}</strong>
+            )}
+            <span className="target-deadline">
+              closes {formatDay(target.deadline)}
+              {plan.today && ` · ${daysBetween(plan.today, target.deadline)} days left`}
+            </span>
+          </>
+        ) : (
+          <span className="muted">
+            No open funding deadline is known, so steps are in order without dates.
+          </span>
+        )}
+      </div>
+
       {/* Progress: one segment per phase, filled by the share done. */}
       <div className="process-progress">
         <ol className="phase-strip">
@@ -187,7 +254,10 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
 
       {current ? (
         <section className="card next-step" aria-label="Next step">
-          <span className="next-step-phase">{current.phaseTitle}</span>
+          <div className="next-step-top">
+            <span className="next-step-phase">{current.phaseTitle}</span>
+            <DueChip step={current} today={plan.today} />
+          </div>
           <h3>{current.title}</h3>
           {current.who && <p className="muted">Usually: {current.who}</p>}
           {current.detail && <p>{current.detail}</p>}
@@ -239,6 +309,23 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
         </section>
       )}
 
+      {comingUp.length > 0 && (
+        <section className="coming-up" aria-label="Coming up">
+          <h4>Coming up</h4>
+          <ul>
+            {comingUp.map((s) => (
+              <li key={s.id}>
+                <button type="button" className="step-title" onClick={() => setFocusId(s.id)}>
+                  {s.title}
+                </button>
+                <span className="muted">{s.who}</span>
+                <DueChip step={s} today={plan.today} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="process-links">
         <button type="button" className="link-button" onClick={() => setShowAll((v) => !v)}>
           {showAll ? "Hide all steps" : `See all ${steps.length} steps`}
@@ -274,6 +361,7 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
                         {step.title}
                       </button>
                       {step.who && <span className="muted"> · {step.who}</span>}
+                      <DueChip step={step} today={plan.today} />
                       {step.detail && <span className="step-detail">{step.detail}</span>}
                       <DocLinks ids={step.document_ids} docs={docs} />
                     </span>
@@ -331,7 +419,7 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
       )}
 
       <p className="muted process-caveat" title={plan.caveats.join("\n")}>
-        {CAVEAT_LINE}
+        {CAVEAT_LINE} Do-by dates use our own lead-time assumptions.
       </p>
       {/* What Print shows: the pack as plain text, with the official's edits. */}
       <pre className="pack-print">{markdown}</pre>

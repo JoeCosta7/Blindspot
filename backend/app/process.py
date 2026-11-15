@@ -15,6 +15,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from app.cache import DAY, cache_get, cache_set
 from app.config import Settings
 from app.estimates import format_number
 from app.models import (
+    FundingMatch,
     PackSection,
     ProcessPhase,
     ProcessPlan,
@@ -72,6 +74,7 @@ def _template_steps(
                 who=raw.get("who"),
                 document_ids=[d for d in raw.get("document_ids", []) if d in known_docs],
                 section_ids=[x for x in raw.get("section_ids", []) if x in SECTION_IDS],
+                due=str(raw["lead_days"]) if raw.get("lead_days") is not None else None,
                 source="template",
             )
         )
@@ -291,10 +294,62 @@ async def reword(sections: list[PackSection], settings: Settings) -> list[PackSe
     return out
 
 
+def dated_targets(funding: list[FundingMatch], today: date) -> list[FundingMatch]:
+    """Leads one can aim for: open, with a deadline still ahead. Soonest first."""
+    leads = [
+        f
+        for f in funding
+        if f.deadline
+        and f.status in ("open", "open_with_deadlines")
+        and f.deadline >= today.isoformat()
+    ]
+    return sorted(leads, key=lambda f: f.deadline or "")
+
+
+def schedule(
+    phases: list[ProcessPhase], target: FundingMatch | None, today: date
+) -> list[ProcessPhase]:
+    """Turn each step's lead days (carried in `due` by _template_steps) into a
+    do-by date before the target's deadline, and add the submission itself."""
+    deadline = date.fromisoformat(target.deadline) if target and target.deadline else None
+    out = []
+    for phase in phases:
+        steps = []
+        for step in phase.steps:
+            lead = int(step.due) if step.due and step.due.isdigit() else None
+            if deadline is None or lead is None:
+                steps.append(step.model_copy(update={"due": None, "late": False}))
+                continue
+            due = deadline - timedelta(days=lead)
+            steps.append(step.model_copy(update={"due": due.isoformat(), "late": due < today}))
+        if phase.id == "fund" and target is not None and deadline is not None:
+            steps.append(
+                ProcessStep(
+                    id="submit_application",
+                    title=f"Submit the application to {target.name}",
+                    detail=f"{target.agency} deadline. Confirm the date with the agency.",
+                    who="Grants coordinator",
+                    section_ids=["narrative"],
+                    due=deadline.isoformat(),
+                    late=False,
+                    source="template",
+                )
+            )
+        out.append(phase.model_copy(update={"steps": steps}))
+    return out
+
+
 async def build_process(request: ProcessRequest, settings: Settings) -> ProcessPlan:
     templates = load_templates(settings.data_dir / "process_templates.json")
     docs = gather_documents(request, settings.data_dir)
     phases, ideas = build_phases(request, templates, {d.id for d in docs})
+    today = date.today()
+    targets = dated_targets(request.opportunity.funding, today)
+    target = next(
+        (f for f in targets if f.program_id == request.target_program_id),
+        targets[0] if targets else None,
+    )
+    phases = schedule(phases, target, today)
     plan = _site_plan(request)
     needed = (
         plan.documents_needed
@@ -310,6 +365,9 @@ async def build_process(request: ProcessRequest, settings: Settings) -> ProcessP
     return ProcessPlan(
         opportunity_id=request.opportunity.id,
         site_id=site_id,
+        target=target,
+        targets=targets,
+        today=today.isoformat(),
         phases=phases,
         ideas=ideas,
         documents=docs,

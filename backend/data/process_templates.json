@@ -31,21 +31,24 @@
       "who": "County administrator",
       "section_ids": [
         "summary"
-      ]
+      ],
+      "lead_days": 90
     },
     {
       "id": "name_lead",
       "phase": "support",
       "title": "Name a project lead and partners",
       "detail": "One staff lead, plus the agencies, utilities, nonprofits or owners the project depends on.",
-      "who": "County administrator"
+      "who": "County administrator",
+      "lead_days": 85
     },
     {
       "id": "public_input",
       "phase": "support",
       "title": "Hold a public meeting or listening session",
       "detail": "Hear from the residents the project is meant to help before plans are fixed.",
-      "who": "Project lead"
+      "who": "Project lead",
+      "lead_days": 70
     },
     {
       "id": "confirm_owner",
@@ -59,7 +62,8 @@
       "site_only": true,
       "section_ids": [
         "letter"
-      ]
+      ],
+      "lead_days": 75
     },
     {
       "id": "site_visit",
@@ -67,7 +71,8 @@
       "title": "Visit the site and record its condition",
       "detail": "Photos, access, utilities nearby, and anything the aerial view could not show.",
       "who": "Project lead",
-      "site_only": true
+      "site_only": true,
+      "lead_days": 70
     },
     {
       "id": "pick_funding",
@@ -77,7 +82,8 @@
       "who": "Grants coordinator",
       "section_ids": [
         "narrative"
-      ]
+      ],
+      "lead_days": 80
     },
     {
       "id": "budget",
@@ -87,7 +93,8 @@
       "who": "Finance department",
       "section_ids": [
         "summary"
-      ]
+      ],
+      "lead_days": 40
     },
     {
       "id": "resolution",
@@ -97,35 +104,40 @@
       "who": "County board, clerk",
       "section_ids": [
         "resolution"
-      ]
+      ],
+      "lead_days": 30
     },
     {
       "id": "permits",
       "phase": "approve",
       "title": "Ask planning and zoning which permits apply",
       "detail": "Land use, building and any state permits for this kind of project.",
-      "who": "Planning department"
+      "who": "Planning department",
+      "lead_days": 45
     },
     {
       "id": "env_review",
       "phase": "approve",
       "title": "Ask each funding agency whether an environmental review is required",
       "detail": "Federal funds often come with one; starting early avoids delays.",
-      "who": "Project lead"
+      "who": "Project lead",
+      "lead_days": 50
     },
     {
       "id": "procurement",
       "phase": "build",
       "title": "Prepare a request for proposals under county procurement rules",
       "detail": "Define the scope, the evaluation criteria and the timeline.",
-      "who": "Purchasing office"
+      "who": "Purchasing office",
+      "lead_days": null
     },
     {
       "id": "schedule",
       "phase": "build",
       "title": "Set milestones and how results will be reported",
       "detail": "Report back to the board and the public on progress and outcomes.",
-      "who": "Project lead"
+      "who": "Project lead",
+      "lead_days": null
     }
   ],
   "by_solution": {
@@ -140,7 +152,8 @@
           "epa_repowering_screening",
           "epa_brownfields_marc_packet"
         ],
-        "site_only": true
+        "site_only": true,
+        "lead_days": 65
       },
       {
         "id": "interconnection",
@@ -149,7 +162,8 @@
         "who": "Project lead, utility",
         "document_ids": [
           "utility_interconnection_request"
-        ]
+        ],
+        "lead_days": 45
       },
       {
         "id": "elective_pay",
@@ -160,7 +174,8 @@
         "document_ids": [
           "irs_elective_pay_overview",
           "energy_community_bonus_briefing"
-        ]
+        ],
+        "lead_days": 50
       }
     ],
     "resilience_hub": [
@@ -171,7 +186,8 @@
         "who": "Project lead, utility",
         "document_ids": [
           "utility_interconnection_request"
-        ]
+        ],
+        "lead_days": 45
       },
       {
         "id": "elective_pay",
@@ -180,14 +196,16 @@
         "who": "Finance department",
         "document_ids": [
           "irs_elective_pay_overview"
-        ]
+        ],
+        "lead_days": 50
       },
       {
         "id": "emergency_plan",
         "phase": "support",
         "title": "Agree the hub's role with the emergency management office",
         "detail": "When it opens, who staffs it, and what it must power during an outage.",
-        "who": "Emergency management"
+        "who": "Emergency management",
+        "lead_days": 60
       }
     ],
     "landfill_gas_energy": [
@@ -202,7 +220,8 @@
         "site_only": true,
         "section_ids": [
           "letter"
-        ]
+        ],
+        "lead_days": 70
       }
     ],
     "landfill_composting": [
@@ -217,19 +236,22 @@
         "site_only": true,
         "section_ids": [
           "letter"
-        ]
+        ],
+        "lead_days": 70
       },
       {
         "id": "compost_permit",
         "phase": "approve",
         "title": "Ask the state solid-waste agency what permit a composting site needs",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 45
       },
       {
         "id": "feedstock",
         "phase": "support",
         "title": "Line up food-scrap sources: schools, groceries, haulers",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 55
       }
     ],
     "flood_buyout": [
@@ -237,20 +259,23 @@
         "id": "flooded_list",
         "phase": "support",
         "title": "List repeatedly flooded properties with the floodplain manager",
-        "who": "Floodplain manager"
+        "who": "Floodplain manager",
+        "lead_days": 75
       },
       {
         "id": "mitigation_plan",
         "phase": "fund",
         "title": "Confirm the county's hazard mitigation plan is current",
         "detail": "FEMA mitigation grants generally require one; ask the State Hazard Mitigation Officer.",
-        "who": "Emergency management"
+        "who": "Emergency management",
+        "lead_days": 80
       },
       {
         "id": "voluntary_offers",
         "phase": "approve",
         "title": "Make voluntary offers to willing owners only",
-        "who": "County attorney"
+        "who": "County attorney",
+        "lead_days": 35
       }
     ],
     "wildfire_defensible_space": [
@@ -258,7 +283,8 @@
         "id": "fire_partners",
         "phase": "support",
         "title": "Coordinate with the state forestry agency and local fire districts",
-        "who": "Emergency management"
+        "who": "Emergency management",
+        "lead_days": 70
       }
     ],
     "public_ev_charging": [
@@ -269,7 +295,8 @@
         "who": "Project lead, utility",
         "document_ids": [
           "utility_interconnection_request"
-        ]
+        ],
+        "lead_days": 45
       }
     ],
     "weatherization_clinic": [
@@ -277,7 +304,8 @@
         "id": "wap_partner",
         "phase": "support",
         "title": "Partner with the local weatherization or energy-assistance agency",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 60
       }
     ],
     "utility_assistance_drive": [
@@ -285,7 +313,8 @@
         "id": "wap_partner",
         "phase": "support",
         "title": "Partner with the local energy-assistance agency to staff sign-ups",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 60
       }
     ],
     "heat_pump_group_buy": [
@@ -293,7 +322,8 @@
         "id": "installers",
         "phase": "build",
         "title": "Invite local installers to quote a group price",
-        "who": "Purchasing office"
+        "who": "Purchasing office",
+        "lead_days": null
       }
     ],
     "mobile_home_repair": [
@@ -301,7 +331,8 @@
         "id": "wap_partner",
         "phase": "support",
         "title": "Partner with the local weatherization agency and housing nonprofits",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 60
       }
     ],
     "water_system_consolidation": [
@@ -309,7 +340,8 @@
         "id": "state_water",
         "phase": "support",
         "title": "Meet the state drinking water program about consolidation help",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 70
       }
     ],
     "drinking_water_compliance": [
@@ -317,7 +349,8 @@
         "id": "state_water",
         "phase": "support",
         "title": "Meet the state drinking water program about the systems with violations",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 70
       }
     ],
     "microtransit": [
@@ -325,7 +358,8 @@
         "id": "transit_office",
         "phase": "fund",
         "title": "Ask the state DOT transit office about rural transit funding",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 70
       }
     ],
     "mobility_hub": [
@@ -333,8 +367,10 @@
         "id": "transit_office",
         "phase": "fund",
         "title": "Ask the state DOT about active-transportation funding",
-        "who": "Project lead"
+        "who": "Project lead",
+        "lead_days": 70
       }
     ]
-  }
+  },
+  "lead_note": "lead_days: how many days before the target grant's deadline a step should be done. Our own planning assumptions for a small county, not program rules; null means after award."
 }

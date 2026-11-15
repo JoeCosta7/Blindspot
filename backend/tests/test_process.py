@@ -76,3 +76,42 @@ def test_reword_rejects_new_numbers(settings, monkeypatch):
     by_id = {s.id: s for s in out}
     assert by_id["summary"].generated_by == "template"  # 40,000 was invented
     assert by_id["narrative"].generated_by == "gemini"
+
+
+def test_steps_count_back_from_the_grant_deadline(settings):
+    from datetime import date, timedelta
+
+    from app.models import FundingMatch
+
+    soon = (date.today() + timedelta(days=60)).isoformat()
+    later = (date.today() + timedelta(days=200)).isoformat()
+
+    def lead(pid, deadline):
+        return FundingMatch(
+            program_id=pid,
+            name=pid,
+            agency="EPA",
+            status="open",
+            deadline=deadline,
+            key_terms="",
+            verified_on="2026-11-14",
+            source_url=None,
+        )
+
+    opp = opportunity(
+        funding=[lead("later", later), lead("soon", soon), lead("past", "2020-01-01")]
+    )
+    plan = asyncio.run(process.build_process(request(opportunity=opp), settings))
+    assert plan.target.program_id == "soon"  # earliest open deadline still ahead
+    assert [t.program_id for t in plan.targets] == ["soon", "later"]
+    steps = {s.id: s for p in plan.phases for s in p.steps}
+    assert steps["submit_application"].due == soon
+    # brief_board is due 90 days before a deadline 60 days away: already late.
+    assert steps["brief_board"].late is True
+    assert steps["procurement"].due is None  # after award
+
+    chosen = asyncio.run(
+        process.build_process(request(opportunity=opp, target_program_id="later"), settings)
+    )
+    steps = {s.id: s for p in chosen.phases for s in p.steps}
+    assert chosen.target.program_id == "later" and steps["brief_board"].late is False
