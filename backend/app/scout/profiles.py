@@ -41,6 +41,10 @@ class Profile:
     check_ids: tuple[str, ...] = ()
     # "gemini" when written for this opportunity, "catalogue" otherwise.
     chosen_by: str = "catalogue"
+    # The project is judged from the inside (a cooling center): the scan library
+    # is always searched, scanned buildings found are inspected, and at equal
+    # score a site whose interior was checked ranks first.
+    judge_interior: bool = False
 
 
 PUBLIC = Profile(
@@ -104,6 +108,7 @@ INTERIOR = Profile(
         "room_for_people",
         "record_vs_footprint",
     ),
+    judge_interior=True,
 )
 DAM = Profile(
     SITE_FIRST,

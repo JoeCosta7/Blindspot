@@ -551,3 +551,25 @@ def test_one_building_through_two_sources_is_one_candidate(settings):
     state.seen[first.id] = tools.Inspection(building=first)
     assert tools.admit(state, [scan]) == []
     assert state.seen["cs:1"].building.scan_id == "X"  # the record gains the scan
+
+
+def test_interior_projects_search_the_scans_before_finishing(settings):
+    from app.scout import tools
+
+    def state(judge_interior):
+        return tools.ScoutState(
+            county=make_county("48201", -96, 29, -95, 30),
+            needs=NEEDS,
+            solar_yield=None,
+            solutions=(),
+            programs=(),
+            provider=FakeProvider(),
+            settings=settings,
+            client=None,
+            judge_interior=judge_interior,
+        )
+
+    # Other projects finish when they say so.
+    assert agent.interior_followup(state(False)) is None
+    # A cooling center searches the scan library first.
+    assert agent.interior_followup(state(True)).tool == "search_scans"

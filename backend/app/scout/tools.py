@@ -127,6 +127,7 @@ class ScoutState:
     public_kinds: tuple[str, ...] = ()
     check_ids: tuple[str, ...] = ()
     focus_hosts: str = ""
+    judge_interior: bool = False
     seen: dict[str, Inspection] = field(default_factory=dict)
     steps: list[ScoutStep] = field(default_factory=list)
     pending: list[ScoutEvent] = field(default_factory=list)
@@ -630,7 +631,8 @@ async def inspect_roof(state: ScoutState, building_id: str) -> str:
     b = insp.building
     if insp.roof_checked:
         return _record(state, insp, f"{b.id} roof already inspected: {insp.texts[-1]}")
-    if state.roofs_used >= state.settings.scout_max_roofs:
+    extra = 3 if state.judge_interior and b.scan_id else 0
+    if state.roofs_used >= state.settings.scout_max_roofs + extra:
         return _record(state, insp, "The roof inspection budget is spent. Evaluate or finish.")
     state.roofs_used += 1
     insp.roof_checked = True

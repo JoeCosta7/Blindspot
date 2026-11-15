@@ -232,4 +232,9 @@ async def resolve(
     if not hit:
         cache_set(settings.cache_dir, "scout_host_spec", key, asked.model_dump())
     # Gemini chooses where to look; the ranking policy stays the catalogue's.
-    return follow_the_text(dataclasses.replace(spec, prefer_public=fallback.prefer_public), text)
+    return follow_the_text(
+        dataclasses.replace(
+            spec, prefer_public=fallback.prefer_public, judge_interior=fallback.judge_interior
+        ),
+        text,
+    )
