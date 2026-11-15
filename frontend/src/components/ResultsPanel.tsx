@@ -230,7 +230,7 @@ function CountyView({
   const tabs: [Tab, string][] = [
     ["opportunities", `Opportunities (${report.opportunities.length})`],
     ["needs", `Needs (${report.needs.length})`],
-    ["assets", `Assets (${report.factors.length})`],
+    ["assets", `Local stats (${report.factors.length})`],
     ["peers", `Peers (${report.peers.length})`],
   ];
 
