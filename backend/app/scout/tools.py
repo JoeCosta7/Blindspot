@@ -128,6 +128,8 @@ class ScoutState:
     check_ids: tuple[str, ...] = ()
     focus_hosts: str = ""
     judge_interior: bool = False
+    # A for-lease property search has run (searched once, found or not).
+    lease_searched: bool = False
     seen: dict[str, Inspection] = field(default_factory=dict)
     steps: list[ScoutStep] = field(default_factory=list)
     pending: list[ScoutEvent] = field(default_factory=list)
@@ -206,6 +208,11 @@ def _building_line(b: Building) -> str:
         parts.append("rooms: " + ", ".join(b.room_labels[:6]))
     if b.building_type:
         parts.append(f"type: {b.building_type}")
+    if b.lease_contiguous_sqft or b.lease_available_sqft:
+        parts.append(
+            f"for lease now: {format_number(round(b.lease_contiguous_sqft or 0))} sq ft "
+            f"largest block, {format_number(round(b.lease_available_sqft or 0))} sq ft marketed"
+        )
     parts.append("has 3D scan" if b.scan_id else "no 3D scan")
     return " | ".join(parts)
 
@@ -307,6 +314,10 @@ async def search_report_sites(state: ScoutState, limit: int) -> str:
     return state.last_result
 
 
+# The site card shows this observation as "For lease now".
+LEASE_BLOCK_LABEL = "Largest block marketed for lease"
+
+
 async def search_public_buildings(state: ScoutState, kinds: list[str], limit: int) -> str:
     """Schools, libraries and colleges from the county report, as candidates.
     A nearby 3D scan is linked when the scan index is available."""
@@ -399,10 +410,15 @@ async def search_properties(
     min_sqft: int | None,
     max_stories: int | None,
     limit: int,
+    for_lease: bool = False,
 ) -> str:
     """Commercial property records in the county (the CoStar layer) matching
     a type word (Industrial, Warehouse, Retail, Office, Flex...), a minimum
-    gross area and a maximum number of storeys. Largest first."""
+    gross area and a maximum number of storeys. Largest first. With
+    `for_lease`, only buildings with space marketed for lease now (CoStar's
+    active lease listings), the largest contiguous block first."""
+    if for_lease:
+        state.lease_searched = True
     try:
         buildings = await state.provider.properties(state.county)
     except Exception as exc:  # a broken kit file must not take the run down
@@ -431,11 +447,15 @@ async def search_properties(
             return False
         if min_sqft and (b.gross_sqft or 0) < min_sqft:
             return False
+        if for_lease and not (b.lease_contiguous_sqft or b.lease_available_sqft):
+            return False
         return not (max_stories and (b.stories or 1) > max_stories)
 
     fresh = [b for b in buildings if b.id not in state.seen and matches(b)]
     # Buildings with a 3D scan first: a third layer, and the only way to judge an interior.
     fresh.sort(key=lambda b: (-(b.gross_sqft or 0), b.name))
+    if for_lease:  # the largest space that can be leased now first
+        fresh.sort(key=lambda b: (-(b.lease_contiguous_sqft or 0), b.name))
     picked = fresh[:limit]
     picked = admit(state, picked)
     for b in picked:
@@ -447,7 +467,8 @@ async def search_properties(
         "observation",
         f"Searched {len(buildings):,} property records in the county for {filters}"
         f"{f', at least {min_sqft:,} sq ft' if min_sqft else ''}"
-        f"{f', up to {max_stories} storeys' if max_stories else ''}: "
+        f"{f', up to {max_stories} storeys' if max_stories else ''}"
+        f"{', with space for lease now' if for_lease else ''}: "
         f"{len(picked)} new candidate(s).",
         "search_properties",
     )
@@ -746,6 +767,9 @@ def _observations(
             ("Year built", building.year_built, None),
             ("Parking spaces (record)", building.parking_spaces, None),
             ("Building class", building.building_class, None),
+            (LEASE_BLOCK_LABEL, building.lease_contiguous_sqft, "sq ft"),
+            ("Space marketed for lease", building.lease_available_sqft, "sq ft"),
+            ("Lease listing", ", ".join(building.lease_types) or None, None),
         ]
         for label, value, unit in cs:
             if value is None:

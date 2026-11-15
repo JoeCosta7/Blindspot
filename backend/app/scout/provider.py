@@ -80,6 +80,11 @@ class Building:
     year_built: int | None = None
     parking_spaces: int | None = None
     photo_url: str | None = None
+    # From CoStar's active lease listings: space marketed for lease now.
+    lease_available_sqft: float | None = None
+    lease_contiguous_sqft: float | None = None
+    lease_spaces: int | None = None
+    lease_types: tuple[str, ...] = ()
     # A site the county report found (landfill, brownfield, plant, dam).
     report_asset: Asset | None = field(default=None, compare=False)
 
@@ -156,6 +161,17 @@ class ScanIndex:
 DETECT_LABELS = ["rooftop hvac unit", "solar panel", "car"]
 
 
+def _lease_fields(lease: dict[str, Any] | None) -> dict[str, Any]:
+    if not lease:
+        return {}
+    return {
+        "lease_available_sqft": lease["available_sqft"] or None,
+        "lease_contiguous_sqft": lease["contiguous_sqft"] or None,
+        "lease_spaces": lease["spaces"] or None,
+        "lease_types": tuple(lease["types"]),
+    }
+
+
 class BuildingData(Protocol):
     name: str
 
@@ -213,6 +229,7 @@ class RealBuildingData:
         kit = self.settings.costar_kit_dir
         if not costar.available(kit):
             return []
+        leases = costar.lease_listings(kit)
         return [
             Building(
                 id=f"cs:{r['id']}",
@@ -232,6 +249,7 @@ class RealBuildingData:
                 year_built=r["year_built"],
                 parking_spaces=r["parking_spaces"],
                 photo_url=r["photo_url"],
+                **_lease_fields(leases.get(r["id"])),
             )
             for r in costar.properties_in_county(kit, county)
             if r["construction_status"] in (None, "Existing", "UnderRenovation", "Redeveloped")

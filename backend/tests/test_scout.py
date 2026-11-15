@@ -571,5 +571,34 @@ def test_interior_projects_search_the_scans_before_finishing(settings):
 
     # Other projects finish when they say so.
     assert agent.interior_followup(state(False)) is None
-    # A cooling center searches the scan library first.
-    assert agent.interior_followup(state(True)).tool == "search_scans"
+    # A cooling center looks at space for lease now, then the scan library.
+    first = agent.interior_followup(state(True))
+    assert first.tool == "search_properties" and first.for_lease
+    after = state(True)
+    after.lease_searched = True
+    assert agent.interior_followup(after).tool == "search_scans"
+
+
+def test_for_lease_search_keeps_buildings_with_space_on_the_market(settings):
+    from dataclasses import replace
+
+    from app.scout import tools
+
+    leased = replace(COSTAR_D, id="cs:10", lease_contiguous_sqft=12_000.0)
+
+    class LeaseProvider(FakeProvider):
+        async def properties(self, county):
+            return [COSTAR_D, leased]
+
+    state = tools.ScoutState(
+        county=make_county("48201", -96, 29, -95, 30),
+        needs=NEEDS,
+        solar_yield=None,
+        solutions=(),
+        programs=(),
+        provider=LeaseProvider(),
+        settings=settings,
+        client=None,
+    )
+    asyncio.run(tools.search_properties(state, [], None, None, 5, for_lease=True))
+    assert list(state.seen) == ["cs:10"] and state.lease_searched

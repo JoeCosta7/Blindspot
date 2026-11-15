@@ -59,6 +59,8 @@ class AgentAction(BaseModel):
     property_types: list[str] = []
     min_sqft: int | None = None
     max_stories: int | None = None
+    # search_properties: only buildings with space marketed for lease now.
+    for_lease: bool = False
     # search_public_buildings: school, library, college.
     kinds: list[str] = []
     # search_scans: words to look for in building names and room labels.
@@ -135,8 +137,10 @@ def build_prompt(state: ScoutState) -> str:
         "(search_scans, inspect_interior), and aerial property records and imagery "
         "(inspect_roof, search_imagery), plus the county report (needs).\n\n"
         "Tools:\n"
-        "- search_properties(property_types, min_sqft?, max_stories?): property records by type "
-        "word (Industrial, Warehouse, Retail, Office, Flex, Multifamily), size and storeys.\n"
+        "- search_properties(property_types, min_sqft?, max_stories?, for_lease?): property "
+        "records by type word (Industrial, Warehouse, Retail, Office, Flex, Multifamily), size "
+        "and storeys; for_lease=true keeps only buildings with space marketed for lease now "
+        "(CoStar listings), largest block first.\n"
         "- search_public_buildings(kinds): the county's schools, libraries and colleges.\n"
         "- search_report_sites(): the sites the county report already found for this project, "
         "such as its landfills, brownfields, power plants or dams.\n"
@@ -239,7 +243,12 @@ async def run_tool(action: AgentAction, state: ScoutState) -> str:
     limit = state.settings.scout_search_limit
     if action.tool == "search_properties":
         return await tools.search_properties(
-            state, action.property_types, action.min_sqft, action.max_stories, limit
+            state,
+            action.property_types,
+            action.min_sqft,
+            action.max_stories,
+            limit,
+            for_lease=action.for_lease,
         )
     if action.tool == "search_report_sites":
         return await tools.search_report_sites(state, limit)
@@ -301,6 +310,7 @@ def rule_actions(state: ScoutState) -> AgentAction:
                 tool="search_properties",
                 property_types=list(state.property_types),
                 max_stories=2,
+                for_lease=state.judge_interior,
             )
         return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
     if not state.seen:
@@ -333,9 +343,25 @@ def interior_followup(state: ScoutState) -> AgentAction | None:
     buildings found. None when nothing is left."""
     if not state.judge_interior:
         return None
+    if not state.lease_searched:
+        return AgentAction(
+            thought="",
+            tool="search_properties",
+            property_types=list(state.property_types),
+            for_lease=True,
+        )
     if "search_scans" not in {s.tool for s in state.steps}:
         return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
-    scanned = [i for i in state.seen.values() if i.building.scan_id]
+    found = [
+        i for i in state.seen.values() if i.building.scan_id or i.building.lease_contiguous_sqft
+    ]
+    # Take each source in turn (CoStar listings, the scan library), so the first
+    # one searched cannot use every inspection left.
+    groups: dict[str, list] = {}
+    for insp in found:
+        groups.setdefault(insp.building.found_by, []).append(insp)
+    lists = list(groups.values())
+    scanned = [g[i] for i in range(max(map(len, lists), default=0)) for g in lists if i < len(g)]
     left = state.settings.scout_max_roofs + 3 - state.roofs_used
     todo = [i.building.id for i in scanned if not i.roof_checked][: min(4, left)]
     if todo:
@@ -513,6 +539,10 @@ async def run_scout(
             order[c.status],
             -c.score,
             -(state.judge_interior and bool(c.scan_rooms)),
+            -(
+                state.judge_interior
+                and any(o.label == tools.LEASE_BLOCK_LABEL for o in c.observations)
+            ),
         ),
     )
     # Photos only for the sites that will be shown: the best non-rejected ones.
