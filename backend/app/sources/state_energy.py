@@ -22,7 +22,7 @@ NATIONAL_KEY = "US"
 def _load(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise SourceError(f"{path.name} is missing; run scripts/prep_data.py energy")
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def bill_source_label(year: int) -> str:

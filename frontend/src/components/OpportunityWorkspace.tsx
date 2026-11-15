@@ -32,11 +32,14 @@ export function OpportunityWorkspace({
 }: Props) {
   // Pursuing always opens on step 1 (Choose a site); the chosen site, ticks and
   // edits saved from earlier visits are kept.
+  // Gemini's ids are positions (ai:1, ai:2...), so a regenerated report can put a
+  // different opportunity at the same id. Key progress by its type and title too.
+  const storeId = `${opportunity.id}:${opportunity.solution_id ?? "idea"}:${opportunity.title}`;
   const [ws, setWs] = useState<WorkspaceState>(() => ({
-    ...loadWorkspace(report.fips, opportunity.id),
+    ...loadWorkspace(report.fips, storeId),
     stage: "site",
   }));
-  useEffect(() => saveWorkspace(report.fips, opportunity.id, ws), [report.fips, opportunity.id, ws]);
+  useEffect(() => saveWorkspace(report.fips, storeId, ws), [report.fips, storeId, ws]);
   const update = (change: Partial<WorkspaceState>) => setWs((s) => ({ ...s, ...change }));
   // Report sites stay hidden until asked for, like Site Scout's.
   const [revealed, setRevealed] = useState(false);

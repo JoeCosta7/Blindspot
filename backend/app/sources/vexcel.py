@@ -329,7 +329,7 @@ def save_image_job(
 def load_image_job(settings: Settings, name: str) -> dict[str, Any] | None:
     path = image_path(settings, name, "json")
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 

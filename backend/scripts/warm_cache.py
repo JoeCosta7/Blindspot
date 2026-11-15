@@ -84,7 +84,7 @@ async def main(argv: list[str]) -> int:
             if save:
                 fixtures.mkdir(parents=True, exist_ok=True)
                 path = fixtures / f"{fips}.json"
-                path.write_text(report.model_dump_json(indent=1))
+                path.write_text(report.model_dump_json(indent=1), encoding="utf-8")
                 print(f"  saved {path.relative_to(settings.data_dir.parent)}")
 
     if failures:

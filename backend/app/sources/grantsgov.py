@@ -65,7 +65,9 @@ class GrantQuery(BaseModel):
 
 @lru_cache(maxsize=4)
 def load_queries(path: Path) -> tuple[GrantQuery, ...]:
-    return tuple(GrantQuery.model_validate(item) for item in json.loads(path.read_text()))
+    return tuple(
+        GrantQuery.model_validate(item) for item in json.loads(path.read_text(encoding="utf-8"))
+    )
 
 
 def _iso(value: Any) -> str | None:

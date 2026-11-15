@@ -12,7 +12,12 @@ export default defineConfig({
         target: "http://localhost:8000",
         // Keep NDJSON progress / scout streams unbuffered so the UI can update live.
         configure: (proxy) => {
-          proxy.on("proxyReq", (proxyReq) => {
+          // Vite 8's ProxyServer type omits the event methods the proxy has at runtime.
+          type ProxyRequest = { setHeader(name: string, value: string): void };
+          const events = proxy as unknown as {
+            on(event: "proxyReq", listener: (proxyReq: ProxyRequest) => void): void;
+          };
+          events.on("proxyReq", (proxyReq) => {
             proxyReq.setHeader("Accept-Encoding", "identity");
           });
         },

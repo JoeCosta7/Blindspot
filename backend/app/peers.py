@@ -48,7 +48,7 @@ def load_directory(path: Path) -> dict[str, CountyInfo]:
     if not path.exists():
         raise SourceError(f"{path.name} is missing; run scripts/prep_data.py")
     directory: dict[str, CountyInfo] = {}
-    for feature in json.loads(path.read_text())["features"]:
+    for feature in json.loads(path.read_text(encoding="utf-8"))["features"]:
         props = feature["properties"]
         land_sq_km = props.get("land_sq_km")
         directory[props["GEOID"]] = CountyInfo(

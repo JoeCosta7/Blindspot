@@ -503,7 +503,7 @@ def prep_nri() -> None:
     raw_path = RAW_DIR / "nri_counties.json"
     if raw_path.exists():
         print(f"  using existing {raw_path.name}")
-        rows = json.loads(raw_path.read_text())
+        rows = json.loads(raw_path.read_text(encoding="utf-8"))
     else:
         rows = []
         page = 2000  # the service's maxRecordCount
