@@ -186,7 +186,7 @@ def _analyze_message(
     if truncated:
         return (
             f"The box covers more than {max_counties} counties. "
-            f"Showing the {max_counties} with the largest overlap; "
+            f"Showing the {max_counties} nearest its center; "
             "zoom in to choose others."
         )
     if not counties:

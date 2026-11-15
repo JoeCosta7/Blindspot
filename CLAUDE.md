@@ -464,7 +464,9 @@ Zeros and "…" above are placeholders for shape only.
 1. Find counties whose polygon intersects the box.
 2. Keep a county if its centroid is inside the box **or** at least 25% of its
    area is inside.
-3. Sort by overlap area, descending. Return the first `MAX_COUNTIES`.
+3. Sort by the distance from the county's centroid to the box's center,
+   nearest first (longitude scaled by the cosine of the box's latitude).
+   Return the first `MAX_COUNTIES`.
 4. If more matched, set `truncated: true` and a message asking the user to zoom
    in. Do not error.
 

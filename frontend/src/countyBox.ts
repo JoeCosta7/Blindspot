@@ -20,7 +20,7 @@ function rectOverlapArea(
 }
 
 /**
- * Counties that a drawn box would select, largest overlap first.
+ * Counties that a drawn box would select, nearest to the box's center first.
  *
  * Mirrors backend `CountyIndex.resolve_bbox`: keep a county if its centroid is
  * inside the box or at least `minAreaShare` of its area overlaps. Area share
@@ -32,13 +32,17 @@ export function countiesMatchingBox(
   sw: LonLat,
   ne: LonLat,
   minAreaShare: number = BBOX_MIN_AREA_SHARE,
-): { fips: string; overlap: number }[] {
+): { fips: string; distance: number }[] {
   const west = Math.min(sw[0], ne[0]);
   const south = Math.min(sw[1], ne[1]);
   const east = Math.max(sw[0], ne[0]);
   const north = Math.max(sw[1], ne[1]);
   const selection = { west, south, east, north };
-  const matches: { fips: string; overlap: number }[] = [];
+  const centerLon = (west + east) / 2;
+  const centerLat = (south + north) / 2;
+  // Same scaling as the backend: a degree of longitude shrinks toward the poles.
+  const lonScale = Math.cos((centerLat * Math.PI) / 180);
+  const matches: { fips: string; distance: number }[] = [];
 
   for (const feature of features) {
     const [cWest, cSouth, cEast, cNorth] = featureBounds(feature);
@@ -51,11 +55,12 @@ export function countiesMatchingBox(
     const countyArea = Math.max((cEast - cWest) * (cNorth - cSouth), 1e-12);
     const share = overlap / countyArea;
     if (centroidInside || share >= minAreaShare) {
-      matches.push({ fips: GEOID, overlap });
+      const distance = Math.hypot((lon - centerLon) * lonScale, lat - centerLat);
+      matches.push({ fips: GEOID, distance });
     }
   }
 
-  matches.sort((a, b) => b.overlap - a.overlap || a.fips.localeCompare(b.fips));
+  matches.sort((a, b) => a.distance - b.distance || a.fips.localeCompare(b.fips));
   return matches;
 }
 
