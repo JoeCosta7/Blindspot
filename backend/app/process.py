@@ -71,6 +71,7 @@ def _template_steps(
                 detail=raw.get("detail"),
                 who=raw.get("who"),
                 document_ids=[d for d in raw.get("document_ids", []) if d in known_docs],
+                section_ids=[x for x in raw.get("section_ids", []) if x in SECTION_IDS],
                 source="template",
             )
         )
@@ -89,9 +90,14 @@ def _site_plan(request: ProcessRequest):
     return None
 
 
+SECTION_IDS = ("summary", "resolution", "letter", "narrative")
+
+
 def build_phases(
     request: ProcessRequest, templates: dict[str, Any], known_docs: set[str]
-) -> list[ProcessPhase]:
+) -> tuple[list[ProcessPhase], list[ProcessStep]]:
+    """The checklist phases, and the site's or opportunity's own plan lines
+    kept apart as ideas."""
     has_site = request.site is not None or request.site_asset is not None
     steps = _template_steps(templates, request.opportunity.solution_id, has_site, known_docs)
     phases = [
@@ -119,10 +125,7 @@ def build_phases(
             ProcessStep(id=f"plan_{i}", title=t, source="plan")
             for i, t in enumerate(request.opportunity.plan)
         ]
-    if extra:
-        title = "At the chosen site" if site_plan is not None else "The project's own plan"
-        phases.insert(1, ProcessPhase(id="specific", title=title, steps=extra))
-    return [p for p in phases if p.steps]
+    return [p for p in phases if p.steps], extra
 
 
 def gather_documents(request: ProcessRequest, data_dir: Path) -> list[ProjectDocument]:
@@ -182,11 +185,14 @@ def template_sections(request: ProcessRequest) -> list[PackSection]:
     )
     program_names = [f.name for f in opp.funding if f.status in ("open", "open_with_deadlines")][:3]
 
-    summary = (
+    lead = (
         f"{place} proposes: {opp.title}. The project answers {need_text}. "
         + (opp.summary + " " if opp.summary else "")
         + estimates
     ).strip()
+    # One summary: the project, then the site, then the funding leads. Only the
+    # first paragraph is ever reworded (reword).
+    summary = f"{lead}\n\nSite: {site_text}\n\n{funding_text}"
     resolution = (
         "RESOLUTION NO. ____ (draft for the county attorney's review)\n\n"
         f"A resolution of the governing board of {request.county_name} authorizing staff to "
@@ -229,8 +235,6 @@ def template_sections(request: ProcessRequest) -> list[PackSection]:
     ).strip()
     rows = [
         ("summary", "Project summary", summary),
-        ("site", "Site description", site_text),
-        ("funding", "Funding plan", funding_text),
         ("resolution", "Draft board resolution", resolution),
         ("letter", "Partner or owner letter", letter),
         ("narrative", "Grant narrative paragraph", narrative),
@@ -257,7 +261,9 @@ async def reword(sections: list[PackSection], settings: Settings) -> list[PackSe
     if not settings.gemini_api_key:
         return sections
     by_id = {s.id: s for s in sections}
-    prompt = REWORD_PROMPT.format(summary=by_id["summary"].text, narrative=by_id["narrative"].text)
+    # The summary's first paragraph only; the site and funding lines stay as written.
+    head, _, tail = by_id["summary"].text.partition("\n\n")
+    prompt = REWORD_PROMPT.format(summary=head, narrative=by_id["narrative"].text)
     key = {"model": settings.gemini_model, "prompt": hashlib.sha256(prompt.encode()).hexdigest()}
     hit = cache_get(settings.cache_dir, "process_reword", key, 30 * DAY)
     try:
@@ -276,8 +282,10 @@ async def reword(sections: list[PackSection], settings: Settings) -> list[PackSe
     out = []
     for s in sections:
         new = getattr(result, s.id, None) if s.id in ("summary", "narrative") else None
-        if new and new.strip() and extract_numbers(new) <= extract_numbers(s.text):
-            out.append(s.model_copy(update={"text": new.strip(), "generated_by": "gemini"}))
+        original = head if s.id == "summary" else s.text
+        if new and new.strip() and extract_numbers(new) <= extract_numbers(original):
+            text = new.strip() + ("\n\n" + tail if s.id == "summary" and tail else "")
+            out.append(s.model_copy(update={"text": text, "generated_by": "gemini"}))
         else:
             out.append(s)
     return out
@@ -286,7 +294,7 @@ async def reword(sections: list[PackSection], settings: Settings) -> list[PackSe
 async def build_process(request: ProcessRequest, settings: Settings) -> ProcessPlan:
     templates = load_templates(settings.data_dir / "process_templates.json")
     docs = gather_documents(request, settings.data_dir)
-    phases = build_phases(request, templates, {d.id for d in docs})
+    phases, ideas = build_phases(request, templates, {d.id for d in docs})
     plan = _site_plan(request)
     needed = (
         plan.documents_needed
@@ -303,6 +311,7 @@ async def build_process(request: ProcessRequest, settings: Settings) -> ProcessP
         opportunity_id=request.opportunity.id,
         site_id=site_id,
         phases=phases,
+        ideas=ideas,
         documents=docs,
         documents_needed=needed,
         sections=sections,

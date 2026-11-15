@@ -624,6 +624,8 @@ class ProcessStep(BaseModel):
     who: str | None = None
     # Ids of documents in ProcessPlan.documents this step uses.
     document_ids: list[str] = Field(default_factory=list)
+    # Ids of ProcessPlan.sections (drafts) this step uses, e.g. the resolution.
+    section_ids: list[str] = Field(default_factory=list)
     source: ProcessStepSource
 
 
@@ -647,6 +649,9 @@ class ProcessPlan(BaseModel):
     opportunity_id: str
     site_id: str | None
     phases: list[ProcessPhase]
+    # Lines from the chosen site's plan or the opportunity's own plan: shown
+    # apart from the checklist because they often repeat its steps.
+    ideas: list[ProcessStep] = Field(default_factory=list)
     documents: list[ProjectDocument]
     # Forms to gather locally that have no national URL.
     documents_needed: list[str]

@@ -40,9 +40,9 @@ def test_site_steps_only_with_a_site_and_type_steps_merge(settings):
     ids = {s.id for p in county_wide.phases for s in p.steps}
     assert "compost_permit" in ids and "brief_board" in ids  # type step + default
     assert "confirm_owner" not in ids and "operator_agreement" not in ids  # site-only
-    assert any(
-        p.id == "specific" and p.title == "The project's own plan" for p in county_wide.phases
-    )
+    # The opportunity's own plan is kept apart as ideas, not a checklist phase.
+    assert all(p.id != "specific" for p in county_wide.phases)
+    assert [i.title for i in county_wide.ideas] == ["Survey food-scrap sources"]
 
     site = make_asset("lmop:7", "lmop_landfill")
     plan = SiteActionPlan(site_id="lmop:7", course_of_action=["Walk the cell with the operator"])
@@ -52,18 +52,16 @@ def test_site_steps_only_with_a_site_and_type_steps_merge(settings):
         )
     )
     ids = {s.id for p in with_site.phases for s in p.steps}
-    assert {"confirm_owner", "operator_agreement", "site_0"} <= ids
+    assert {"confirm_owner", "operator_agreement"} <= ids
+    assert [i.id for i in with_site.ideas] == ["site_0"]
+    sections = {s.id for s in with_site.sections}
+    assert all(x in sections for p in with_site.phases for s in p.steps for x in s.section_ids)
+    resolution = next(s for p in with_site.phases for s in p.steps if s.id == "resolution")
+    assert resolution.section_ids == ["resolution"]
     # Document ids on steps all resolve to documents in the plan.
     known = {d.id for d in with_site.documents}
     assert all(d in known for p in with_site.phases for s in p.steps for d in s.document_ids)
-    assert [s.id for s in with_site.sections] == [
-        "summary",
-        "site",
-        "funding",
-        "resolution",
-        "letter",
-        "narrative",
-    ]
+    assert [s.id for s in with_site.sections] == ["summary", "resolution", "letter", "narrative"]
     assert all(s.generated_by == "template" for s in with_site.sections)  # no Gemini key
 
 

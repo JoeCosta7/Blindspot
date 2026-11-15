@@ -181,11 +181,6 @@ export function OpportunityWorkspace({
               </button>
             </div>
           )}
-          {!countyWide && (
-            <button type="button" className="link-button" onClick={() => choose(NO_SITE)}>
-              Continue without choosing a site
-            </button>
-          )}
         </div>
       )}
 

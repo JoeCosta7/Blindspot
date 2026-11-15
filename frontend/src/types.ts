@@ -511,6 +511,8 @@ export interface ProcessStep {
   detail: string | null;
   who: string | null;
   document_ids: string[];
+  /** Drafts (ProcessPlan.sections ids) this step uses. */
+  section_ids: string[];
   source: "template" | "site_plan" | "plan";
 }
 
@@ -531,6 +533,8 @@ export interface ProcessPlan {
   opportunity_id: string;
   site_id: string | null;
   phases: ProcessPhase[];
+  /** Lines from the site's or the opportunity's own plan, shown apart. */
+  ideas: ProcessStep[];
   documents: ProjectDocument[];
   documents_needed: string[];
   sections: PackSection[];

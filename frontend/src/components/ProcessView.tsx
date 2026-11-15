@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchProcess } from "../api";
-import type { ProcessPlan, ProcessRequest } from "../types";
+import type { PackSection, ProcessPlan, ProcessRequest, ProcessStep, ProjectDocument } from "../types";
 
 interface Props {
   request: ProcessRequest;
@@ -11,10 +11,85 @@ interface Props {
   onReset: (id: string) => void;
 }
 
-/** The checklist (left) and the editable document pack (right). */
+interface PlacedStep extends ProcessStep {
+  phaseId: string;
+  phaseTitle: string;
+}
+
+const CAVEAT_LINE =
+  "Typical steps, not legal advice — confirm with your county attorney and each funding agency.";
+
+function DocLinks({ ids, docs }: { ids: string[]; docs: Map<string, ProjectDocument> }) {
+  const found = ids.map((id) => docs.get(id)).filter((d): d is ProjectDocument => !!d);
+  if (found.length === 0) return null;
+  return (
+    <ul className="step-forms">
+      {found.map((d) =>
+        d.source_url ? (
+          <li key={d.id}>
+            <a href={d.source_url} target="_blank" rel="noreferrer">
+              {d.name}
+            </a>
+          </li>
+        ) : (
+          <li key={d.id}>{d.name}</li>
+        ),
+      )}
+    </ul>
+  );
+}
+
+function SectionEditor({
+  section,
+  text,
+  edited,
+  onEdit,
+  onReset,
+}: {
+  section: PackSection;
+  text: string;
+  edited: boolean;
+  onEdit: (text: string) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="pack-section">
+      <div className="pack-section-head">
+        <h4>{section.title}</h4>
+        <span className="muted">
+          {edited ? "edited" : section.generated_by === "gemini" ? "worded by Gemini" : "draft"}
+        </span>
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => void navigator.clipboard?.writeText(text)}
+        >
+          Copy
+        </button>
+        {edited && (
+          <button type="button" className="link-button" onClick={onReset}>
+            Reset
+          </button>
+        )}
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => onEdit(e.target.value)}
+        rows={Math.min(12, text.split("\n").length + 2)}
+      />
+    </div>
+  );
+}
+
+/** "Get it moving": one next step at the centre, its draft attached; the full
+ * list, the analysis ideas and the document pack are one click away. */
 export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }: Props) {
   const [plan, setPlan] = useState<ProcessPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const siteKey = request.site?.building_id ?? request.site_asset?.id ?? "none";
 
   useEffect(() => {
@@ -40,14 +115,22 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
     );
   }
 
-  const steps = plan.phases.flatMap((p) => p.steps);
-  const finished = steps.filter((s) => done.includes(s.id)).length;
-  const docsById = new Map(plan.documents.map((d) => [d.id, d]));
-  const textOf = (id: string, fallback: string) => edits[id] ?? fallback;
+  const steps: PlacedStep[] = plan.phases.flatMap((p) =>
+    p.steps.map((s) => ({ ...s, phaseId: p.id, phaseTitle: p.title })),
+  );
+  const open = steps.filter((s) => !done.includes(s.id));
+  const current =
+    steps.find((s) => s.id === focusId) ??
+    open.find((s) => !skipped.includes(s.id)) ??
+    open[0] ??
+    null;
+  const docs = new Map(plan.documents.map((d) => [d.id, d]));
+  const sections = new Map(plan.sections.map((s) => [s.id, s]));
+  const textOf = (s: PackSection) => edits[s.id] ?? s.text;
 
   const markdown = [
     `# ${request.opportunity.title} — ${request.county_name}, ${request.state}`,
-    ...plan.sections.map((s) => `## ${s.title}\n\n${textOf(s.id, s.text)}`),
+    ...plan.sections.map((s) => `## ${s.title}\n\n${textOf(s)}`),
     "## Forms to gather",
     ...plan.documents.map((d) => `- ${d.name}${d.source_url ? ` (${d.source_url})` : ""}`),
     ...plan.documents_needed.map((d) => `- ${d}`),
@@ -64,119 +147,194 @@ export function ProcessView({ request, done, edits, onToggle, onEdit, onReset }:
     URL.revokeObjectURL(url);
   };
 
+  const editor = (s: PackSection) => (
+    <SectionEditor
+      key={s.id}
+      section={s}
+      text={textOf(s)}
+      edited={edits[s.id] !== undefined}
+      onEdit={(text) => onEdit(s.id, text)}
+      onReset={() => onReset(s.id)}
+    />
+  );
+
   return (
-    <div className="workspace-body process">
-      <section className="process-checklist" aria-label="Checklist">
-        <h3>
-          Checklist <span className="muted">· {finished} of {steps.length} done</span>
-        </h3>
-        {plan.phases.map((phase) => (
-          <div key={phase.id} className="process-phase">
-            <h4>{phase.title}</h4>
-            <ul>
-              {phase.steps.map((step) => (
-                <li key={step.id} className={done.includes(step.id) ? "step done" : "step"}>
-                  <label>
+    <div className="workspace-body process-view">
+      {/* Progress: one segment per phase, filled by the share done. */}
+      <div className="process-progress">
+        <ol className="phase-strip">
+          {plan.phases.map((p) => {
+            const n = p.steps.length;
+            const k = p.steps.filter((s) => done.includes(s.id)).length;
+            return (
+              <li
+                key={p.id}
+                className={current?.phaseId === p.id ? "phase current" : "phase"}
+                title={`${p.title}: ${k} of ${n} done`}
+              >
+                <span className="phase-bar">
+                  <span style={{ width: `${n ? (100 * k) / n : 0}%` }} />
+                </span>
+                <span className="phase-name">{p.title}</span>
+              </li>
+            );
+          })}
+        </ol>
+        <span className="muted">
+          {steps.length - open.length} of {steps.length} done
+        </span>
+      </div>
+
+      {current ? (
+        <section className="card next-step" aria-label="Next step">
+          <span className="next-step-phase">{current.phaseTitle}</span>
+          <h3>{current.title}</h3>
+          {current.who && <p className="muted">Usually: {current.who}</p>}
+          {current.detail && <p>{current.detail}</p>}
+          <DocLinks ids={current.document_ids} docs={docs} />
+          {current.section_ids
+            .map((id) => sections.get(id))
+            .filter((s): s is PackSection => !!s)
+            .map(editor)}
+          <div className="next-step-actions">
+            {done.includes(current.id) ? (
+              <button type="button" className="button" onClick={() => onToggle(current.id)}>
+                Mark not done
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  onToggle(current.id);
+                  setFocusId(null);
+                }}
+              >
+                Mark done
+              </button>
+            )}
+            {!done.includes(current.id) && open.length > 1 && (
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => {
+                  setSkipped((s) => [...s, current.id]);
+                  setFocusId(null);
+                }}
+              >
+                Later
+              </button>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="card next-step">
+          <h3>Every step is checked</h3>
+          <p>Print the packet for the board, or download it to share.</p>
+          <div className="next-step-actions">
+            <button type="button" className="button" onClick={() => window.print()}>
+              Print packet
+            </button>
+          </div>
+        </section>
+      )}
+
+      <div className="process-links">
+        <button type="button" className="link-button" onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Hide all steps" : `See all ${steps.length} steps`}
+        </button>
+        <button type="button" className="link-button" onClick={() => setShowDocs((v) => !v)}>
+          {showDocs ? "Hide documents" : "All documents"}
+        </button>
+      </div>
+
+      {showAll && (
+        <section className="process-checklist" aria-label="All steps">
+          {plan.phases.map((phase) => (
+            <div
+              key={phase.id}
+              className={current?.phaseId === phase.id ? "process-phase current" : "process-phase"}
+            >
+              <h4>{phase.title}</h4>
+              <ul>
+                {phase.steps.map((step) => (
+                  <li key={step.id} className={done.includes(step.id) ? "step done" : "step"}>
                     <input
                       type="checkbox"
                       checked={done.includes(step.id)}
                       onChange={() => onToggle(step.id)}
+                      aria-label={`Done: ${step.title}`}
                     />
                     <span>
-                      <strong>{step.title}</strong>
+                      <button
+                        type="button"
+                        className="step-title"
+                        onClick={() => setFocusId(step.id)}
+                      >
+                        {step.title}
+                      </button>
                       {step.who && <span className="muted"> · {step.who}</span>}
                       {step.detail && <span className="step-detail">{step.detail}</span>}
-                      {step.document_ids.map((id) => {
-                        const doc = docsById.get(id);
-                        if (!doc) return null;
-                        return doc.source_url ? (
-                          <a key={id} href={doc.source_url} target="_blank" rel="noreferrer">
-                            {doc.name}
-                          </a>
-                        ) : (
-                          <span key={id} className="step-doc">
-                            {doc.name}
-                          </span>
-                        );
-                      })}
+                      <DocLinks ids={step.document_ids} docs={docs} />
                     </span>
-                  </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {plan.ideas.length > 0 && (
+        <details className="process-ideas">
+          <summary>Ideas from the analysis ({plan.ideas.length})</summary>
+          <ul>
+            {plan.ideas.map((i) => (
+              <li key={i.id}>{i.title}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {showDocs && (
+        <section className="document-pack" aria-label="Document pack">
+          <div className="pack-actions">
+            <h3>Document pack</h3>
+            <button type="button" className="button" onClick={() => window.print()}>
+              Print packet
+            </button>
+            <button type="button" className="button" onClick={download}>
+              Download
+            </button>
+          </div>
+          {plan.sections.map(editor)}
+          <div className="pack-section">
+            <h4>Forms to gather</h4>
+            <ul className="pack-forms">
+              {plan.documents.map((d) => (
+                <li key={d.id}>
+                  {d.source_url ? (
+                    <a href={d.source_url} target="_blank" rel="noreferrer">
+                      {d.name}
+                    </a>
+                  ) : (
+                    d.name
+                  )}
                 </li>
+              ))}
+              {plan.documents_needed.map((d) => (
+                <li key={d}>{d}</li>
               ))}
             </ul>
           </div>
-        ))}
-        <ul className="caveats">
-          {plan.caveats.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-      </section>
+        </section>
+      )}
 
-      <section className="document-pack" aria-label="Document pack">
-        <div className="pack-actions">
-          <h3>Document pack</h3>
-          <button type="button" className="button" onClick={() => window.print()}>
-            Print packet
-          </button>
-          <button type="button" className="button" onClick={download}>
-            Download
-          </button>
-        </div>
-        {plan.sections.map((s) => (
-          <div key={s.id} className="pack-section">
-            <div className="pack-section-head">
-              <h4>{s.title}</h4>
-              <span className="muted">
-                {edits[s.id] !== undefined
-                  ? "edited"
-                  : s.generated_by === "gemini"
-                    ? "worded by Gemini"
-                    : "template"}
-              </span>
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => void navigator.clipboard?.writeText(textOf(s.id, s.text))}
-              >
-                Copy
-              </button>
-              {edits[s.id] !== undefined && (
-                <button type="button" className="link-button" onClick={() => onReset(s.id)}>
-                  Reset
-                </button>
-              )}
-            </div>
-            <textarea
-              value={textOf(s.id, s.text)}
-              onChange={(e) => onEdit(s.id, e.target.value)}
-              rows={Math.min(14, textOf(s.id, s.text).split("\n").length + 2)}
-            />
-          </div>
-        ))}
-        <div className="pack-section">
-          <h4>Forms to gather</h4>
-          <ul className="pack-forms">
-            {plan.documents.map((d) => (
-              <li key={d.id}>
-                {d.source_url ? (
-                  <a href={d.source_url} target="_blank" rel="noreferrer">
-                    {d.name}
-                  </a>
-                ) : (
-                  d.name
-                )}
-                {d.description && <span className="muted"> · {d.description}</span>}
-              </li>
-            ))}
-            {plan.documents_needed.map((d) => (
-              <li key={d}>{d}</li>
-            ))}
-          </ul>
-        </div>
-        {/* What Print shows: the pack as plain text, with the official's edits. */}
-        <pre className="pack-print">{markdown}</pre>
-      </section>
+      <p className="muted process-caveat" title={plan.caveats.join("\n")}>
+        {CAVEAT_LINE}
+      </p>
+      {/* What Print shows: the pack as plain text, with the official's edits. */}
+      <pre className="pack-print">{markdown}</pre>
     </div>
   );
 }
