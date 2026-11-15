@@ -11,8 +11,6 @@ rejected if it carries a number the template did not (narrative.extract_numbers)
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
 import logging
 from datetime import date, timedelta
@@ -20,22 +18,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
-
-from app import documents, gemini
-from app.cache import DAY, cache_get, cache_set
+from app import documents, packet
 from app.config import Settings
-from app.estimates import format_number
 from app.models import (
     FundingMatch,
-    PackSection,
     ProcessPhase,
     ProcessPlan,
     ProcessRequest,
     ProcessStep,
     ProjectDocument,
 )
-from app.narrative import extract_numbers
 
 log = logging.getLogger(__name__)
 
@@ -145,155 +137,6 @@ def gather_documents(request: ProcessRequest, data_dir: Path) -> list[ProjectDoc
 # --- the pack ----------------------------------------------------------------------------
 
 
-def _estimates_line(request: ProcessRequest) -> str:
-    figures = request.site.estimates if request.site else request.opportunity.estimates
-    if not figures:
-        return ""
-    parts = [f"{e.label.lower()} about {format_number(e.value)} {e.unit}" for e in figures]
-    return "Planning estimates: " + "; ".join(parts) + "."
-
-
-def template_sections(request: ProcessRequest) -> list[PackSection]:
-    opp = request.opportunity
-    place = f"{request.county_name}, {request.state}"
-    needs = [n.label.lower() for n in request.needs] or ["the needs named in the county report"]
-    need_text = ", ".join(needs)
-    estimates = _estimates_line(request)
-
-    if request.site:
-        s = request.site
-        site_text = f"{s.name}" + (f", {s.address}" if s.address else "") + ". "
-        site_text += f"Status from Site Scout: {s.status.replace('_', ' ')} ({s.status_reason}). "
-        facts = [
-            f"{o.label}: {o.value}{' ' + o.unit if o.unit else ''}" for o in s.observations[:6]
-        ]
-        site_text += ("Facts from the data layers: " + "; ".join(facts) + ".") if facts else ""
-    elif request.site_asset:
-        a = request.site_asset
-        site_text = f"{a.name} ({a.type.replace('_', ' ')}), from {a.source}."
-    else:
-        site_text = "This is a county-wide program; it does not depend on a single site."
-
-    lead_lines = [
-        f"- {f.name} ({f.agency}): {f.status.replace('_', ' ')}"
-        + (f", deadline {f.deadline}" if f.deadline else "")
-        + (f", checked {f.verified_on}" if f.verified_on else "")
-        for f in opp.funding
-    ]
-    funding_text = (
-        "Funding leads to confirm with each agency:\n" + "\n".join(lead_lines)
-        if lead_lines
-        else "No funding lead is matched yet; the grants coordinator should search state "
-        "and federal programs."
-    )
-    program_names = [f.name for f in opp.funding if f.status in ("open", "open_with_deadlines")][:3]
-
-    lead = (
-        f"{place} proposes: {opp.title}. The project answers {need_text}. "
-        + (opp.summary + " " if opp.summary else "")
-        + estimates
-    ).strip()
-    # One summary: the project, then the site, then the funding leads. Only the
-    # first paragraph is ever reworded (reword).
-    summary = f"{lead}\n\nSite: {site_text}\n\n{funding_text}"
-    resolution = (
-        "RESOLUTION NO. ____ (draft for the county attorney's review)\n\n"
-        f"A resolution of the governing board of {request.county_name} authorizing staff to "
-        f"pursue {opp.title.lower()}.\n\n"
-        f"WHEREAS the county faces {need_text}; and\n"
-        f"WHEREAS {opp.title.lower()} could reduce these needs"
-        + (
-            " at " + (request.site.name if request.site else request.site_asset.name)
-            if (request.site or request.site_asset)
-            else ""
-        )
-        + "; and\n"
-        "WHEREAS outside funding may be available to pay for it;\n\n"
-        "NOW, THEREFORE, BE IT RESOLVED that the board authorizes the county administrator to "
-        "develop the project, engage partners and the public, and prepare applications"
-        + (f" to programs including {', '.join(program_names)}" if program_names else "")
-        + ", subject to the board's later approval of any agreement or expenditure."
-    )
-    partner = (
-        request.site.name
-        if request.site
-        else (request.site_asset.name if request.site_asset else "our community partners")
-    )
-    letter = (
-        f"To the owner or manager of {partner},\n\n"
-        f"{request.county_name} is exploring {opp.title.lower()} to address {need_text}. "
-        "We would like to talk with you about whether a partnership could work. "
-        + (estimates + " " if estimates else "")
-        + "This letter is an invitation to a conversation, not a proposal or a commitment.\n\n"
-        f"Sincerely,\n{request.county_name}"
-    )
-    narrative = (
-        f"{request.county_name} will carry out {opp.title.lower()}"
-        + (f" at {partner}" if request.site or request.site_asset else "")
-        + f" to address {need_text}. "
-        + (opp.rationale + " " if opp.rationale else "")
-        + (estimates + " " if estimates else "")
-        + "Figures are preliminary estimates; the county will confirm eligibility with each "
-        "program before applying."
-    ).strip()
-    rows = [
-        ("summary", "Project summary", summary),
-        ("resolution", "Draft board resolution", resolution),
-        ("letter", "Partner or owner letter", letter),
-        ("narrative", "Grant narrative paragraph", narrative),
-    ]
-    return [PackSection(id=i, title=t, text=x, generated_by="template") for i, t, x in rows]
-
-
-class _Reworded(BaseModel):
-    summary: str
-    narrative: str
-
-
-REWORD_PROMPT = (
-    "Rewrite these two passages for a county grant packet, in plain, confident language for "
-    "a non-technical reader. Keep every fact. Do not add numbers, dates, names, programs or "
-    "promises that are not in the text. Keep each under 120 words.\n\n"
-    "summary:\n{summary}\n\nnarrative:\n{narrative}"
-)
-
-
-async def reword(sections: list[PackSection], settings: Settings) -> list[PackSection]:
-    """Gemini rewords the summary and narrative; anything with a new number is
-    rejected and the template kept. Never raises."""
-    if not settings.gemini_api_key:
-        return sections
-    by_id = {s.id: s for s in sections}
-    # The summary's first paragraph only; the site and funding lines stay as written.
-    head, _, tail = by_id["summary"].text.partition("\n\n")
-    prompt = REWORD_PROMPT.format(summary=head, narrative=by_id["narrative"].text)
-    key = {"model": settings.gemini_model, "prompt": hashlib.sha256(prompt.encode()).hexdigest()}
-    hit = cache_get(settings.cache_dir, "process_reword", key, 30 * DAY)
-    try:
-        result = (
-            _Reworded.model_validate(hit)
-            if hit
-            else await asyncio.wait_for(
-                gemini.generate(prompt, _Reworded, settings), settings.gemini_timeout_s
-            )
-        )
-    except Exception as exc:  # SDK, network, timeout or parsing
-        log.warning("process reword failed: %r", exc)
-        return sections
-    if not hit:
-        cache_set(settings.cache_dir, "process_reword", key, result.model_dump())
-    out = []
-    for s in sections:
-        new = getattr(result, s.id, None) if s.id in ("summary", "narrative") else None
-        original = head if s.id == "summary" else s.text
-        if new and new.strip() and extract_numbers(new) <= extract_numbers(original):
-            text = new.strip() + ("\n\n" + tail if s.id == "summary" and tail else "")
-            out.append(s.model_copy(update={"text": text, "generated_by": "gemini"}))
-        else:
-            out.append(s)
-    return out
-
-
 def dated_targets(funding: list[FundingMatch], today: date) -> list[FundingMatch]:
     """Leads one can aim for: open, with a deadline still ahead. Soonest first."""
     leads = [
@@ -356,7 +199,7 @@ async def build_process(request: ProcessRequest, settings: Settings) -> ProcessP
         if plan and plan.documents_needed
         else list(request.opportunity.documents_needed)
     )
-    sections = await reword(template_sections(request), settings)
+    sections = packet.build_sections(request, target, phases, today)
     site_id = (
         request.site.building_id
         if request.site

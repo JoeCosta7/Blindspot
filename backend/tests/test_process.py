@@ -65,19 +65,6 @@ def test_site_steps_only_with_a_site_and_type_steps_merge(settings):
     assert all(s.generated_by == "template" for s in with_site.sections)  # no Gemini key
 
 
-def test_reword_rejects_new_numbers(settings, monkeypatch):
-    sections = process.template_sections(request())
-
-    async def fake(prompt, schema, s):
-        return schema(summary="It will serve 40,000 homes.", narrative="Plainly worded narrative.")
-
-    monkeypatch.setattr(process.gemini, "generate", fake)
-    out = asyncio.run(process.reword(sections, settings.model_copy(update={"gemini_api_key": "x"})))
-    by_id = {s.id: s for s in out}
-    assert by_id["summary"].generated_by == "template"  # 40,000 was invented
-    assert by_id["narrative"].generated_by == "gemini"
-
-
 def test_steps_count_back_from_the_grant_deadline(settings):
     from datetime import date, timedelta
 
@@ -115,3 +102,17 @@ def test_steps_count_back_from_the_grant_deadline(settings):
     )
     steps = {s.id: s for p in chosen.phases for s in p.steps}
     assert chosen.target.program_id == "later" and steps["brief_board"].late is False
+
+
+def test_drafts_read_like_county_documents(settings):
+    site = make_asset("lmop:7", "lmop_landfill")
+    plan = asyncio.run(process.build_process(request(site_asset=site), settings))
+    by_id = {s.id: s.text for s in plan.sections}
+    assert "AGENDA ITEM SUMMARY" in by_id["summary"] and "RECOMMENDED ACTION" in by_id["summary"]
+    # Texas: the Commissioners Court, chaired by the County Judge.
+    assert "COMMISSIONERS COURT" in by_id["resolution"] and "County Judge" in by_id["resolution"]
+    assert "WHEREAS" in by_id["resolution"] and "APPROVED AS TO FORM" in by_id["resolution"]
+    assert by_id["letter"].count("Re: ") == 1 and "not an offer" in by_id["letter"]
+    assert "2. Statement of need" in by_id["narrative"]
+    # Unknowns are blanks, never made up.
+    assert "[Owner name]" in by_id["letter"] and "[____]" in by_id["resolution"]

@@ -2276,3 +2276,13 @@ button {
   line-height: 1.5;
   font-size: 0.95rem;
 }
+
+.blank-count {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--elevated);
+}
+
+.pack-section textarea {
+  font-family: Georgia, "Times New Roman", serif;
+}

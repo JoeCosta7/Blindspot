@@ -79,6 +79,8 @@ function SectionEditor({
   onEdit: (text: string) => void;
   onReset: () => void;
 }) {
+  // [Bracketed] items are what staff still have to supply.
+  const blanks = (text.match(/\[[^\]\n]*\]/g) ?? []).length;
   return (
     <div className="pack-section">
       <div className="pack-section-head">
@@ -86,6 +88,11 @@ function SectionEditor({
         <span className="muted">
           {edited ? "edited" : section.generated_by === "gemini" ? "worded by Gemini" : "draft"}
         </span>
+        {blanks > 0 && (
+          <span className="blank-count" title="Items in [brackets] for staff to fill in">
+            {blanks} blank{blanks === 1 ? "" : "s"} to fill
+          </span>
+        )}
         <button
           type="button"
           className="link-button"
