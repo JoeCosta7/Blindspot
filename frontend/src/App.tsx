@@ -11,6 +11,7 @@ import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE, scout } from "./api
 import { CountySearch } from "./components/CountySearch";
 import type { LoadingArea } from "./components/loadingSweep";
 import { type Basemap, MapView, type SelectMode, type Theme } from "./components/MapView";
+import { OpportunityWorkspace } from "./components/OpportunityWorkspace";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { LoadingPanel, ResultsPanel, scoutKey } from "./components/ResultsPanel";
 import { bestCandidates, bestSites } from "./components/ScoutPanel";
@@ -203,6 +204,10 @@ export function App() {
   const scoutInFlight = useRef<Map<string, AbortController>>(new Map());
   // The scouted site whose aerial photo is open over the map.
   const [viewed, setViewed] = useState<SiteCandidate | null>(null);
+  // The opportunity open in the workspace, if any.
+  const [workspace, setWorkspace] = useState<{ fips: string; opportunityId: string } | null>(
+    null,
+  );
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [basemap, setBasemap] = useState<Basemap>(
     () => readPref<Basemap>("basemap", ["streets", "satellite"]) ?? "streets",
@@ -315,6 +320,7 @@ export function App() {
       scoutInFlight.current.clear();
       setScoutRuns({});
       setViewed(null);
+      setWorkspace(null);
       try {
         const result = await analyzePending(request.body, controller.signal, (_fips, status) => {
           // Prefer a failed status if the same source reports more than once
@@ -454,6 +460,7 @@ export function App() {
       opportunity.title,
       opportunity.solution_id,
       opportunity.asset_ids,
+      opportunity.description ?? opportunity.summary ?? null,
       (event) => {
         if (controller.signal.aborted) return;
         update((run) => {
@@ -520,7 +527,21 @@ export function App() {
     }
     return byId;
   }, [activeReport, scoutRuns]);
-  const assets = useMemo(() => [...scouted.values()].map(candidateAsset), [scouted]);
+  const pursued =
+    workspace && activeReport?.fips === workspace.fips
+      ? (activeReport.opportunities.find((o) => o.id === workspace.opportunityId) ?? null)
+      : null;
+  const pursuedRun =
+    pursued && activeReport ? (scoutRuns[scoutKey(activeReport.fips, pursued.id)] ?? null) : null;
+  // In the workspace the map strip shows only this opportunity's sites.
+  const assets = useMemo(() => {
+    if (pursued && activeReport) {
+      if (pursuedRun) return bestSites(pursuedRun).map(candidateAsset);
+      const ids = new Set(pursued.asset_ids);
+      return activeReport.assets.filter((a) => ids.has(a.id));
+    }
+    return [...scouted.values()].map(candidateAsset);
+  }, [scouted, pursued, pursuedRun, activeReport]);
 
   const showCandidate = useCallback((candidate: SiteCandidate) => {
     setFocusAsset(candidateAsset(candidate));
@@ -571,6 +592,7 @@ export function App() {
       </header>
 
       <main className="layout">
+        <div className={pursued ? "main-area workspace-mode" : "main-area"}>
         <MapView
           counties={counties}
           mode={mode}
@@ -595,7 +617,7 @@ export function App() {
             if (candidate) showCandidate(candidate);
           }}
           overlay={
-            viewed ? (
+            viewed && !pursued ? (
               <PhotoViewer
                 key={viewed.building_id}
                 candidate={viewed}
@@ -604,6 +626,28 @@ export function App() {
             ) : null
           }
         />
+        {pursued && activeReport && (
+          <OpportunityWorkspace
+            key={`${activeReport.fips}:${pursued.id}`}
+            report={activeReport}
+            opportunity={pursued}
+            canScout={activeReport.scout_available && pursued.scoutable}
+            run={pursuedRun}
+            onStartScout={() => startScout(activeReport.fips, pursued)}
+            onShowCandidate={showCandidate}
+            onShowAsset={(asset) => setFocusAsset({ ...asset })}
+            onBack={() => setWorkspace(null)}
+          />
+        )}
+        {pursued && viewed && (
+          <PhotoViewer
+            key={viewed.building_id}
+            candidate={viewed}
+            className="in-workspace"
+            onClose={() => setViewed(null)}
+          />
+        )}
+        </div>
 
         <aside className="panel" aria-label="Results" style={{ width: panelWidth }}>
           <div
@@ -642,16 +686,13 @@ export function App() {
               response={response}
               activeIndex={activeIndex}
               onSelectCounty={switchCounty}
-              // A new object each time, so clicking the same site twice flies again.
-              onShowOnMap={(asset) => {
-                setViewed(null);
-                setFocusAsset({ ...asset });
-              }}
               onAnalyzeCounty={selectCounty}
               scout={{
                 scoutRuns,
                 onScout: startScout,
                 onShowCandidate: showCandidate,
+                onPursue: (fips, opportunity) =>
+                  setWorkspace({ fips, opportunityId: opportunity.id }),
               }}
             />
           )}

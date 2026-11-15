@@ -119,6 +119,12 @@ def match_funding(
             verified_on=p.verified_on,
             source_url=p.source_url,
             note=note,
+            kind="grant"
+            if p.type == "grant"
+            else ("tax_credit" if p.type.startswith("tax_credit") else "other"),
+            county_eligible="yes"
+            if "local_government" in p.eligible_applicants
+            else ("no" if p.eligible_applicants else "unknown"),
         )
         for p, note in matched
     ]

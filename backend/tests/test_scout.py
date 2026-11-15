@@ -164,7 +164,7 @@ class FakeProvider:
     async def properties(self, county: County) -> list[Building]:
         return [COSTAR_D]
 
-    async def roof(self, building: Building, allow_no_parcel: bool = False) -> RoofRecord | None:
+    async def roof(self, building: Building, allow_no_parcel: bool = False, labels=None):
         if self.fail_roof:
             raise SourceError("Vexcel is down")
         return ROOFS.get(building.id, roof())
@@ -480,3 +480,51 @@ def test_site_project_starts_from_report_sites(settings):
     site = next(c for c in result.candidates if c.building_id == "rs:lmop:7")
     assert site.name == "McCarty Road LF" and site.solution_ids == ["landfill_composting"]
     assert site.status != "rejected" and site.need_ids == ["landfill_gas_uncaptured"]
+
+
+def test_checks_follow_the_project(settings):
+    from app.scout import checks
+
+    path = settings.data_dir / "site_checks.json"
+    site = BUILDINGS[0]
+    compost = checks.run_checks({"landfill_composting"}, roof(), None, site, 0.3, path)
+    solar = checks.run_checks({"rooftop_solar_commercial"}, roof(), None, site, 0.3, path)
+    labels = {c.label for c in compost}
+    assert "Roof is flat" not in labels and "Signs of activity: vehicles seen on site" in labels
+    assert {"Roof is flat", "No solar on the roof yet"} <= {c.label for c in solar}
+    # Unknown facts skip their check instead of failing it.
+    assert all(c.label != "Interior seen in a 3D scan" or c.ok is False for c in solar)
+
+
+def test_public_buildings_take_kinds_in_turn(settings):
+    from app.models import Asset
+    from app.scout import tools
+
+    def asset(i, kind, name=None):
+        return Asset(
+            id=f"{kind}:{i}",
+            type=kind,
+            name=name or f"{kind} {i}",
+            lat=29.7,
+            lon=-95.3,
+            source="test",
+        )
+
+    schools = [asset(i, "school") for i in range(20)]
+    libraries = [asset(0, "library"), asset(1, "library", "Heights High School Library")]
+    state = tools.ScoutState(
+        county=make_county("48201", -96, 29, -95, 30),
+        needs=NEEDS,
+        solar_yield=None,
+        solutions=(),
+        programs=(),
+        provider=FakeProvider(),
+        settings=settings,
+        client=None,
+        public_buildings=schools + libraries,
+        public_kinds=("school", "library"),
+    )
+    asyncio.run(tools.search_public_buildings(state, [], 4))
+    kinds = [i.building.building_type for i in state.seen.values()]
+    assert kinds[:2] == ["school", "library"]  # the library is reached, not crowded out
+    assert not any("High School Library" in i.building.name for i in state.seen.values())

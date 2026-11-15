@@ -1,0 +1,423 @@
+{
+  "note": "Hand-written 2026-11-14. Typical steps a county takes to start a project, in plain language. General practice, not legal advice: every plan carries a caveat to confirm the process with the county attorney and the funding agency. No step cites a statute. document_ids refer to data/project_documents.json.",
+  "phases": [
+    {
+      "id": "support",
+      "title": "Build support"
+    },
+    {
+      "id": "site",
+      "title": "Secure the site"
+    },
+    {
+      "id": "fund",
+      "title": "Fund it"
+    },
+    {
+      "id": "approve",
+      "title": "Approve and permit"
+    },
+    {
+      "id": "build",
+      "title": "Procure and build"
+    }
+  ],
+  "default": [
+    {
+      "id": "brief_board",
+      "phase": "support",
+      "title": "Brief the county board or commission",
+      "detail": "Share the need, the proposed project and the funding leads, and ask for direction to proceed.",
+      "who": "County administrator",
+      "section_ids": [
+        "summary"
+      ],
+      "lead_days": 90,
+      "basis": "common_practice"
+    },
+    {
+      "id": "name_lead",
+      "phase": "support",
+      "title": "Name a project lead and partners",
+      "detail": "One staff lead, plus the agencies, utilities, nonprofits or owners the project depends on.",
+      "who": "County administrator",
+      "lead_days": 85,
+      "basis": "common_practice"
+    },
+    {
+      "id": "public_input",
+      "phase": "support",
+      "title": "Hold a public meeting or listening session",
+      "detail": "Hear from the residents the project is meant to help before plans are fixed.",
+      "who": "Project lead",
+      "lead_days": 70,
+      "basis": "common_practice"
+    },
+    {
+      "id": "confirm_owner",
+      "phase": "site",
+      "title": "Confirm who owns the site and whether they are willing",
+      "detail": "Check the assessor's records, then contact the owner about access and a longer-term agreement.",
+      "who": "County attorney, assessor",
+      "document_ids": [
+        "site_access_agreement"
+      ],
+      "site_only": true,
+      "section_ids": [
+        "letter"
+      ],
+      "lead_days": 75,
+      "basis": "common_practice"
+    },
+    {
+      "id": "site_visit",
+      "phase": "site",
+      "title": "Visit the site and record its condition",
+      "detail": "Photos, access, utilities nearby, and anything the aerial view could not show.",
+      "who": "Project lead",
+      "site_only": true,
+      "lead_days": 70,
+      "basis": "common_practice"
+    },
+    {
+      "id": "pick_funding",
+      "phase": "fund",
+      "title": "Choose the funding leads to pursue and note their deadlines",
+      "detail": "Confirm each program's status and eligibility with the agency before relying on it.",
+      "who": "Grants coordinator",
+      "section_ids": [
+        "narrative"
+      ],
+      "lead_days": 80,
+      "basis": "common_practice"
+    },
+    {
+      "id": "budget",
+      "phase": "fund",
+      "title": "Draft a budget and cost-share plan",
+      "detail": "Include any local match the programs require and who would pay it.",
+      "who": "Finance department",
+      "section_ids": [
+        "summary"
+      ],
+      "lead_days": 40,
+      "basis": "common_practice"
+    },
+    {
+      "id": "resolution",
+      "phase": "approve",
+      "title": "Adopt a board resolution authorizing the project and applications",
+      "detail": "A draft is in the document pack; the county attorney should review it.",
+      "who": "County board, clerk",
+      "section_ids": [
+        "resolution"
+      ],
+      "lead_days": 30,
+      "basis": "common_practice"
+    },
+    {
+      "id": "permits",
+      "phase": "approve",
+      "title": "Ask planning and zoning which permits apply",
+      "detail": "Land use, building and any state permits for this kind of project.",
+      "who": "Planning department",
+      "lead_days": 45,
+      "basis": "common_practice"
+    },
+    {
+      "id": "env_review",
+      "phase": "approve",
+      "title": "Ask each funding agency whether an environmental review is required",
+      "detail": "Federal funds often come with one; starting early avoids delays.",
+      "who": "Project lead",
+      "lead_days": 50,
+      "basis": "common_practice"
+    },
+    {
+      "id": "procurement",
+      "phase": "build",
+      "title": "Prepare a request for proposals under county procurement rules",
+      "detail": "Define the scope, the evaluation criteria and the timeline.",
+      "who": "Purchasing office",
+      "lead_days": null,
+      "basis": "common_practice"
+    },
+    {
+      "id": "schedule",
+      "phase": "build",
+      "title": "Set milestones and how results will be reported",
+      "detail": "Report back to the board and the public on progress and outcomes.",
+      "who": "Project lead",
+      "lead_days": null,
+      "basis": "common_practice"
+    }
+  ],
+  "by_solution": {
+    "community_solar": [
+      {
+        "id": "cleanup_status",
+        "phase": "site",
+        "title": "Check the site's cleanup status with the state environmental agency",
+        "detail": "Reclaimed land may have use limits or monitoring that shape where panels can go.",
+        "who": "Project lead",
+        "document_ids": [
+          "epa_repowering_screening",
+          "epa_brownfields_marc_packet"
+        ],
+        "site_only": true,
+        "lead_days": 65,
+        "basis": "common_practice"
+      },
+      {
+        "id": "interconnection",
+        "phase": "approve",
+        "title": "Request an interconnection review from the utility",
+        "who": "Project lead, utility",
+        "document_ids": [
+          "utility_interconnection_request"
+        ],
+        "lead_days": 45,
+        "basis": "common_practice"
+      },
+      {
+        "id": "elective_pay",
+        "phase": "fund",
+        "title": "Check elective-pay eligibility for the clean electricity credits",
+        "detail": "Note the in-service deadlines for solar.",
+        "who": "Finance department",
+        "document_ids": [
+          "irs_elective_pay_overview",
+          "energy_community_bonus_briefing"
+        ],
+        "lead_days": 50,
+        "basis": "common_practice"
+      }
+    ],
+    "resilience_hub": [
+      {
+        "id": "interconnection",
+        "phase": "approve",
+        "title": "Request an interconnection review from the utility",
+        "who": "Project lead, utility",
+        "document_ids": [
+          "utility_interconnection_request"
+        ],
+        "lead_days": 45,
+        "basis": "common_practice"
+      },
+      {
+        "id": "elective_pay",
+        "phase": "fund",
+        "title": "Check elective-pay eligibility for the clean electricity credits",
+        "who": "Finance department",
+        "document_ids": [
+          "irs_elective_pay_overview"
+        ],
+        "lead_days": 50,
+        "basis": "common_practice"
+      },
+      {
+        "id": "emergency_plan",
+        "phase": "support",
+        "title": "Agree the hub's role with the emergency management office",
+        "detail": "When it opens, who staffs it, and what it must power during an outage.",
+        "who": "Emergency management",
+        "lead_days": 60,
+        "basis": "common_practice"
+      }
+    ],
+    "landfill_gas_energy": [
+      {
+        "id": "gas_rights",
+        "phase": "site",
+        "title": "Confirm gas rights and data with the landfill owner and operator",
+        "who": "County attorney, project lead",
+        "document_ids": [
+          "epa_lmop_landfill_gas"
+        ],
+        "site_only": true,
+        "section_ids": [
+          "letter"
+        ],
+        "lead_days": 70,
+        "basis": "common_practice"
+      }
+    ],
+    "landfill_composting": [
+      {
+        "id": "operator_agreement",
+        "phase": "site",
+        "title": "Agree land use and operations with the landfill owner and operator",
+        "who": "County attorney, project lead",
+        "document_ids": [
+          "epa_lmop_landfill_gas"
+        ],
+        "site_only": true,
+        "section_ids": [
+          "letter"
+        ],
+        "lead_days": 70,
+        "basis": "common_practice"
+      },
+      {
+        "id": "compost_permit",
+        "phase": "approve",
+        "title": "Ask the state solid-waste agency what permit a composting site needs",
+        "who": "Project lead",
+        "lead_days": 45,
+        "basis": "common_practice"
+      },
+      {
+        "id": "feedstock",
+        "phase": "support",
+        "title": "Line up food-scrap sources: schools, groceries, haulers",
+        "who": "Project lead",
+        "lead_days": 55,
+        "basis": "common_practice"
+      }
+    ],
+    "flood_buyout": [
+      {
+        "id": "flooded_list",
+        "phase": "support",
+        "title": "List repeatedly flooded properties with the floodplain manager",
+        "who": "Floodplain manager",
+        "lead_days": 75,
+        "basis": "common_practice"
+      },
+      {
+        "id": "mitigation_plan",
+        "phase": "fund",
+        "title": "Confirm the county has a current FEMA-approved hazard mitigation plan",
+        "detail": "FEMA hazard mitigation grants generally require one (44 CFR Part 201); checked 2026-11-14.",
+        "who": "Emergency management",
+        "lead_days": 80,
+        "basis": "program_rule",
+        "source_url": "https://www.ecfr.gov/current/title-44/chapter-I/subchapter-D/part-201"
+      },
+      {
+        "id": "voluntary_offers",
+        "phase": "approve",
+        "title": "Make voluntary offers to willing owners only",
+        "who": "County attorney",
+        "lead_days": 35,
+        "basis": "common_practice"
+      },
+      {
+        "id": "ehp_review",
+        "phase": "approve",
+        "title": "Prepare for FEMA's environmental and historic preservation review",
+        "detail": "FEMA must finish this review before it awards a mitigation project; checked 2026-11-14.",
+        "who": "Project lead",
+        "basis": "program_rule",
+        "source_url": "https://www.fema.gov/sites/default/files/documents/fema_ehp-flood-risk-reduction-job-aid.pdf",
+        "lead_days": 50
+      }
+    ],
+    "wildfire_defensible_space": [
+      {
+        "id": "fire_partners",
+        "phase": "support",
+        "title": "Coordinate with the state forestry agency and local fire districts",
+        "who": "Emergency management",
+        "lead_days": 70,
+        "basis": "common_practice"
+      }
+    ],
+    "public_ev_charging": [
+      {
+        "id": "interconnection",
+        "phase": "approve",
+        "title": "Ask the utility about service upgrades for the chargers",
+        "who": "Project lead, utility",
+        "document_ids": [
+          "utility_interconnection_request"
+        ],
+        "lead_days": 45,
+        "basis": "common_practice"
+      }
+    ],
+    "weatherization_clinic": [
+      {
+        "id": "wap_partner",
+        "phase": "support",
+        "title": "Partner with the local weatherization or energy-assistance agency",
+        "who": "Project lead",
+        "lead_days": 60,
+        "basis": "common_practice"
+      }
+    ],
+    "utility_assistance_drive": [
+      {
+        "id": "wap_partner",
+        "phase": "support",
+        "title": "Partner with the local energy-assistance agency to staff sign-ups",
+        "who": "Project lead",
+        "lead_days": 60,
+        "basis": "common_practice"
+      }
+    ],
+    "heat_pump_group_buy": [
+      {
+        "id": "installers",
+        "phase": "build",
+        "title": "Invite local installers to quote a group price",
+        "who": "Purchasing office",
+        "lead_days": null,
+        "basis": "common_practice"
+      }
+    ],
+    "mobile_home_repair": [
+      {
+        "id": "wap_partner",
+        "phase": "support",
+        "title": "Partner with the local weatherization agency and housing nonprofits",
+        "who": "Project lead",
+        "lead_days": 60,
+        "basis": "common_practice"
+      }
+    ],
+    "water_system_consolidation": [
+      {
+        "id": "state_water",
+        "phase": "support",
+        "title": "Meet the state drinking water program about consolidation help",
+        "who": "Project lead",
+        "lead_days": 70,
+        "basis": "common_practice"
+      }
+    ],
+    "drinking_water_compliance": [
+      {
+        "id": "state_water",
+        "phase": "support",
+        "title": "Meet the state drinking water program about the systems with violations",
+        "who": "Project lead",
+        "lead_days": 70,
+        "basis": "common_practice"
+      }
+    ],
+    "microtransit": [
+      {
+        "id": "transit_office",
+        "phase": "fund",
+        "title": "Ask the state DOT transit office about rural transit funding",
+        "who": "Project lead",
+        "lead_days": 70,
+        "basis": "common_practice"
+      }
+    ],
+    "mobility_hub": [
+      {
+        "id": "transit_office",
+        "phase": "fund",
+        "title": "Ask the state DOT about active-transportation funding",
+        "who": "Project lead",
+        "lead_days": 70,
+        "basis": "common_practice"
+      }
+    ]
+  },
+  "lead_note": "lead_days: how many days before the target grant's deadline a step should be done. Our own planning assumptions for a small county, not program rules; null means after award.",
+  "basis_note": "basis: common_practice = general county practice, shown as a suggestion; program_rule = a requirement of the program, which must carry a source_url checked on the date given."
+}

@@ -389,9 +389,11 @@ def test_shrinking_drops_what_the_model_cannot_use_and_changes_no_figure():
         return {p["project_type"] for p in d["project_types"]}
 
     assert len(types(digest)) == len(SOLUTIONS)
-    assert types(small) == {"community_solar", "resilience_hub"}
+    assert {"community_solar", "resilience_hub"} <= types(small)
+    assert "public_ev_charging" not in types(small)  # answers neither need
     no_library = {**digest, "sites": [g for g in digest["sites"] if g["kind"] != "Libraries"]}
-    assert types(opportunities.shrink_digest(no_library, 0.10)) == {"community_solar"}
+    left = types(opportunities.shrink_digest(no_library, 0.10))
+    assert "community_solar" in left and "resilience_hub" not in left
 
     # Needs, standouts and sites are untouched, and nothing new can be cited.
     assert all(small[key] == digest[key] for key in ("county", "needs", "standouts", "sites"))

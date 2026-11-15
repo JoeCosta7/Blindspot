@@ -224,6 +224,12 @@ class FundingMatch(BaseModel):
     # Why the program applies here, when that depends on the county or site,
     # e.g. which energy community category the county falls in.
     note: str | None = None
+    # What kind of money: only a grant has an application deadline. A tax
+    # credit's date is a placed-in-service date, never an application date.
+    kind: Literal["grant", "tax_credit", "other"] = "other"
+    # Whether a county government may apply, from the curated table's
+    # eligible applicants; "unknown" for live listings we have not read.
+    county_eligible: Literal["yes", "no", "unknown"] = "unknown"
 
 
 DocumentKind = Literal[
@@ -291,6 +297,8 @@ class Opportunity(BaseModel):
     # fits none of them; only a typed opportunity can get estimates and funding.
     solution_id: str | None
     title: str
+    # One plain sentence on what the project is, from the catalogue.
+    description: str | None = None
     # What would be done, and why it fits this county. Null for a rule match.
     summary: str | None = None
     rationale: str | None = None
@@ -495,6 +503,8 @@ class ScoutRequest(BaseModel):
     # The opportunity's project type, which decides what kind of host to look
     # for first (agent.profile_for). Null for an idea of Gemini's own.
     solution_id: str | None = None
+    # What the project is (catalogue description or Gemini's summary), for the host spec.
+    detail: str | None = None
     # The opportunity's own sites (report asset ids), tried first for site projects.
     asset_ids: list[str] = Field(default_factory=list)
 
@@ -615,3 +625,85 @@ class ScoutEvent(BaseModel):
     step: ScoutStep | None = None
     candidate: SiteCandidate | None = None
     result: ScoutResult | None = None
+
+
+# --- Opportunity workspace: the government process (app/process.py) ------------------
+
+ProcessStepSource = Literal["template", "site_plan", "plan"]
+
+
+class ProcessStep(BaseModel):
+    """One thing the county does to move a project forward. From the curated
+    table (data/process_templates.json), the chosen site's plan, or the
+    opportunity's own plan. General practice, not legal advice."""
+
+    id: str
+    title: str
+    detail: str | None = None
+    # Who usually does it, e.g. "County board" or "Planning department".
+    who: str | None = None
+    # Ids of documents in ProcessPlan.documents this step uses.
+    document_ids: list[str] = Field(default_factory=list)
+    # Ids of ProcessPlan.sections (drafts) this step uses, e.g. the resolution.
+    section_ids: list[str] = Field(default_factory=list)
+    # Suggested do-by date (ISO), counted back from the target grant's deadline
+    # by the step's lead time, which is our own planning assumption. Only the
+    # submission step's date is the program's real deadline.
+    due: str | None = None
+    # The suggested date has passed (behind the suggested schedule).
+    late: bool = False
+    # common_practice: general county practice, a suggestion. program_rule: a
+    # requirement of the program, with its source.
+    basis: Literal["common_practice", "program_rule"] = "common_practice"
+    source_url: str | None = None
+    source: ProcessStepSource
+
+
+class ProcessPhase(BaseModel):
+    id: str
+    title: str
+    steps: list[ProcessStep]
+
+
+class PackSection(BaseModel):
+    """One part of the printable document pack. Code fills it from the
+    opportunity's own figures; Gemini may reword it (number-checked)."""
+
+    id: str
+    title: str
+    text: str
+    generated_by: Literal["gemini", "template"]
+
+
+class ProcessPlan(BaseModel):
+    opportunity_id: str
+    site_id: str | None
+    # The grant the dates count back from, and the dated leads one could pick.
+    target: FundingMatch | None = None
+    targets: list[FundingMatch] = Field(default_factory=list)
+    today: str | None = None
+    phases: list[ProcessPhase]
+    # Lines from the chosen site's plan or the opportunity's own plan: shown
+    # apart from the checklist because they often repeat its steps.
+    ideas: list[ProcessStep] = Field(default_factory=list)
+    documents: list[ProjectDocument]
+    # Forms to gather locally that have no national URL.
+    documents_needed: list[str]
+    sections: list[PackSection]
+    caveats: list[str]
+
+
+class ProcessRequest(BaseModel):
+    """The client sends what it already has; nothing is re-analyzed."""
+
+    fips: str = Field(pattern=r"^\d{5}$")
+    county_name: str
+    state: str
+    opportunity: Opportunity
+    # The needs the opportunity addresses, for the pack's wording.
+    needs: list[Need] = Field(default_factory=list)
+    # The chosen site: a Site Scout candidate, or one of the report's own sites.
+    site: SiteCandidate | None = None
+    site_asset: Asset | None = None
+    # The funding lead to aim for; empty means the earliest open deadline.
+    target_program_id: str | None = None

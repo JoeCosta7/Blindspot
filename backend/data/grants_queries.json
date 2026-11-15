@@ -1,82 +1,222 @@
 [
   {
     "keyword": "brownfield",
-    "solution_ids": ["community_solar", "wind_on_reclaimed_land"],
-    "agency_prefixes": ["EPA"],
-    "title_terms": ["brownfield"],
-    "asset_types": ["brownfield"],
+    "solution_ids": [
+      "community_solar",
+      "wind_on_reclaimed_land"
+    ],
+    "agency_prefixes": [
+      "EPA"
+    ],
+    "title_terms": [
+      "brownfield"
+    ],
+    "asset_types": [
+      "brownfield"
+    ],
     "note": "Tested 2026-11-14: EPA FY27 Brownfield Assessment, Cleanup and RLF grants."
   },
   {
     "keyword": "mitigation",
-    "solution_ids": ["resilience_hub"],
-    "agency_prefixes": ["DHS"],
-    "title_terms": ["mitigation", "resilien"],
-    "exclude_terms": ["noise"],
+    "solution_ids": [
+      "resilience_hub"
+    ],
+    "agency_prefixes": [
+      "DHS"
+    ],
+    "title_terms": [
+      "mitigation",
+      "resilien"
+    ],
+    "exclude_terms": [
+      "noise"
+    ],
     "note": "Tested 2026-11-14: FEMA Flood Mitigation Assistance (listed under DHS-DHS)."
   },
   {
     "keyword": "weatherization",
-    "solution_ids": ["weatherization_clinic"],
-    "agency_prefixes": ["DOE", "HHS-ACF"],
-    "title_terms": ["weatherization", "energy assistance"],
+    "solution_ids": [
+      "heat_pump_group_buy",
+      "mobile_home_repair",
+      "utility_assistance_drive",
+      "weatherization_clinic"
+    ],
+    "agency_prefixes": [
+      "DOE",
+      "HHS-ACF"
+    ],
+    "title_terms": [
+      "weatherization",
+      "energy assistance"
+    ],
     "note": "Tested 2026-11-14: no listing."
   },
   {
     "keyword": "charging",
-    "solution_ids": ["public_ev_charging"],
-    "agency_prefixes": ["DOT", "DOE"],
-    "title_terms": ["charging", "fueling", "electric vehicle"],
+    "solution_ids": [
+      "public_ev_charging"
+    ],
+    "agency_prefixes": [
+      "DOT",
+      "DOE"
+    ],
+    "title_terms": [
+      "charging",
+      "fueling",
+      "electric vehicle"
+    ],
     "note": "Tested 2026-11-14: no listing."
   },
   {
     "keyword": "landfill",
-    "solution_ids": ["landfill_gas_energy", "landfill_composting"],
-    "agency_prefixes": ["EPA", "USDA", "DOE"],
-    "title_terms": ["landfill", "solid waste", "methane", "biogas"],
+    "solution_ids": [
+      "landfill_gas_energy",
+      "landfill_composting"
+    ],
+    "agency_prefixes": [
+      "EPA",
+      "USDA",
+      "DOE"
+    ],
+    "title_terms": [
+      "landfill",
+      "solid waste",
+      "methane",
+      "biogas"
+    ],
     "note": "Tested 2026-11-14: USDA Solid Waste Management Grant Program."
   },
   {
     "keyword": "recycling",
-    "solution_ids": ["landfill_composting"],
-    "agency_prefixes": ["EPA", "USDA"],
-    "title_terms": ["recycling", "compost", "solid waste", "food waste"],
+    "solution_ids": [
+      "landfill_composting"
+    ],
+    "agency_prefixes": [
+      "EPA",
+      "USDA"
+    ],
+    "title_terms": [
+      "recycling",
+      "compost",
+      "solid waste",
+      "food waste"
+    ],
     "note": "Tested 2026-11-14: USDA Solid Waste Management Grant Program."
   },
   {
     "keyword": "hydropower",
-    "solution_ids": ["small_hydro"],
-    "agency_prefixes": ["DOE"],
-    "title_terms": ["hydropower", "hydroelectric"],
+    "solution_ids": [
+      "small_hydro"
+    ],
+    "agency_prefixes": [
+      "DOE"
+    ],
+    "title_terms": [
+      "hydropower",
+      "hydroelectric"
+    ],
     "note": "Tested 2026-11-14: no listing."
   },
   {
     "keyword": "wind energy",
-    "solution_ids": ["wind_on_reclaimed_land"],
-    "agency_prefixes": ["DOE"],
-    "title_terms": ["wind"],
+    "solution_ids": [
+      "wind_on_reclaimed_land"
+    ],
+    "agency_prefixes": [
+      "DOE"
+    ],
+    "title_terms": [
+      "wind"
+    ],
     "note": "Tested 2026-11-14: no listing."
   },
   {
     "keyword": "urban forest",
-    "solution_ids": ["shade_trees_depaving"],
-    "agency_prefixes": ["USDA-FS"],
-    "title_terms": ["urban", "community forest"],
-    "exclude_terms": ["great lakes"],
+    "solution_ids": [
+      "shade_trees_depaving"
+    ],
+    "agency_prefixes": [
+      "USDA-FS"
+    ],
+    "title_terms": [
+      "urban",
+      "community forest"
+    ],
+    "exclude_terms": [
+      "great lakes"
+    ],
     "note": "Great Lakes programs are excluded: they cover only those states."
   },
   {
     "keyword": "rural energy",
-    "solution_ids": ["farm_digester"],
-    "agency_prefixes": ["USDA"],
-    "title_terms": ["renewable energy", "energy efficiency", "digester", "biogas"],
+    "solution_ids": [
+      "farm_digester"
+    ],
+    "agency_prefixes": [
+      "USDA"
+    ],
+    "title_terms": [
+      "renewable energy",
+      "energy efficiency",
+      "digester",
+      "biogas"
+    ],
     "note": "Tested 2026-11-14: USDA-RBCS Renewable Energy Systems and Energy Efficiency Improvements Program (forecasted)."
   },
   {
     "keyword": "schools",
-    "solution_ids": ["school_heat_pumps"],
-    "agency_prefixes": ["DOE"],
-    "title_terms": ["school"],
+    "solution_ids": [
+      "school_heat_pumps"
+    ],
+    "agency_prefixes": [
+      "DOE"
+    ],
+    "title_terms": [
+      "school"
+    ],
     "note": "Tested 2026-11-14: no listing."
+  },
+  {
+    "keyword": "flood mitigation",
+    "solution_ids": [
+      "flood_buyout",
+      "green_stormwater"
+    ],
+    "agency_prefixes": [
+      "DHS"
+    ],
+    "title_terms": [
+      "flood mitigation"
+    ],
+    "note": "Tested 2026-11-14: FEMA Flood Mitigation Assistance FY 2026 (closes 2027-02-26) and Swift Current."
+  },
+  {
+    "keyword": "wildfire",
+    "solution_ids": [
+      "wildfire_defensible_space"
+    ],
+    "agency_prefixes": [
+      "USDA-FS"
+    ],
+    "title_terms": [
+      "landscape scale restoration",
+      "wildfire",
+      "community wildfire"
+    ],
+    "note": "Tested 2026-11-14: USDA Forest Service Landscape Scale Restoration (non-federal lands, closes 2027-01-26)."
+  },
+  {
+    "keyword": "manufactured housing",
+    "solution_ids": [
+      "mobile_home_repair"
+    ],
+    "agency_prefixes": [
+      "HUD"
+    ],
+    "title_terms": [
+      "preservation and reinvestment",
+      "manufactured"
+    ],
+    "note": "Tested 2026-11-14: HUD Preservation and Reinvestment Initiative for Community Enhancement (PRICE)."
   }
 ]

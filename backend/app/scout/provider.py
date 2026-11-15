@@ -179,7 +179,12 @@ class BuildingData(Protocol):
         layer). Empty when the kit is not installed."""
         ...
 
-    async def roof(self, building: Building, allow_no_parcel: bool = False) -> RoofRecord | None:
+    async def roof(
+        self,
+        building: Building,
+        allow_no_parcel: bool = False,
+        labels: frozenset[str] | None = None,
+    ) -> RoofRecord | None:
         """Parcel, structure and detected objects, or None with no parcel."""
         ...
 
@@ -316,7 +321,12 @@ class RealBuildingData:
             )
         return found
 
-    async def roof(self, building: Building, allow_no_parcel: bool = False) -> RoofRecord | None:
+    async def roof(
+        self,
+        building: Building,
+        allow_no_parcel: bool = False,
+        labels: frozenset[str] | None = None,
+    ) -> RoofRecord | None:
         feature = await vexcel.property_at(self.client, self.settings, building.lat, building.lon)
         if feature is None and not allow_no_parcel:
             return None
@@ -351,11 +361,17 @@ class RealBuildingData:
         failed: str | None = None
         # Rooftop equipment is small, and the detector downsamples large areas,
         # so it runs on the footprint; cars are found on the whole parcel.
+        # Only the labels the project's checks need (None: all). Each live
+        # detection call takes several seconds.
+        wanted = set(DETECT_LABELS) if labels is None else set(labels)
+        roof_labels = [x for x in ("rooftop hvac unit", "solar panel") if x in wanted]
         jobs = []
-        if f["footprint_wkt"]:
-            jobs.append((f["footprint_wkt"], ["rooftop hvac unit", "solar panel"]))
-        if f["parcel_wkt"]:
+        if f["footprint_wkt"] and roof_labels:
+            jobs.append((f["footprint_wkt"], roof_labels))
+        if f["parcel_wkt"] and "car" in wanted:
             jobs.append((f["parcel_wkt"], ["car"]))
+        if not jobs:
+            failed = "not run: no check needs it"
         found: list[Detection] = []
         for job_area, labels in jobs:
             try:

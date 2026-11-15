@@ -1,0 +1,46 @@
+{
+  "note": "Hand-written 2026-11-14. Which checks Site Scout runs on a site, per project type. Two kinds: 'fact' compares one site fact (app/scout/checks.py FACTS) with a value; 'cross' runs a cross-layer comparison from app/scout/measure.py. Thresholds are our own screening choices, not published standards, and every check says so in its detail. A check whose fact is unknown for a site is skipped, not failed. Add a project id to 'projects' to give that project the check; '*' means every project.",
+  "checks": [
+    {"id": "flat_roof", "kind": "fact", "label": "Roof is flat", "fact": "roof_shape", "op": "contains", "value": "flat",
+     "projects": ["rooftop_solar_commercial", "resilience_hub", "school_heat_pumps"]},
+    {"id": "no_existing_solar", "kind": "fact", "label": "No solar on the roof yet", "fact": "solar_present", "op": "eq", "value": false,
+     "projects": ["rooftop_solar_commercial", "resilience_hub"]},
+    {"id": "roof_condition", "kind": "fact", "label": "Roof in fair condition or better", "fact": "roof_condition", "op": "gte", "value": 3,
+     "projects": ["rooftop_solar_commercial", "resilience_hub", "school_heat_pumps"]},
+    {"id": "roof_unshaded", "kind": "fact", "label": "Roof mostly free of tree shade", "fact": "roof_tree_cover_pct", "op": "lte", "value": 20,
+     "projects": ["rooftop_solar_commercial", "resilience_hub"]},
+    {"id": "solar_record_vs_detection", "kind": "cross", "fn": "solar",
+     "projects": ["rooftop_solar_commercial", "resilience_hub"]},
+    {"id": "record_vs_footprint", "kind": "cross", "fn": "record",
+     "projects": ["rooftop_solar_commercial", "resilience_hub", "cooling_center", "weatherization_clinic", "utility_assistance_drive"]},
+
+    {"id": "has_scan", "kind": "fact", "label": "Interior seen in a 3D scan", "fact": "scan_exists", "op": "eq", "value": true,
+     "projects": ["cooling_center", "resilience_hub", "weatherization_clinic", "utility_assistance_drive"]},
+    {"id": "scan_vs_footprint", "kind": "cross", "fn": "footprint",
+     "projects": ["cooling_center", "resilience_hub", "weatherization_clinic", "utility_assistance_drive", "school_heat_pumps"]},
+    {"id": "room_for_people", "kind": "fact", "label": "Large floor for visitors (1,000 m² or more scanned)", "fact": "scan_floor_m2", "op": "gte", "value": 1000,
+     "projects": ["cooling_center", "resilience_hub"]},
+
+    {"id": "paved_area", "kind": "fact", "label": "Paved area on the parcel (2,000 m² or more)", "fact": "hardscape_m2", "op": "gte", "value": 2000,
+     "projects": ["parking_canopy_solar", "public_ev_charging", "mobility_hub", "green_stormwater", "shade_trees_depaving"]},
+    {"id": "vehicles_record_vs_detection", "kind": "cross", "fn": "vehicles",
+     "projects": ["parking_canopy_solar", "public_ev_charging", "mobility_hub"]},
+    {"id": "parking_record", "kind": "fact", "label": "Parking on record (20 spaces or more)", "fact": "parking_spaces", "op": "gte", "value": 20,
+     "projects": ["public_ev_charging", "parking_canopy_solar"]},
+    {"id": "room_to_plant", "kind": "fact", "label": "Little existing tree cover on the parcel (20% or less)", "fact": "parcel_tree_cover_pct", "op": "lte", "value": 20,
+     "projects": ["shade_trees_depaving", "green_stormwater"]},
+
+    {"id": "parcel_on_record", "kind": "fact", "label": "Parcel on record in the aerial data", "fact": "parcel_on_record", "op": "eq", "value": true,
+     "projects": ["community_solar", "wind_on_reclaimed_land", "repower_fossil_plant"]},
+    {"id": "open_land", "kind": "fact", "label": "Large site (2 hectares or more)", "fact": "parcel_m2", "op": "gte", "value": 20000,
+     "projects": ["community_solar", "wind_on_reclaimed_land", "repower_fossil_plant"]},
+    {"id": "few_structures", "kind": "fact", "label": "Few buildings in the way (3 or fewer on record)", "fact": "structure_count", "op": "lte", "value": 3,
+     "projects": ["community_solar", "wind_on_reclaimed_land"]},
+    {"id": "clear_land", "kind": "fact", "label": "Mostly clear of trees (30% or less cover)", "fact": "parcel_tree_cover_pct", "op": "lte", "value": 30,
+     "projects": ["community_solar", "wind_on_reclaimed_land"]},
+    {"id": "landfill_active", "kind": "fact", "label": "Signs of activity: vehicles seen on site", "fact": "vehicles_detected", "op": "gte", "value": 1,
+     "projects": ["landfill_composting", "landfill_gas_energy"]},
+    {"id": "landfill_open_ground", "kind": "fact", "label": "Mostly open ground (30% or less tree cover)", "fact": "parcel_tree_cover_pct", "op": "lte", "value": 30,
+     "projects": ["landfill_composting"]}
+  ]
+}

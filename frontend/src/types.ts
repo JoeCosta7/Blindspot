@@ -165,6 +165,10 @@ export interface FundingMatch {
   source_url: string | null;
   /** Why the program applies here, when that depends on the county or site. */
   note: string | null;
+  /** Only a grant has an application deadline; a tax credit's date is a placed-in-service date. */
+  kind: "grant" | "tax_credit" | "other";
+  /** Whether a county government may apply (curated table); unknown for live listings. */
+  county_eligible: "yes" | "no" | "unknown";
 }
 
 
@@ -218,6 +222,8 @@ export interface Opportunity {
    * only a typed opportunity can get estimates and funding. */
   solution_id: string | null;
   title: string;
+  /** One plain sentence on what the project is, from the catalogue. */
+  description: string | null;
   /** What would be done, and why it fits this county. Null for a rule match. */
   summary: string | null;
   rationale: string | null;
@@ -508,4 +514,64 @@ export interface ScoutRun {
   candidates: SiteCandidate[];
   result: ScoutResult | null;
   error: string | null;
+}
+
+// --- Opportunity workspace: the government process ----------------------------
+
+export interface ProcessStep {
+  id: string;
+  title: string;
+  detail: string | null;
+  who: string | null;
+  document_ids: string[];
+  /** Drafts (ProcessPlan.sections ids) this step uses. */
+  section_ids: string[];
+  /** Do-by date, counted back from the target grant's deadline. */
+  due: string | null;
+  /** The suggested date has passed. */
+  late: boolean;
+  /** A suggestion (common practice) or a program requirement with its source. */
+  basis: "common_practice" | "program_rule";
+  source_url: string | null;
+  source: "template" | "site_plan" | "plan";
+}
+
+export interface ProcessPhase {
+  id: string;
+  title: string;
+  steps: ProcessStep[];
+}
+
+export interface PackSection {
+  id: string;
+  title: string;
+  text: string;
+  generated_by: "gemini" | "template";
+}
+
+export interface ProcessPlan {
+  opportunity_id: string;
+  site_id: string | null;
+  /** The grant the dates count back from, and the dated leads to pick from. */
+  target: FundingMatch | null;
+  targets: FundingMatch[];
+  today: string | null;
+  phases: ProcessPhase[];
+  /** Lines from the site's or the opportunity's own plan, shown apart. */
+  ideas: ProcessStep[];
+  documents: ProjectDocument[];
+  documents_needed: string[];
+  sections: PackSection[];
+  caveats: string[];
+}
+
+export interface ProcessRequest {
+  fips: string;
+  county_name: string;
+  state: string;
+  opportunity: Opportunity;
+  needs: Need[];
+  site: SiteCandidate | null;
+  site_asset: Asset | null;
+  target_program_id: string | null;
 }
