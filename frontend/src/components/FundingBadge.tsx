@@ -1,4 +1,4 @@
-import { formatDate, FUNDING_STATUS } from "../format";
+import { formatDate, formatDeadlineCountdown, FUNDING_STATUS } from "../format";
 import type { FundingMatch } from "../types";
 
 /**
@@ -8,6 +8,12 @@ import type { FundingMatch } from "../types";
  */
 export function FundingBadge({ funding }: { funding: FundingMatch }) {
   const status = FUNDING_STATUS[funding.status];
+  const countdown =
+    funding.deadline && (funding.status === "open" || funding.status === "open_with_deadlines")
+      ? formatDeadlineCountdown(funding.deadline)
+      : null;
+  const deadlinePassed = countdown === "Deadline passed";
+
   return (
     <div className={`funding funding-${funding.status}`}>
       <div className="funding-head">
@@ -24,7 +30,19 @@ export function FundingBadge({ funding }: { funding: FundingMatch }) {
       </div>
       <div className="funding-meta">
         {funding.agency}
-        {funding.deadline && ` · Deadline ${formatDate(funding.deadline)}`}
+        {countdown && (
+          <>
+            {" · "}
+            <span
+              className={
+                deadlinePassed ? "funding-deadline funding-deadline-passed" : "funding-deadline"
+              }
+            >
+              {countdown}
+            </span>
+          </>
+        )}
+        {funding.deadline && ` · ${formatDate(funding.deadline)}`}
         {" · "}
         {funding.program_id.startsWith("grantsgov:")
           ? `From Grants.gov ${funding.verified_on ? formatDate(funding.verified_on) : ""}`

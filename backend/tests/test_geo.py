@@ -32,13 +32,24 @@ def test_quarter_of_area_without_centroid_is_kept(grid_index):
     assert fips_of(counties) == ["99001"]
 
 
-def test_sorted_by_overlap_and_truncated(grid_index):
+def test_nearest_to_center_first_and_truncated(grid_index):
     # Covers all of row 0 and the lower 60% of row 1: six counties match.
+    # The center is (1.5, 0.8): 99002 (0.3 away) and 99005 (0.7) are nearest,
+    # then 99001 and 99003 (about 1.04). 99005 beats the fully covered 99001
+    # and 99003 even though only 60% of it is in the box.
     counties, truncated = grid_index.resolve_bbox((0.0, 0.0), (3.0, 1.6), 4)
     assert truncated is True
-    assert len(counties) == 4
-    # The three fully covered counties come first.
-    assert set(fips_of(counties[:3])) == {"99001", "99002", "99003"}
+    assert fips_of(counties) == ["99002", "99005", "99001", "99003"]
+
+
+def test_far_county_with_more_overlap_loses_to_a_near_one():
+    # A big county (0-4 square, centroid (2, 2)) and a small one beside it
+    # (4-5 by 1.5-2.5, centroid (4.5, 2)). The box x 1.8-5, y 1-3 holds both
+    # centroids; its center is (3.4, 2). The big county overlaps 4.4 square
+    # degrees and is 1.4 away; the small one overlaps 1.0 and is 1.1 away.
+    index = CountyIndex([make_county("99010", 0, 0, 4, 4), make_county("99011", 4, 1.5, 5, 2.5)])
+    counties, truncated = index.resolve_bbox((1.8, 1.0), (5.0, 3.0), 1)
+    assert fips_of(counties) == ["99011"] and truncated is True
 
 
 def test_not_truncated_at_exactly_the_limit(grid_index):

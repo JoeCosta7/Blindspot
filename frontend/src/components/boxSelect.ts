@@ -1,21 +1,37 @@
 import type { Map as MapboxMap } from "mapbox-gl";
-import type { LonLat } from "../types";
+import {
+  BBOX_MIN_AREA_SHARE,
+  MAX_COUNTIES,
+  boxPreviewLabel,
+  countiesMatchingBox,
+} from "../countyBox";
+import type { CountyFeature, LonLat } from "../types";
 
 const MIN_DRAG_PX = 6;
+
+export interface BoxSelectOptions {
+  onSelect: (sw: LonLat, ne: LonLat) => void;
+  /** County polygons used for the live match count while dragging. */
+  counties: CountyFeature[];
+  maxCounties?: number;
+  minAreaShare?: number;
+}
 
 /**
  * Lets the user drag a rectangle on the map. Panning is disabled while this is
  * active and restored by the returned cleanup function. Escape cancels a drag.
  *
  * `onSelect` receives the south-west and north-east corners as [lon, lat].
+ * While dragging, the rectangle shows how many counties match (and the cap).
  */
-export function startBoxSelect(
-  map: MapboxMap,
-  onSelect: (sw: LonLat, ne: LonLat) => void,
-): () => void {
+export function startBoxSelect(map: MapboxMap, options: BoxSelectOptions): () => void {
+  const { onSelect, counties, maxCounties = MAX_COUNTIES, minAreaShare = BBOX_MIN_AREA_SHARE } =
+    options;
   const container = map.getCanvasContainer();
   let start: { x: number; y: number } | null = null;
   let box: HTMLDivElement | null = null;
+  let label: HTMLSpanElement | null = null;
+  let raf = 0;
 
   map.dragPan.disable();
   map.boxZoom.disable();
@@ -27,25 +43,56 @@ export function startBoxSelect(
   };
 
   const clearDrag = () => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
     box?.remove();
     box = null;
+    label = null;
     start = null;
     document.removeEventListener("mousemove", onMouseMove);
     document.removeEventListener("mouseup", onMouseUp);
   };
 
-  function onMouseMove(event: MouseEvent) {
-    if (!start) return;
-    const current = position(event);
+  const updatePreview = (from: { x: number; y: number }, to: { x: number; y: number }) => {
     if (!box) {
       box = document.createElement("div");
       box.className = "box-select-rect";
+      label = document.createElement("span");
+      label.className = "box-select-count";
+      box.appendChild(label);
       container.appendChild(box);
     }
-    box.style.left = `${Math.min(start.x, current.x)}px`;
-    box.style.top = `${Math.min(start.y, current.y)}px`;
-    box.style.width = `${Math.abs(current.x - start.x)}px`;
-    box.style.height = `${Math.abs(current.y - start.y)}px`;
+    const left = Math.min(from.x, to.x);
+    const top = Math.min(from.y, to.y);
+    const width = Math.abs(to.x - from.x);
+    const height = Math.abs(to.y - from.y);
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
+
+    if (width < MIN_DRAG_PX || height < MIN_DRAG_PX) {
+      if (label) label.textContent = "Drag to select counties";
+      return;
+    }
+
+    const a = map.unproject([from.x, from.y]);
+    const b = map.unproject([to.x, to.y]);
+    const sw: LonLat = [Math.min(a.lng, b.lng), Math.min(a.lat, b.lat)];
+    const ne: LonLat = [Math.max(a.lng, b.lng), Math.max(a.lat, b.lat)];
+    const matchCount = countiesMatchingBox(counties, sw, ne, minAreaShare).length;
+    if (label) label.textContent = boxPreviewLabel(matchCount, maxCounties);
+  };
+
+  function onMouseMove(event: MouseEvent) {
+    if (!start) return;
+    const from = start;
+    const to = position(event);
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      updatePreview(from, to);
+    });
   }
 
   function onMouseUp(event: MouseEvent) {

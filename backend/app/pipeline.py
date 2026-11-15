@@ -133,12 +133,16 @@ SOURCE_NAMES = {
 BUILDING_TYPES = ("school", "library", "college")
 SOLAR_SOLUTIONS = ("community_solar", "resilience_hub")
 
+# Called as each source finishes when the client asked for live progress.
+ProgressCallback = Callable[[SourceStatus], Awaitable[None]] | None
+
 
 async def _run(
     name: str,
     call: Callable[[], Awaitable[tuple[Any, bool]]],
     timeout_s: float,
     slot: asyncio.Semaphore | None = None,
+    on_progress: ProgressCallback = None,
 ) -> tuple[Any, SourceStatus]:
     """Run one source. Returns (value or None, status); never raises."""
     try:
@@ -147,7 +151,10 @@ async def _run(
                 value, cached = await asyncio.wait_for(call(), timeout_s)
         else:
             value, cached = await asyncio.wait_for(call(), timeout_s)
-        return value, SourceStatus(source=name, ok=True, cached=cached)
+        status = SourceStatus(source=name, ok=True, cached=cached)
+        if on_progress is not None:
+            await on_progress(status)
+        return value, status
     except SourceError as exc:
         message = str(exc)
     except TimeoutError:
@@ -155,7 +162,10 @@ async def _run(
     except Exception as exc:  # a source bug must not take the report down
         log.exception("source %s failed unexpectedly", name)
         message = f"Unexpected error: {type(exc).__name__}"
-    return None, SourceStatus(source=name, ok=False, cached=False, message=message)
+    status = SourceStatus(source=name, ok=False, cached=False, message=message)
+    if on_progress is not None:
+        await on_progress(status)
+    return None, status
 
 
 def _local(read: Callable[[], Any]) -> Callable[[], Awaitable[tuple[Any, bool]]]:
@@ -610,115 +620,130 @@ def size_estimates(
 
 
 async def analyze_county(
-    county: County, client: httpx.AsyncClient, settings: Settings
+    county: County,
+    client: httpx.AsyncClient,
+    settings: Settings,
+    on_progress: ProgressCallback = None,
 ) -> CountyReport:
     timeout = settings.source_timeout_s
     data_dir = settings.data_dir
     centroid = (county.centroid_lon, county.centroid_lat)
 
+    async def run(
+        name: str,
+        call: Callable[[], Awaitable[tuple[Any, bool]]],
+        timeout_s: float,
+        slot: asyncio.Semaphore | None = None,
+    ) -> tuple[Any, SourceStatus]:
+        return await _run(name, call, timeout_s, slot, on_progress)
+
+    async def emit(status: SourceStatus) -> None:
+        if on_progress is not None:
+            await on_progress(status)
+
     results = await asyncio.gather(
-        _run(
+        run(
             "census",
             lambda: census.fetch_county(client, settings, county.state_fips, county.county_code),
             timeout,
         ),
-        _run("census_national", lambda: census.fetch_national(client, settings), timeout),
-        _run("nri", _local(lambda: nri.ratings_for_county(data_dir, county.fips)), timeout),
-        _run(
+        run("census_national", lambda: census.fetch_national(client, settings), timeout),
+        run("nri", _local(lambda: nri.ratings_for_county(data_dir, county.fips)), timeout),
+        run(
             "repowering",
             _local(lambda: repowering.sites_for_county(data_dir, county.fips)),
             timeout,
         ),
-        _run("lmop", _local(lambda: lmop.landfills_for_county(data_dir, county.fips)), timeout),
-        _run(
+        run("lmop", _local(lambda: lmop.landfills_for_county(data_dir, county.fips)), timeout),
+        run(
             "geoapify",
             lambda: geoapify.fetch_public_buildings(client, settings, county.fips, county.bounds),
             settings.buildings_timeout_s,
         ),
-        _run(
+        run(
             "ev_stations",
             lambda: afdc.fetch_state_stations(client, settings, county.state),
             timeout,
         ),
-        _run("ev_national_count", lambda: afdc.fetch_national_count(client, settings), timeout),
-        _run(
+        run("ev_national_count", lambda: afdc.fetch_national_count(client, settings), timeout),
+        run(
             "pvwatts",
             lambda: pvwatts.fetch_yield(client, settings, county.centroid_lat, county.centroid_lon),
             timeout,
         ),
-        _run(
+        run(
             "state_energy",
             _local(lambda: state_energy.for_state(data_dir, county.state)),
             timeout,
         ),
-        _run("dams", _local(lambda: dams.dams_for_county(data_dir, county.fips)), timeout),
-        _run("farms", _local(lambda: farms.farms_for_county(data_dir, county.fips)), timeout),
-        _run(
+        run("dams", _local(lambda: dams.dams_for_county(data_dir, county.fips)), timeout),
+        run("farms", _local(lambda: farms.farms_for_county(data_dir, county.fips)), timeout),
+        run(
             "earthengine",
             lambda: earthengine.fetch_county_metrics(settings, county),
             settings.ee_timeout_s,
         ),
-        _run("svi", _local(lambda: svi.svi_for_county(data_dir, county.fips)), timeout),
-        _run(
+        run("svi", _local(lambda: svi.svi_for_county(data_dir, county.fips)), timeout),
+        run(
             "climate",
             lambda: openmeteo.fetch_climate(
                 client, settings, county.centroid_lat, county.centroid_lon
             ),
             timeout,
         ),
-        _run("peers", lambda: census.fetch_all_counties(client, settings), timeout),
+        run("peers", lambda: census.fetch_all_counties(client, settings), timeout),
         # Sources added 2026-11-14.
-        _run(
+        run(
             "energy_burden",
             _local(lambda: energy_burden.burden_for_county(data_dir, county.fips)),
             timeout,
         ),
-        _run(
+        run(
             "energy_communities",
             _local(lambda: energy_communities.status_for_county(data_dir, county.fips)),
             timeout,
         ),
-        _run(
+        run(
             "power_plants",
             _local(lambda: power_plants.plants_for_county(data_dir, county.fips)),
             timeout,
         ),
-        _run(
+        run(
             "utilities",
             _local(lambda: utilities.utilities_for_county(data_dir, county.fips)),
             timeout,
         ),
-        _run("rucc", _local(lambda: rucc.rucc_for_county(data_dir, county.fips)), timeout),
-        _run("places", _local(lambda: places.places_for_county(data_dir, county.fips)), timeout),
-        _run(
+        run("rucc", _local(lambda: rucc.rucc_for_county(data_dir, county.fips)), timeout),
+        run("places", _local(lambda: places.places_for_county(data_dir, county.fips)), timeout),
+        run(
             "air_quality",
             _local(lambda: air_quality.design_values_for_county(data_dir, county.fips)),
             timeout,
         ),
-        _run(
+        run(
             "wildfire", _local(lambda: wildfire.wildfire_for_county(data_dir, county.fips)), timeout
         ),
-        _run(
+        run(
             "disasters",
             lambda: openfema.fetch_declarations(
                 client, settings, county.state_fips, county.county_code
             ),
             timeout,
         ),
-        _run(
+        run(
             "drinking_water",
             lambda: drinking_water.fetch_water_systems(client, settings, county.fips),
             timeout,
         ),
-        _run(
+        run(
             "waters",
             lambda: attains.fetch_county_waters(client, settings, county.fips, county.geometry),
             timeout,
         ),
-        _run(
+        run(
             "wind_turbines", lambda: uswtdb.fetch_turbines(client, settings, county.fips), timeout
         ),
-        _run(
+        run(
             "transit",
             lambda: transit.fetch_stops(client, settings, county.fips, county.geometry),
             timeout,
@@ -900,6 +925,7 @@ async def analyze_county(
     failed = [SOURCE_NAMES.get(s.source, s.source) for s in statuses if not s.ok]
     plan, gemini_status = await opportunities.write_opportunities(digest, settings)
     statuses.append(gemini_status)
+    await emit(gemini_status)
     if plan is not None:
         proposals = proposals_from_drafts(plan.drafts, flagged, all_assets, solutions)
     else:  # no key, an error, a timeout or nothing usable: the rule matches
@@ -942,7 +968,7 @@ async def analyze_county(
     )
     gathered = await asyncio.gather(
         *(
-            _run(
+            run(
                 "pvwatts_site",
                 lambda a=a: pvwatts.fetch_yield(client, settings, a.lat, a.lon),
                 timeout,
@@ -950,7 +976,7 @@ async def analyze_county(
             for a in solar_assets.values()
         ),
         *(
-            _run("grants_gov", lambda k=k: grantsgov.search(client, settings, k), timeout)
+            run("grants_gov", lambda k=k: grantsgov.search(client, settings, k), timeout)
             for k in keywords
         ),
     )
@@ -962,7 +988,9 @@ async def analyze_county(
         if value is not None
     }
     if keywords:
-        statuses.append(combined_status("grants_gov", keywords, [s for _, s in grant_results]))
+        grant_status = combined_status("grants_gov", keywords, [s for _, s in grant_results])
+        statuses.append(grant_status)
+        await emit(grant_status)
     site_yields = {
         asset_id: value
         for asset_id, (value, _) in zip(solar_assets, site_results, strict=True)

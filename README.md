@@ -36,6 +36,13 @@ Checks: `pytest -q` and `ruff check .` in `backend/`; `npm run build` in `fronte
 Demo without a network: `python scripts/warm_cache.py <fips> ...` saves reports
 to `backend/data/fixtures/`, and `http://localhost:5173/?fixture=1` serves them.
 
+Demo with fast counties: set `SERVE_SAVED_REPORTS=true` in `backend/.env`. A
+county with a saved report then loads from its file at once, and every other
+county is analyzed live. A saved report is frozen when it is written, so run
+`warm_cache.py` again after changing the pipeline, the prompt or `models.py`.
+Saved for this: Los Angeles County, CA (06037), Harris County, TX (48201) and
+Mercer County, NJ (34021).
+
 ## Status
 
 Working and tested (146 backend tests; frontend builds in strict mode):

@@ -4,6 +4,7 @@ import {
   formatDollars,
   formatShare,
   formatWhole,
+  LOADING_SOURCE_IDS,
   sourceName,
 } from "../format";
 import type {
@@ -12,6 +13,7 @@ import type {
   Opportunity,
   ScoutRun,
   SiteCandidate,
+  SourceStatus,
 } from "../types";
 import { FactorList } from "./FactorList";
 import { NeedList } from "./NeedList";
@@ -34,38 +36,53 @@ export interface ScoutProps {
   onPursue: (fips: string, opportunity: Opportunity) => void;
 }
 
-const LOADING_SOURCES = [
-  "Census ACS: county and national figures, and every county for peers",
-  "FEMA National Risk Index",
-  "CDC Social Vulnerability Index",
-  "EPA RE-Powering sites",
-  "EPA landfill database",
-  "EIA and EPA eGRID: state electricity bills and grid carbon",
-  "ORNL: dams without hydropower",
-  "USDA farm census and EPA digester database",
-  "Geoapify: schools, libraries, colleges",
-  "NLR: EV charging stations",
-  "NLR PVWatts: solar yield",
-  "Open-Meteo: ten years of weather",
-  "DOE LEAD energy burden and CDC PLACES health estimates",
-  "EIA-860 power plants, EIA-861 utilities, Treasury energy communities",
-  "EPA drinking water (ECHO), assessed waters (ATTAINS) and air quality",
-  "FEMA disaster history, USFS wildfire risk, wind turbines, transit stops",
-  "Gemini: opportunities and brief, written from the needs and assets",
-];
+/** Live checklist while `/api/analyze?progress=1` streams each source. */
+export function LoadingPanel({
+  label,
+  progress,
+}: {
+  label: string;
+  progress: Record<string, SourceStatus>;
+}) {
+  const known = new Set<string>(LOADING_SOURCE_IDS);
+  const extra = Object.keys(progress).filter(
+    (id) => !known.has(id) && id !== "pvwatts_site",
+  );
+  const ids = [...LOADING_SOURCE_IDS, ...extra];
+  const done = ids.filter((id) => progress[id]).length;
+  const failed = ids.filter((id) => progress[id] && !progress[id].ok).length;
 
-export function LoadingPanel({ label }: { label: string }) {
   return (
     <div className="panel-body" aria-busy="true">
       <h2>{label}</h2>
-      <p className="muted">Fetching, up to 15 seconds per source:</p>
+      <p className="muted">
+        Fetching sources ({done} of {ids.length} done
+        {failed > 0 ? `, ${failed} failed` : ""}
+        ). Up to 15 seconds each:
+      </p>
       <ul className="loading-sources">
-        {LOADING_SOURCES.map((source) => (
-          <li key={source}>
-            <span className="spinner" aria-hidden="true" />
-            {source}
-          </li>
-        ))}
+        {ids.map((id) => {
+          const status = progress[id];
+          const state = !status ? "pending" : status.ok ? "ok" : "fail";
+          return (
+            <li key={id} className={`loading-source loading-source-${state}`}>
+              <span className="loading-mark" aria-hidden="true">
+                {state === "pending" ? (
+                  <span className="spinner" />
+                ) : state === "ok" ? (
+                  "✓"
+                ) : (
+                  "✕"
+                )}
+              </span>
+              <span className="loading-source-label">
+                {sourceName(id)}
+                {status?.cached ? " (cached)" : ""}
+                {status && !status.ok && status.message ? ` — ${status.message}` : ""}
+              </span>
+            </li>
+          );
+        })}
       </ul>
       <div className="skeleton" />
       <div className="skeleton" />
@@ -213,7 +230,7 @@ function CountyView({
   const tabs: [Tab, string][] = [
     ["opportunities", `Opportunities (${report.opportunities.length})`],
     ["needs", `Needs (${report.needs.length})`],
-    ["assets", `Assets (${report.factors.length})`],
+    ["assets", `Local stats (${report.factors.length})`],
     ["peers", `Peers (${report.peers.length})`],
   ];
 

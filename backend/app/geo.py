@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,15 +81,21 @@ class CountyIndex:
         max_counties: int,
         min_area_share: float = 0.25,
     ) -> tuple[list[County], bool]:
-        """Counties selected by a box, largest overlap first, and whether the
-        list was cut to `max_counties`.
+        """Counties selected by a box, nearest to the box's center first, and
+        whether the list was cut to `max_counties`.
 
         A county is kept if its centroid is inside the box or at least
-        `min_area_share` of its area is. Corners may arrive in any order.
+        `min_area_share` of its area is. Of those, the ones whose centroids
+        are nearest the center of the box are returned. Corners may arrive in
+        any order.
         """
         west, east = sorted((sw[0], ne[0]))
         south, north = sorted((sw[1], ne[1]))
         selection = box(west, south, east, north)
+        center_lon, center_lat = (west + east) / 2, (south + north) / 2
+        # A degree of longitude shrinks toward the poles; scale it so distance
+        # east-west counts the same as north-south at the box's latitude.
+        lon_scale = math.cos(math.radians(center_lat))
 
         matches: list[tuple[float, County]] = []
         for i in self._tree.query(selection, predicate="intersects"):
@@ -101,8 +108,12 @@ class CountyIndex:
             )
             share = overlap / county.geometry.area
             if centroid_inside or share >= min_area_share:
-                matches.append((overlap, county))
+                distance = math.hypot(
+                    (county.centroid_lon - center_lon) * lon_scale,
+                    county.centroid_lat - center_lat,
+                )
+                matches.append((distance, county))
 
-        matches.sort(key=lambda m: (-m[0], m[1].fips))
+        matches.sort(key=lambda m: (m[0], m[1].fips))
         truncated = len(matches) > max_counties
         return [county for _, county in matches[:max_counties]], truncated

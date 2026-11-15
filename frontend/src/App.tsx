@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { analyze, fetchCounties, fetchNeedMap, FIXTURE_MODE, scout } from "./api";
 import { CountySearch } from "./components/CountySearch";
 import type { LoadingArea } from "./components/loadingSweep";
@@ -7,6 +15,7 @@ import { OpportunityWorkspace } from "./components/OpportunityWorkspace";
 import { PhotoViewer } from "./components/PhotoViewer";
 import { LoadingPanel, ResultsPanel, scoutKey } from "./components/ResultsPanel";
 import { bestCandidates, bestSites } from "./components/ScoutPanel";
+import { MAX_COUNTIES } from "./countyBox";
 import { featureBounds, unionBounds } from "./format";
 import type {
   AnalyzeRequest,
@@ -21,7 +30,12 @@ import type {
   Opportunity,
   ScoutRun,
   SiteCandidate,
+  SourceStatus,
 } from "./types";
+
+/** One or more counties chosen by click / Ctrl+click (not a drawn box). */
+type CountiesRequest = { mode: "counties"; fips: string[] };
+type PendingBody = AnalyzeRequest | CountiesRequest;
 
 /** A scouted building as a map marker. */
 function candidateAsset(candidate: SiteCandidate): Asset {
@@ -55,6 +69,27 @@ function writePref(key: string, value: string) {
   }
 }
 
+const PANEL_WIDTH_DEFAULT = 460;
+const PANEL_WIDTH_MIN = 320;
+const PANEL_WIDTH_MAX = 720;
+
+function clampPanelWidth(width: number): number {
+  const maxForViewport =
+    typeof window !== "undefined" ? Math.min(PANEL_WIDTH_MAX, window.innerWidth - 240) : PANEL_WIDTH_MAX;
+  return Math.round(Math.min(Math.max(width, PANEL_WIDTH_MIN), Math.max(PANEL_WIDTH_MIN, maxForViewport)));
+}
+
+function initialPanelWidth(): number {
+  try {
+    const raw = localStorage.getItem("panelWidth");
+    const parsed = raw ? Number(raw) : NaN;
+    if (Number.isFinite(parsed)) return clampPanelWidth(parsed);
+  } catch {
+    // fall through
+  }
+  return PANEL_WIDTH_DEFAULT;
+}
+
 function initialTheme(): Theme {
   const saved = readPref<Theme>("theme", ["light", "dark"]);
   if (saved) return saved;
@@ -84,7 +119,7 @@ function ThemeIcon({ theme }: { theme: Theme }) {
 }
 
 interface PendingRequest {
-  body: AnalyzeRequest;
+  body: PendingBody;
   label: string;
   /** Covered by the loading animation on the map. */
   area: LoadingArea | null;
@@ -101,8 +136,9 @@ function Intro({ countiesError }: { countiesError: string | null }) {
       <ol>
         <li>Click a county on the map, or search for it by name.</li>
         <li>
-          To compare neighbors, choose <strong>Select area</strong> and drag a box over up to four
-          counties.
+          Hold <strong>Ctrl</strong> or <strong>⌘</strong> and click more counties to compare up to
+          four, or choose <strong>Select area</strong> and drag a box (the box shows how many
+          match).
         </li>
         <li>Open an opportunity to see its estimates, their assumptions, and funding leads.</li>
       </ol>
@@ -116,14 +152,43 @@ function Intro({ countiesError }: { countiesError: string | null }) {
   );
 }
 
+function countyLabel(feature: CountyFeature | undefined, fips: string): string {
+  return feature
+    ? `${feature.properties.NAMELSAD}, ${feature.properties.STUSPS}`
+    : fips;
+}
+
+async function analyzePending(
+  body: PendingBody,
+  signal: AbortSignal,
+  onSource: (fips: string, status: SourceStatus) => void,
+): Promise<AnalyzeResponse> {
+  if (body.mode === "counties") {
+    const reports = await Promise.all(
+      body.fips.map((fips) => analyze({ mode: "county", fips }, signal, onSource)),
+    );
+    return {
+      counties: reports.flatMap((report) => report.counties),
+      truncated: false,
+      message:
+        body.fips.length > 1
+          ? `Comparing ${body.fips.length} counties. Ctrl/⌘+click a county to add or remove one.`
+          : null,
+    };
+  }
+  return analyze(body, signal, onSource);
+}
+
 export function App() {
   const [counties, setCounties] = useState<CountyCollection | null>(null);
   const [countiesError, setCountiesError] = useState<string | null>(null);
   const [mode, setMode] = useState<SelectMode>("county");
+  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [selectedFips, setSelectedFips] = useState<string[]>([]);
   const [fitTo, setFitTo] = useState<Bounds | null>(null);
   const [pending, setPending] = useState<PendingRequest | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sourceProgress, setSourceProgress] = useState<Record<string, SourceStatus>>({});
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<AnalyzeResponse | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -147,6 +212,8 @@ export function App() {
   const [basemap, setBasemap] = useState<Basemap>(
     () => readPref<Basemap>("basemap", ["streets", "satellite"]) ?? "streets",
   );
+  const [panelWidth, setPanelWidth] = useState(initialPanelWidth);
+  const resizing = useRef(false);
 
   // Before paint, so the page never flashes the other theme.
   useLayoutEffect(() => {
@@ -162,6 +229,37 @@ export function App() {
   const changeBasemap = (next: Basemap) => {
     setBasemap(next);
     writePref("basemap", next);
+  };
+
+  /** Drag the panel's left edge to resize it. Width is remembered in localStorage. */
+  const startPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    resizing.current = true;
+    handle.setPointerCapture(event.pointerId);
+    document.body.classList.add("panel-resizing");
+
+    const onMove = (move: PointerEvent) => {
+      if (!resizing.current) return;
+      const next = clampPanelWidth(window.innerWidth - move.clientX);
+      setPanelWidth(next);
+    };
+    const onUp = (up: PointerEvent) => {
+      resizing.current = false;
+      document.body.classList.remove("panel-resizing");
+      handle.releasePointerCapture(up.pointerId);
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      setPanelWidth((width) => {
+        writePref("panelWidth", String(width));
+        return width;
+      });
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
   };
 
   useEffect(() => {
@@ -213,6 +311,7 @@ export function App() {
       inFlight.current = controller;
       setPending(request);
       setLoading(true);
+      setSourceProgress({});
       setError(null);
       setResponse(null);
       setFocusAsset(null);
@@ -223,14 +322,24 @@ export function App() {
       setViewed(null);
       setWorkspace(null);
       try {
-        const result = await analyze(request.body, controller.signal);
+        const result = await analyzePending(request.body, controller.signal, (_fips, status) => {
+          // Prefer a failed status if the same source reports more than once
+          // (e.g. several Grants.gov queries folded into one row).
+          setSourceProgress((prev) => {
+            const prior = prev[status.source];
+            if (prior && !prior.ok) return prev;
+            return { ...prev, [status.source]: status };
+          });
+        });
         if (controller.signal.aborted) return;
         const fips = result.counties.map((county) => county.fips);
         setResponse(result);
         setSelectedFips(fips);
         const done = areaOf(fips);
         if (done) setFlare({ area: done });
-        if (request.body.mode === "bbox") setFitTo(boundsOf(fips));
+        if (request.body.mode === "bbox" || request.body.mode === "counties") {
+          setFitTo(boundsOf(fips));
+        }
       } catch (err) {
         if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "The request failed.");
@@ -241,23 +350,76 @@ export function App() {
     [boundsOf, areaOf],
   );
 
-  const selectCounty = useCallback(
-    (fips: string) => {
-      const feature = featuresByFips.get(fips);
-      setSelectedFips([fips]);
-      setFitTo(boundsOf([fips]));
-      void run({
-        body: { mode: "county", fips },
-        label: feature ? `${feature.properties.NAMELSAD}, ${feature.properties.STUSPS}` : fips,
-        area: feature?.geometry ?? null,
-      });
+  const pendingForFips = useCallback(
+    (ids: string[]): PendingRequest => {
+      const [first, ...rest] = ids;
+      if (!first || rest.length > 0) {
+        return {
+          body: { mode: "counties", fips: ids },
+          label: `${ids.length} counties`,
+          area: areaOf(ids),
+        };
+      }
+      const feature = featuresByFips.get(first);
+      return {
+        body: { mode: "county", fips: first },
+        label: countyLabel(feature, first),
+        area: feature?.geometry ?? areaOf(ids),
+      };
     },
-    [featuresByFips, boundsOf, run],
+    [featuresByFips, areaOf],
+  );
+
+  const selectCounty = useCallback(
+    (fips: string, opts?: { additive?: boolean }) => {
+      setMode("county");
+      if (!opts?.additive) {
+        setSelectionNotice(null);
+        setSelectedFips([fips]);
+        setFitTo(boundsOf([fips]));
+        void run(pendingForFips([fips]));
+        return;
+      }
+
+      const already = selectedFips.includes(fips);
+      if (already) {
+        const next = selectedFips.filter((id) => id !== fips);
+        setSelectionNotice(null);
+        setSelectedFips(next);
+        if (next.length === 0) {
+          inFlight.current?.abort();
+          setResponse(null);
+          setPending(null);
+          setError(null);
+          setLoading(false);
+          setFitTo(null);
+          return;
+        }
+        setFitTo(boundsOf(next));
+        void run(pendingForFips(next));
+        return;
+      }
+
+      if (selectedFips.length >= MAX_COUNTIES) {
+        setSelectionNotice(
+          `You can compare up to ${MAX_COUNTIES} counties. Ctrl/⌘+click a selected county to remove it.`,
+        );
+        return;
+      }
+
+      const next = [...selectedFips, fips];
+      setSelectionNotice(null);
+      setSelectedFips(next);
+      setFitTo(boundsOf(next));
+      void run(pendingForFips(next));
+    },
+    [boundsOf, run, selectedFips, pendingForFips],
   );
 
   const selectBox = useCallback(
     (sw: LonLat, ne: LonLat) => {
       setMode("county"); // one box per click of the button; panning comes back
+      setSelectionNotice(null);
       setSelectedFips([]);
       const [w, s] = sw;
       const [e, n] = ne;
@@ -449,6 +611,7 @@ export function App() {
           onNeedChange={setNeedId}
           onCountyClick={selectCounty}
           onBoxSelect={selectBox}
+          showCountyHint={!loading && !response}
           onAssetClick={(asset) => {
             const candidate = scouted.get(asset.id);
             if (candidate) showCandidate(candidate);
@@ -486,8 +649,28 @@ export function App() {
         )}
         </div>
 
-        <aside className="panel" aria-label="Results">
-          {loading && pending && <LoadingPanel label={pending.label} />}
+        <aside className="panel" aria-label="Results" style={{ width: panelWidth }}>
+          <div
+            className="panel-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize results panel"
+            aria-valuenow={panelWidth}
+            aria-valuemin={PANEL_WIDTH_MIN}
+            aria-valuemax={PANEL_WIDTH_MAX}
+            title="Drag to resize"
+            onPointerDown={startPanelResize}
+          />
+          {selectionNotice && (
+            <div className="panel-body" style={{ paddingBottom: 0 }}>
+              <div className="notice notice-warning" role="status">
+                {selectionNotice}
+              </div>
+            </div>
+          )}
+          {loading && pending && (
+            <LoadingPanel label={pending.label} progress={sourceProgress} />
+          )}
           {!loading && error && pending && (
             <div className="panel-body">
               <div className="notice notice-warning" role="alert">
