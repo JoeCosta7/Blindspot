@@ -15,6 +15,12 @@ paths). Read on 2026-11-14 from `costar-hackathon-kit/index.md` and
   [{parkingType, totalSpaces}], primaryPhoto.attachmentUri.
 - commercial-properties.csv: PropertyId, MatterportModelId, Address, City,
   State; one row per property and scan.
+- data/commercial-listing-summary.jsonl (read 2026-11-15, models/commercial-
+  listing-summary.md): 1,022 listings, every propertyId joins a property.
+  Kept: listingStatus 1 (Active, on the market now) with a lease listingType
+  (ListingType 14, 16-21) and forLeaseSummary {totalAvailableSquareFeet,
+  maxContiguousSquareFeet, spaceCount}. The kit's note: available is not
+  vacant; it is space being marketed, possibly still occupied.
 Emails and phone numbers in the kit are fake by design; contacts are not
 read here at all. The kit is licensed data and is not committed.
 """
@@ -110,6 +116,53 @@ def load_properties(kit_dir: Path) -> tuple[dict[str, Any], ...]:
                     records.append(record)
     log.info("CoStar kit: %d properties loaded", len(records))
     return tuple(records)
+
+
+# ListingType values for space offered for lease (schemas/enums.json).
+LEASE_TYPES = {
+    14: "direct lease",
+    16: "direct lease (building park)",
+    17: "direct lease (shopping center)",
+    18: "land for lease",
+    19: "sublease",
+    20: "lease assignment",
+    21: "coworking",
+}
+LISTING_ACTIVE = 1
+
+
+@lru_cache(maxsize=2)
+def lease_listings(kit_dir: Path) -> dict[int, dict[str, Any]]:
+    """Space on the market for lease now, by property id: square feet marketed
+    (summed over the property's active lease listings), the largest contiguous
+    block, the number of spaces and the listing types. Empty without the file."""
+    path = kit_dir / "data" / "commercial-listing-summary.jsonl"
+    if not path.exists():
+        return {}
+    out: dict[int, dict[str, Any]] = {}
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            summary = raw.get("forLeaseSummary") or {}
+            kind = LEASE_TYPES.get(raw.get("listingType"))
+            pid = raw.get("propertyId")
+            if raw.get("listingStatus") != LISTING_ACTIVE or kind is None or not summary:
+                continue
+            if not isinstance(pid, int):
+                continue
+            entry = out.setdefault(
+                pid, {"available_sqft": 0.0, "contiguous_sqft": 0.0, "spaces": 0, "types": []}
+            )
+            entry["available_sqft"] += float(summary.get("totalAvailableSquareFeet") or 0)
+            entry["contiguous_sqft"] = max(
+                entry["contiguous_sqft"], float(summary.get("maxContiguousSquareFeet") or 0)
+            )
+            entry["spaces"] += int(summary.get("spaceCount") or 0)
+            if kind not in entry["types"]:
+                entry["types"].append(kind)
+    return {k: v for k, v in out.items() if v["available_sqft"] > 0 or v["contiguous_sqft"] > 0}
 
 
 def properties_in_county(kit_dir: Path, county: County) -> list[dict[str, Any]]:

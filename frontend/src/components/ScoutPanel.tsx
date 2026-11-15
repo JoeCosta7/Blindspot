@@ -56,6 +56,10 @@ export function SiteCard({
   const addressed = needs.filter((need) => candidate.need_ids.includes(need.id));
   const seen = candidate.observations.filter((o) => o.by_model);
   const recorded = candidate.observations.filter((o) => !o.by_model);
+  // CoStar's active lease listings: space marketed for lease now (not necessarily vacant).
+  const leaseBlock = candidate.observations.find(
+    (o) => o.layer === "costar" && o.label === "Largest block marketed for lease",
+  );
 
 
   return (
@@ -194,6 +198,12 @@ export function SiteCard({
           “{candidate.interior_summary}”
           <footer className="muted">Matterport's own AI summary of the scan, quoted as is.</footer>
         </blockquote>
+      )}
+      {leaseBlock && typeof leaseBlock.value === "number" && (
+        <p className="lease-chip" title="CoStar listing: space marketed for lease now. Available is not always vacant.">
+          <span className="chip chip-layer">CoStar</span> For lease now: largest block{" "}
+          {Math.round(leaseBlock.value).toLocaleString()} sq ft
+        </p>
       )}
       {candidate.tour_url && (
         <section className="scan-preview">

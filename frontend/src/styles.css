@@ -2532,3 +2532,12 @@ body.panel-resizing .map {
     grid-template-columns: 1fr;
   }
 }
+
+.lease-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
