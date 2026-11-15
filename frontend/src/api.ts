@@ -8,6 +8,7 @@ import type {
   ScoutEvent,
   ProcessPlan,
   ProcessRequest,
+  SourceStatus,
 } from "./types";
 
 /** `?fixture=1` in the page URL serves saved reports: the demo works offline. */

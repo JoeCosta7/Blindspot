@@ -13286,6 +13286,45 @@
    "scoutable": true
   },
   {
+   "id": "cooling_center:county",
+   "solution_id": "cooling_center",
+   "title": "Cooling and resilience center in an existing building",
+   "description": "Open a large, accessible building as a cooling and charging center during heat waves and outages; Site Scout checks its interior from 3D scans where they exist.",
+   "summary": null,
+   "rationale": null,
+   "plan": [],
+   "first_steps": [],
+   "compliance": [],
+   "need_ids": [
+    "hazard_risk"
+   ],
+   "need_fits": [],
+   "asset_ids": [],
+   "site_plans": [],
+   "factor_ids": [],
+   "score": 100,
+   "estimates": [],
+   "funding": [
+    {
+     "program_id": "fema_hazard_mitigation",
+     "name": "FEMA hazard mitigation grants",
+     "agency": "FEMA",
+     "status": "unverified",
+     "deadline": null,
+     "key_terms": "Not checked. Confirm the program, eligibility and deadlines with FEMA before relying on it.",
+     "verified_on": null,
+     "source_url": null,
+     "note": null,
+     "kind": "grant",
+     "county_eligible": "unknown"
+    }
+   ],
+   "documents": [],
+   "documents_needed": [],
+   "generated_by": "rules",
+   "scoutable": true
+  },
+  {
    "id": "ai:2",
    "solution_id": "repower_fossil_plant",
    "title": "Industrial Clean Energy Repowering and Storage",

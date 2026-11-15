@@ -41,6 +41,10 @@ class Profile:
     check_ids: tuple[str, ...] = ()
     # "gemini" when written for this opportunity, "catalogue" otherwise.
     chosen_by: str = "catalogue"
+    # The project is judged from the inside (a cooling center): the scan library
+    # is always searched, scanned buildings found are inspected, and at equal
+    # score a site whose interior was checked ranks first.
+    judge_interior: bool = False
 
 
 PUBLIC = Profile(
@@ -90,6 +94,22 @@ PAVED = Profile(
     land=True,
     imagery_text="large paved parking lot with very few trees",
 )
+INTERIOR = Profile(
+    ("search_properties", "search_public_buildings", "search_scans"),
+    ("Office", "Retail", "Hospitality", "Specialty"),
+    False,
+    "existing buildings with large, open interiors",
+    public_kinds=("library", "college"),
+    check_ids=(
+        "big_footprint",
+        "floor_area_record",
+        "has_scan",
+        "scan_vs_footprint",
+        "room_for_people",
+        "record_vs_footprint",
+    ),
+    judge_interior=True,
+)
 DAM = Profile(
     SITE_FIRST,
     (),
@@ -116,6 +136,7 @@ PROFILES: dict[str, Profile] = {
     "landfill_composting": LANDFILL,
     "repower_fossil_plant": POWER_PLANT,
     "small_hydro": DAM,
+    "cooling_center": INTERIOR,
 }
 _PUBLIC_WORDS = (
     "school",

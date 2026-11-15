@@ -375,6 +375,13 @@ export interface ImageOption {
   url: string;
 }
 
+/** One room of a Matterport 3D scan, as the API reports it. */
+export interface ScanRoom {
+  label: string | null;
+  area_m2: number | null;
+  ceiling_m: number | null;
+}
+
 export interface SiteCandidate {
   building_id: string;
   name: string;
@@ -401,6 +408,10 @@ export interface SiteCandidate {
   image_options: ImageOption[];
   overlays: GeoOverlay[];
   interior_summary: string | null;
+  /** Rooms read from the Matterport API, largest first. */
+  scan_rooms: ScanRoom[];
+  scan_floors: number | null;
+  scan_image_url: string | null;
   tour_url: string | null;
 }
 

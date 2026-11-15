@@ -28,7 +28,7 @@ def cache_get(cache_dir: Path, source: str, args: dict[str, Any], ttl_s: float) 
     entry = _memory.get(path)
     if entry is None:
         try:
-            raw = json.loads(path.read_text())
+            raw = json.loads(path.read_text(encoding="utf-8"))
             entry = (float(raw["saved_at"]), raw["value"])
         except (OSError, ValueError, KeyError, TypeError):
             return None

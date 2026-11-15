@@ -30,7 +30,9 @@ class DocumentEntry(BaseModel):
 
 @lru_cache(maxsize=4)
 def load_documents(path: Path) -> tuple[DocumentEntry, ...]:
-    return tuple(DocumentEntry.model_validate(item) for item in json.loads(path.read_text()))
+    return tuple(
+        DocumentEntry.model_validate(item) for item in json.loads(path.read_text(encoding="utf-8"))
+    )
 
 
 def match_documents(

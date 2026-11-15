@@ -207,10 +207,7 @@ def confidence_factor(
         reasons.append("no building footprint in the aerial record")
     elif roof.inside_parcel is False:
         factor *= settings.scout_factor_low_confidence
-        reasons.append("the building's point fell outside the parcel returned")
-    if interior is None:
-        factor *= settings.scout_factor_no_scan
-        reasons.append("no 3D scan of the interior")
+    # No scan is not a weakness: the right building may simply not be scanned.
     if any(not c.ok and c.label.endswith("vs footprint") for c in checks):
         factor *= settings.scout_factor_footprint_mismatch
         reasons.append("a floor area from another layer does not match the footprint")

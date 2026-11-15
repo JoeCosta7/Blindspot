@@ -38,6 +38,7 @@ NEW_SOURCE_SOLUTIONS = {
 
 # Added 2026-11-14 so every need has at least two answers.
 GAP_SOLUTIONS = {
+    "cooling_center",
     "microtransit",
     "mobility_hub",
     "flood_buyout",

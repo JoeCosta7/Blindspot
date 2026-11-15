@@ -306,13 +306,44 @@ def rule_actions(state: ScoutState) -> AgentAction:
     if not state.seen:
         return AgentAction(thought="", tool="finish")
     left = state.settings.scout_max_roofs - state.roofs_used
-    todo = [i.building.id for i in state.seen.values() if not i.roof_checked][: min(4, left)]
+    pending = [i.building for i in state.seen.values() if not i.roof_checked]
+    if not state.land_mode:
+        # Building projects: take candidates from each source in turn, so the
+        # first source searched cannot fill every inspection slot. Land projects
+        # keep their order: the report's own sites come before look-alikes.
+        groups: dict[str, list] = {}
+        for b in pending:
+            groups.setdefault(b.found_by, []).append(b)
+        lists = list(groups.values())
+        pending = [
+            g[i] for i in range(max(map(len, lists), default=0)) for g in lists if i < len(g)
+        ]
+    todo = [b.id for b in pending][: min(4, left)]
     if todo:
         return AgentAction(thought="", tool="inspect_roof", building_ids=todo)
     for insp in state.seen.values():
         if insp.roof_checked and insp.candidate is None:
             return AgentAction(thought="", tool="evaluate_site", building_id=insp.building.id)
     return AgentAction(thought="", tool="finish")
+
+
+def interior_followup(state: ScoutState) -> AgentAction | None:
+    """For a project judged from the inside, what must happen before finishing:
+    search the scan library once, then inspect and evaluate the scanned
+    buildings found. None when nothing is left."""
+    if not state.judge_interior:
+        return None
+    if "search_scans" not in {s.tool for s in state.steps}:
+        return AgentAction(thought="", tool="search_scans", keywords=list(tools.DEFAULT_KEYWORDS))
+    scanned = [i for i in state.seen.values() if i.building.scan_id]
+    left = state.settings.scout_max_roofs + 3 - state.roofs_used
+    todo = [i.building.id for i in scanned if not i.roof_checked][: min(4, left)]
+    if todo:
+        return AgentAction(thought="", tool="inspect_roof", building_ids=todo)
+    for insp in scanned:
+        if insp.roof_checked and insp.candidate is None:
+            return AgentAction(thought="", tool="evaluate_site", building_id=insp.building.id)
+    return None
 
 
 # --- the loop ---------------------------------------------------------------------------
@@ -363,6 +394,7 @@ async def run_scout(
         imagery_text=(profile.imagery_text if profile else None),
         report_sites=report_sites or [],
         site_solution=site_solution,
+        judge_interior=bool(profile and profile.judge_interior),
     )
     decide = decider or await gemini_decider(settings)
     generated_by: Literal["gemini", "rules"] = "gemini"
@@ -429,6 +461,8 @@ async def run_scout(
                     continue
         if action is None:
             action = rule_actions(state)
+        if action.tool == "finish":
+            action = interior_followup(state) or action
         state.actions_used += 1
 
         why = problem(action, state)
@@ -459,7 +493,9 @@ async def run_scout(
         await run_tool(action, state)
         for event in _drain(state):
             yield event
-        if state.shortlisted() >= settings.scout_target_sites:
+        # Land projects stop once enough sites pass; building projects compare
+        # every inspected candidate and then keep the best.
+        if state.land_mode and state.shortlisted() >= settings.scout_target_sites:
             stopped = "target_reached"
             break
         if state.empty_searches >= 3:
@@ -472,7 +508,12 @@ async def run_scout(
     order = {"shortlisted": 0, "low_confidence": 1, "rejected": 2}
     candidates = sorted(
         (i.candidate for i in state.seen.values() if i.candidate),
-        key=lambda c: (order[c.status], -c.score),
+        # Interior projects: at equal score, a site whose inside was checked first.
+        key=lambda c: (
+            order[c.status],
+            -c.score,
+            -(state.judge_interior and bool(c.scan_rooms)),
+        ),
     )
     # Photos only for the sites that will be shown: the best non-rejected ones.
     best = [c for c in candidates if c.status != "rejected"][: settings.scout_target_sites]

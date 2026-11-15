@@ -48,7 +48,7 @@ class CountyIndex:
 
     @classmethod
     def from_geojson(cls, path: Path) -> CountyIndex:
-        collection = json.loads(path.read_text())
+        collection = json.loads(path.read_text(encoding="utf-8"))
         counties = []
         for feature in collection["features"]:
             props = feature["properties"]

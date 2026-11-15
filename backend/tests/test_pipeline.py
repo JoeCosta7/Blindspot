@@ -294,10 +294,12 @@ def test_full_report(sources, settings):
     tops = [min(rank[i] for i in o.need_ids) for o in report.opportunities]
     assert tops == sorted(tops)
     # Chargers at the library answer only the charger gap, the last need, so
-    # they come last.
-    charging = [o for o in report.opportunities if o.solution_id == "public_ev_charging"]
+    # they come last: past the 6-opportunity cap here, and last when all fit.
+    assert len(report.opportunities) == settings.max_opportunities
+    everything = analyze(settings.model_copy(update={"max_opportunities": 20}))
+    charging = [o for o in everything.opportunities if o.solution_id == "public_ev_charging"]
     assert charging and all(o.score == 50 for o in charging)
-    assert report.opportunities[-1].solution_id == "public_ev_charging"
+    assert everything.opportunities[-1].solution_id == "public_ev_charging"
     # Below 50 only: transport-only types, and the heat-pump group buy, which here
     # answers only the low-priority old-housing need.
     low = {"public_ev_charging", "microtransit", "mobility_hub", "heat_pump_group_buy"}
@@ -890,7 +892,8 @@ def live(o):
 
 
 def test_grant_leads_join_the_funding_list(sources, settings):
-    report = analyze(settings)
+    # Room for every opportunity, so the charger one (last need) is included.
+    report = analyze(settings.model_copy(update={"max_opportunities": 20}))
     by_solution = {o.solution_id: o for o in report.opportunities}
 
     # The NASA hit is dropped: its agency is not listed for the query.
@@ -925,3 +928,5 @@ def test_can_scout_needs_a_site_and_a_building_project():
     assert can_scout("landfill_composting", ["landfill_gas_uncaptured"], ["lmop:1"], scout)
     assert can_scout(None, ["hazard_risk"], [], scout) is False  # county-wide
     assert can_scout(None, ["hazard_risk"], ["school:1"], ()) is False  # no data here
+    # Site Scout finds the building itself for a cooling center.
+    assert can_scout("cooling_center", ["hazard_risk"], [], scout) is True

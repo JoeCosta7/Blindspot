@@ -88,7 +88,9 @@ class Match:
 
 @lru_cache(maxsize=4)
 def load_solutions(path: Path) -> tuple[Solution, ...]:
-    return tuple(Solution.model_validate(item) for item in json.loads(path.read_text()))
+    return tuple(
+        Solution.model_validate(item) for item in json.loads(path.read_text(encoding="utf-8"))
+    )
 
 
 def distance(asset: Asset, lon: float, lat: float) -> float:

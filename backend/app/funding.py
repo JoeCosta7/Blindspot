@@ -46,7 +46,9 @@ class FundingProgram(BaseModel):
 
 @lru_cache(maxsize=4)
 def load_programs(path: Path) -> tuple[FundingProgram, ...]:
-    return tuple(FundingProgram.model_validate(item) for item in json.loads(path.read_text()))
+    return tuple(
+        FundingProgram.model_validate(item) for item in json.loads(path.read_text(encoding="utf-8"))
+    )
 
 
 def energy_community_note(

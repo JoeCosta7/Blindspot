@@ -38,8 +38,7 @@ SOURCE_LABEL = "Matterport 3D scans"
 PAGE_SIZE = 1000
 MAX_PAGES = 12
 
-INDEX_QUERY = (
-    """
+INDEX_QUERY = """
 query($q: String!, $offset: String) {
   models(query: $q, pageSize: PAGE_SIZE, offset: $offset) {
     totalResults nextOffset
@@ -54,7 +53,6 @@ query($q: String!, $offset: String) {
   }
 }
 """.replace("PAGE_SIZE", str(PAGE_SIZE))
-)
 
 DETAIL_QUERY = """
 query($id: ID!) {
@@ -62,7 +60,7 @@ query($id: ID!) {
     id name
     dimensionEstimates(units: metric) { area areaIndoor }
     floors { label sequence dimensionEstimates(units: metric) { area areaIndoor } }
-    rooms { label dimensionEstimates(units: metric) { area } }
+    rooms { label dimensionEstimates(units: metric) { area } ceiling(units: metric) { maxHeight } }
     propertyClassifications { classification }
     generatedDescription { summary }
     publication { url }
@@ -168,7 +166,7 @@ async def model_detail(
     client: httpx.AsyncClient, settings: Settings, model_id: str
 ) -> dict[str, Any] | None:
     """Floors, rooms, classification, summary and tour URL for one model."""
-    key = {"id": model_id}
+    key = {"id": model_id, "v": 2}  # v2: rooms carry ceiling heights
 
     async def fetch() -> dict[str, Any] | None:
         model = (await _gql(client, settings, DETAIL_QUERY, {"id": model_id})).get("model")
@@ -183,11 +181,20 @@ async def model_detail(
                 {"label": f.get("label"), "area_m2": _area(f.get("dimensionEstimates"))}
                 for f in floors
             ],
-            "rooms": [
-                {"label": r.get("label"), "area_m2": _area(r.get("dimensionEstimates"))}
-                for r in model.get("rooms") or []
-                if r.get("label")
-            ],
+            # Rooms of 5 m² or more (scans include tiny fragments), largest first,
+            # with the ceiling's highest point. Unnamed rooms keep a None label.
+            "rooms": sorted(
+                (
+                    {
+                        "label": r.get("label"),
+                        "area_m2": _area(r.get("dimensionEstimates")),
+                        "ceiling_m": _float((r.get("ceiling") or {}).get("maxHeight")),
+                    }
+                    for r in model.get("rooms") or []
+                    if (_area(r.get("dimensionEstimates")) or 0) >= 5
+                ),
+                key=lambda r: -(r["area_m2"] or 0),
+            ),
             "classification": next(
                 (
                     c.get("classification")

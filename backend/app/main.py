@@ -108,7 +108,7 @@ def _load_fixture(settings: Settings, county: County) -> CountyReport | None:
     path = _fixture_path(settings, county.fips)
     if not path.exists():
         return None
-    return CountyReport.model_validate_json(path.read_text())
+    return CountyReport.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 async def _report_for(
@@ -258,10 +258,16 @@ async def analyze(
             queue: asyncio.Queue[SourceStatus | object] = asyncio.Queue()
             done = object()
 
-            async def on_progress(status: SourceStatus) -> None:
+            async def on_progress(
+                status: SourceStatus, queue: asyncio.Queue[SourceStatus | object] = queue
+            ) -> None:
                 await queue.put(status)
 
-            async def run_one() -> CountyReport:
+            async def run_one(
+                county: County = county,
+                queue: asyncio.Queue[SourceStatus | object] = queue,
+                done: object = done,
+            ) -> CountyReport:
                 try:
                     return await _report_for(
                         county, request.app.state.client, settings, on_progress=on_progress
@@ -366,7 +372,7 @@ async def scout(
         path = settings.data_dir / "fixtures" / f"scout_{body.fips}.json"
         if not path.exists():
             raise HTTPException(404, "No saved scout run for this county")
-        saved = ScoutResult.model_validate_json(path.read_text())
+        saved = ScoutResult.model_validate_json(path.read_text(encoding="utf-8"))
         return StreamingResponse(
             _replay_fixture(saved, settings.scout_fixture_step_delay_s),
             media_type="application/x-ndjson",

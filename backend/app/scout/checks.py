@@ -38,6 +38,7 @@ FACTS: dict[str, tuple[str, str | None, ScoutLayer]] = {
     "parking_spaces": ("Parking spaces on record", None, "costar"),
     "year_built": ("Year built", None, "costar"),
     "stories": ("Storeys", None, "costar"),
+    "gross_m2": ("Floor area on record", "m²", "costar"),
 }
 
 OPS = {
@@ -59,10 +60,12 @@ def site_facts(
     roof: RoofRecord | None, interior: InteriorRecord | None, building: Building
 ) -> dict[str, Any]:
     facts: dict[str, Any] = {
-        "scan_exists": interior is not None,
+        # Unknown, not "no", without a scan: the check is skipped, not failed.
+        "scan_exists": True if interior is not None else None,
         "parking_spaces": building.parking_spaces,
         "year_built": building.year_built,
         "stories": building.stories,
+        "gross_m2": building.gross_sqft * 0.09290304 if building.gross_sqft else None,
     }
     if roof is not None:
         on_record = roof.inside_parcel is not None

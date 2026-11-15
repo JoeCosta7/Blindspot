@@ -548,6 +548,14 @@ class ImageOption(BaseModel):
     url: str
 
 
+class ScanRoom(BaseModel):
+    """One room of a Matterport 3D scan, as the API reports it."""
+
+    label: str | None
+    area_m2: float | None
+    ceiling_m: float | None
+
+
 class SiteCandidate(BaseModel):
     building_id: str
     name: str
@@ -582,6 +590,10 @@ class SiteCandidate(BaseModel):
     overlays: list[GeoOverlay]
     # The scan's own AI-written summary of the interior, quoted as is.
     interior_summary: str | None
+    # Rooms read from the Matterport API: largest first.
+    scan_rooms: list[ScanRoom] = Field(default_factory=list)
+    scan_floors: int | None = None
+    scan_image_url: str | None = None
     # The public Matterport tour page, when the scan is published.
     tour_url: str | None
 
