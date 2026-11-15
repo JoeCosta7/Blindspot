@@ -83,6 +83,8 @@ def test_steps_count_back_from_the_grant_deadline(settings):
             key_terms="",
             verified_on="2026-11-14",
             source_url=None,
+            kind="grant",
+            county_eligible="yes",
         )
 
     opp = opportunity(
@@ -116,3 +118,45 @@ def test_drafts_read_like_county_documents(settings):
     assert "2. Statement of need" in by_id["narrative"]
     # Unknowns are blanks, never made up.
     assert "[Owner name]" in by_id["letter"] and "[____]" in by_id["resolution"]
+
+
+def test_targets_are_grants_a_county_can_apply_for(settings):
+    from datetime import date, timedelta
+
+    from app.models import FundingMatch
+
+    soon = (date.today() + timedelta(days=30)).isoformat()
+    later = (date.today() + timedelta(days=90)).isoformat()
+
+    def lead(pid, kind, eligible, deadline):
+        return FundingMatch(
+            program_id=pid,
+            name=pid,
+            agency="X",
+            status="open",
+            deadline=deadline,
+            key_terms="",
+            verified_on="2026-11-14",
+            source_url=None,
+            kind=kind,
+            county_eligible=eligible,
+        )
+
+    funding = [
+        lead("credit", "tax_credit", "yes", soon),  # a placed-in-service date
+        lead("not_counties", "grant", "no", soon),
+        lead("unchecked", "grant", "unknown", soon),
+        lead("county_ok", "grant", "yes", later),
+    ]
+    plan = asyncio.run(
+        process.build_process(request(opportunity=opportunity(funding=funding)), settings)
+    )
+    assert [t.program_id for t in plan.targets] == ["county_ok", "unchecked"]
+    assert plan.target.program_id == "county_ok"
+
+
+def test_every_step_says_what_it_rests_on(settings):
+    templates = process.load_templates(settings.data_dir / "process_templates.json")
+    steps = templates["default"] + [s for g in templates["by_solution"].values() for s in g]
+    assert all(s.get("basis") in ("common_practice", "program_rule") for s in steps)
+    assert all(s.get("source_url") for s in steps if s["basis"] == "program_rule")

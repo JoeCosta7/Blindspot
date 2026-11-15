@@ -165,6 +165,10 @@ export interface FundingMatch {
   source_url: string | null;
   /** Why the program applies here, when that depends on the county or site. */
   note: string | null;
+  /** Only a grant has an application deadline; a tax credit's date is a placed-in-service date. */
+  kind: "grant" | "tax_credit" | "other";
+  /** Whether a county government may apply (curated table); unknown for live listings. */
+  county_eligible: "yes" | "no" | "unknown";
 }
 
 
@@ -515,8 +519,11 @@ export interface ProcessStep {
   section_ids: string[];
   /** Do-by date, counted back from the target grant's deadline. */
   due: string | null;
-  /** The do-by date has passed. */
+  /** The suggested date has passed. */
   late: boolean;
+  /** A suggestion (common practice) or a program requirement with its source. */
+  basis: "common_practice" | "program_rule";
+  source_url: string | null;
   source: "template" | "site_plan" | "plan";
 }
 

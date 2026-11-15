@@ -33,12 +33,44 @@ function daysBetween(fromIso: string, toIso: string): number {
 
 function DueChip({ step, today }: { step: ProcessStep; today: string | null }) {
   if (!step.due) return <span className="due-chip undated">After award</span>;
-  if (step.late) return <span className="due-chip late">Overdue: do now</span>;
+  // Only the submission date is the program's own; the rest are our suggestions.
+  if (step.id === "submit_application") {
+    return (
+      <span className="due-chip deadline" title="The deadline in the program's listing">
+        Deadline {formatDay(step.due)}
+      </span>
+    );
+  }
+  const assumption = "Our own planning suggestion, not a program deadline";
+  if (step.late) {
+    return (
+      <span className="due-chip soon" title={assumption}>
+        Behind the suggested schedule
+      </span>
+    );
+  }
   const days = today ? daysBetween(today, step.due) : null;
   return (
-    <span className={days !== null && days <= 14 ? "due-chip soon" : "due-chip"}>
-      Do by {formatDay(step.due)}
+    <span className={days !== null && days <= 14 ? "due-chip soon" : "due-chip"} title={assumption}>
+      Suggested by {formatDay(step.due)}
       {days !== null && ` · ${days} days`}
+    </span>
+  );
+}
+
+function BasisChip({ step }: { step: ProcessStep }) {
+  if (step.basis === "program_rule") {
+    return step.source_url ? (
+      <a className="basis-chip rule" href={step.source_url} target="_blank" rel="noreferrer">
+        Program rule (source)
+      </a>
+    ) : (
+      <span className="basis-chip rule">Program rule</span>
+    );
+  }
+  return (
+    <span className="basis-chip" title="General county practice, offered as a suggestion">
+      Common practice
     </span>
   );
 }
@@ -226,10 +258,18 @@ export function ProcessView({
               closes {formatDay(target.deadline)}
               {plan.today && ` · ${daysBetween(plan.today, target.deadline)} days left`}
             </span>
+            {target.county_eligible === "yes" ? (
+              <span className="basis-chip rule">Counties are eligible</span>
+            ) : (
+              <span className="basis-chip warn">
+                Eligibility not checked: confirm in the notice
+              </span>
+            )}
           </>
         ) : (
           <span className="muted">
-            No open funding deadline is known, so steps are in order without dates.
+            No open grant deadline is known, so the steps have no dates. (Tax credits have no
+            application deadline.)
           </span>
         )}
       </div>
@@ -264,6 +304,7 @@ export function ProcessView({
           <div className="next-step-top">
             <span className="next-step-phase">{current.phaseTitle}</span>
             <DueChip step={current} today={plan.today} />
+            <BasisChip step={current} />
           </div>
           <h3>{current.title}</h3>
           {current.who && <p className="muted">Usually: {current.who}</p>}
@@ -369,6 +410,7 @@ export function ProcessView({
                       </button>
                       {step.who && <span className="muted"> · {step.who}</span>}
                       <DueChip step={step} today={plan.today} />
+                      <BasisChip step={step} />
                       {step.detail && <span className="step-detail">{step.detail}</span>}
                       <DocLinks ids={step.document_ids} docs={docs} />
                     </span>
@@ -426,7 +468,7 @@ export function ProcessView({
       )}
 
       <p className="muted process-caveat" title={plan.caveats.join("\n")}>
-        {CAVEAT_LINE} Do-by dates use our own lead-time assumptions.
+        {CAVEAT_LINE} Dates other than the program deadline are our own suggestions.
       </p>
       {/* What Print shows: the pack as plain text, with the official's edits. */}
       <pre className="pack-print">{markdown}</pre>

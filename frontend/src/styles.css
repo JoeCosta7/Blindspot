@@ -2286,3 +2286,30 @@ button {
 .pack-section textarea {
   font-family: Georgia, "Times New Roman", serif;
 }
+
+.due-chip.deadline {
+  background: var(--high-bg);
+  color: var(--high);
+}
+
+.basis-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  background: var(--neutral-chip-bg);
+  color: var(--neutral-chip-text);
+  white-space: nowrap;
+  justify-self: start;
+}
+
+.basis-chip.rule {
+  background: var(--info-bg);
+  color: var(--text);
+  border: 1px solid var(--info-border);
+}
+
+.basis-chip.warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}

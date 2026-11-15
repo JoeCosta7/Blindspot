@@ -67,6 +67,8 @@ def _template_steps(
                 document_ids=[d for d in raw.get("document_ids", []) if d in known_docs],
                 section_ids=[x for x in raw.get("section_ids", []) if x in SECTION_IDS],
                 due=str(raw["lead_days"]) if raw.get("lead_days") is not None else None,
+                basis=raw.get("basis", "common_practice"),
+                source_url=raw.get("source_url"),
                 source="template",
             )
         )
@@ -138,15 +140,19 @@ def gather_documents(request: ProcessRequest, data_dir: Path) -> list[ProjectDoc
 
 
 def dated_targets(funding: list[FundingMatch], today: date) -> list[FundingMatch]:
-    """Leads one can aim for: open, with a deadline still ahead. Soonest first."""
+    """Grants a county may apply for, open, with an application deadline still
+    ahead: the ones a county can confirm first, then soonest. Tax credits are
+    never targets: their dates are placed-in-service dates."""
     leads = [
         f
         for f in funding
-        if f.deadline
+        if f.kind == "grant"
+        and f.county_eligible != "no"
+        and f.deadline
         and f.status in ("open", "open_with_deadlines")
         and f.deadline >= today.isoformat()
     ]
-    return sorted(leads, key=lambda f: f.deadline or "")
+    return sorted(leads, key=lambda f: (f.county_eligible != "yes", f.deadline or ""))
 
 
 def schedule(
@@ -170,7 +176,10 @@ def schedule(
                 ProcessStep(
                     id="submit_application",
                     title=f"Submit the application to {target.name}",
-                    detail=f"{target.agency} deadline. Confirm the date with the agency.",
+                    basis="program_rule",
+                    source_url=target.source_url,
+                    detail=f"The {target.agency} deadline from the listing. Confirm it, and "
+                    "that the county is eligible, in the notice before relying on it.",
                     who="Grants coordinator",
                     section_ids=["narrative"],
                     due=deadline.isoformat(),

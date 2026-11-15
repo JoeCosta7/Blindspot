@@ -185,6 +185,8 @@ def leads_for(
             ),
             verified_on=fetched_on,
             source_url=DETAIL_URL.format(id=hit["id"]),
+            kind="grant",
+            county_eligible="unknown",
         )
         for hit, fetched_on in ordered[:limit]
     ]

@@ -111,7 +111,10 @@ def _estimates(request: ProcessRequest) -> list[str]:
 def _timeline(phases: list[ProcessPhase], limit: int = 8) -> list[str]:
     steps = [s for p in phases for s in p.steps if s.due]
     steps.sort(key=lambda s: s.due or "")
-    return [f"{_day(s.due)}: {s.title}" for s in steps[:limit]]
+    return [
+        f"{'Deadline' if s.id == 'submit_application' else 'Suggested by'} {_day(s.due)}: {s.title}"
+        for s in steps[:limit]
+    ]
 
 
 def _due(phases: list[ProcessPhase], step_id: str) -> str | None:
@@ -368,4 +371,7 @@ def build_sections(
         ),
         ("narrative", "Grant application narrative", narrative),
     ]
-    return [PackSection(id=i, title=t, text=x, generated_by="template") for i, t, x in rows]
+    header = "DRAFT TEMPLATE: adapt to your county's format. Not legal advice.\n\n"
+    return [
+        PackSection(id=i, title=t, text=header + x, generated_by="template") for i, t, x in rows
+    ]

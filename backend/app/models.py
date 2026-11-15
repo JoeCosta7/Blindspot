@@ -224,6 +224,12 @@ class FundingMatch(BaseModel):
     # Why the program applies here, when that depends on the county or site,
     # e.g. which energy community category the county falls in.
     note: str | None = None
+    # What kind of money: only a grant has an application deadline. A tax
+    # credit's date is a placed-in-service date, never an application date.
+    kind: Literal["grant", "tax_credit", "other"] = "other"
+    # Whether a county government may apply, from the curated table's
+    # eligible applicants; "unknown" for live listings we have not read.
+    county_eligible: Literal["yes", "no", "unknown"] = "unknown"
 
 
 DocumentKind = Literal[
@@ -626,11 +632,16 @@ class ProcessStep(BaseModel):
     document_ids: list[str] = Field(default_factory=list)
     # Ids of ProcessPlan.sections (drafts) this step uses, e.g. the resolution.
     section_ids: list[str] = Field(default_factory=list)
-    # Do-by date (ISO), counted back from the target grant's deadline by the
-    # step's lead time. Null when there is no dated target or no lead time.
+    # Suggested do-by date (ISO), counted back from the target grant's deadline
+    # by the step's lead time, which is our own planning assumption. Only the
+    # submission step's date is the program's real deadline.
     due: str | None = None
-    # The do-by date has already passed: do it now.
+    # The suggested date has passed (behind the suggested schedule).
     late: bool = False
+    # common_practice: general county practice, a suggestion. program_rule: a
+    # requirement of the program, with its source.
+    basis: Literal["common_practice", "program_rule"] = "common_practice"
+    source_url: str | None = None
     source: ProcessStepSource
 
 
